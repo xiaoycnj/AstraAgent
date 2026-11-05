@@ -8,6 +8,11 @@
 
 克隆源码后运行 `start.bat` 打开桌面或 `CLI.bat` 使用终端助手。源码中已包含必要的小型依赖，运行环境要求与 Lite 一致。测试命令为 `python.bat -m unittest discover -s tests -q`。标准版打包需从标准发行包取得 `runtimes` 环境，并保留源码中的 `runtimes/python` 配置文件。
 
+## 创作者
+
+- **cnxiaoy** — 项目发起、产品设计与维护。
+- **Codex（OpenAI）** — AI 编程协作，参与代码实现、调试、测试与文档整理。
+
 ## 开始使用
 
 1. 将压缩包完整解压到可写的文件夹，不要直接在压缩包内运行。
