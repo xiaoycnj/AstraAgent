@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "task-board",
+  "name": "任务看板",
+  "version": "1.0.0",
+  "description": "用 manage_task 管理待办、执行中、阻塞与完成任务。只有获得真实结果才标记完成。",
+  "tools": [
+    "manage_task"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "任务看板",
+      "prompt": "用 manage_task 管理待办、执行中、阻塞与完成任务。只有获得真实结果才标记完成。"
+    }
+  ]
+}

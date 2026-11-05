@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "writing-studio",
+  "name": "写作工作室",
+  "version": "1.0.0",
+  "description": "先确认读者、目的与语气，再拟结构、创作、润色。长篇阶段成果使用 manage_note 保存。",
+  "tools": [],
+  "skills": [
+    {
+      "id": "main",
+      "name": "写作工作室",
+      "prompt": "先确认读者、目的与语气，再拟结构、创作、润色。长篇阶段成果使用 manage_note 保存。"
+    }
+  ]
+}

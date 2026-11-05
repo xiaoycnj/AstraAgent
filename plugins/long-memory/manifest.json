@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "long-memory",
+  "name": "主动长期记忆",
+  "version": "1.0.0",
+  "description": "遇到用户明确表达的长期事实、偏好与项目决定，使用 remember_memory 自动保存。用 recall_memory 检索。不要保存密码、临时任务或助手猜测。",
+  "tools": [
+    "recall_memory"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "主动长期记忆",
+      "prompt": "遇到用户明确表达的长期事实、偏好与项目决定，使用 remember_memory 自动保存。用 recall_memory 检索。不要保存密码、临时任务或助手猜测。"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "goals",
+  "name": "目标管理",
+  "version": "1.0.0",
+  "description": "把目标拆成可交付的结果，使用 manage_goal 保存目标并维护状态。",
+  "tools": [
+    "manage_goal"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "目标管理",
+      "prompt": "把目标拆成可交付的结果，使用 manage_goal 保存目标并维护状态。"
+    }
+  ]
+}

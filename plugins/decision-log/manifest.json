@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "decision-log",
+  "name": "决策日志",
+  "version": "1.0.0",
+  "description": "使用 manage_decision 记录决定、理由和约束，后续更改时更新状态。",
+  "tools": [
+    "manage_decision"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "决策日志",
+      "prompt": "使用 manage_decision 记录决定、理由和约束，后续更改时更新状态。"
+    }
+  ]
+}

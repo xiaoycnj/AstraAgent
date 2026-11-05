@@ -1,0 +1,7 @@
+python314.zip
+.
+..\..\
+../../vendor_desktop
+../../vendor_python
+Lib/site-packages
+import site

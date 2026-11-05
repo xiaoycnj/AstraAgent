@@ -1,0 +1,20 @@
+[
+  {
+    "file": "python.zip",
+    "url": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-embed-amd64.zip",
+    "sha256": "a93abe456ab01bd96d7a085b3cdb6566b3063f4241360d114142fbdb07f0a310",
+    "bytes": 12601679
+  },
+  {
+    "file": "node.zip",
+    "url": "https://nodejs.org/dist/v24.22.2/node-v24.22.2-win-x64.zip",
+    "sha256": "ca1bff5d8ead13c9f2ea404a176db46bd430704d5b5113734049fa365e7799e2",
+    "bytes": 37754834
+  },
+  {
+    "file": "webview.cab",
+    "url": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/b7919cc9-680d-4253-bf32-732988e68aa6/Microsoft.WebView2.FixedVersionRuntime.156.0.4314.58.x64.cab",
+    "sha256": "857dcfd6f7035508a29645fa2978c3a6a841f220df77cc366d318894e19f4792",
+    "bytes": 310195262
+  }
+]

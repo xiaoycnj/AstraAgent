@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "data-lab",
+  "name": "数据分析室",
+  "version": "1.0.0",
+  "description": "先检查 CSV/JSON 字段与缺失值，再计算与解释，给出数据来源和计算范围。使用现有 read_csv、inspect_json、calculator。",
+  "tools": [],
+  "skills": [
+    {
+      "id": "main",
+      "name": "数据分析室",
+      "prompt": "先检查 CSV/JSON 字段与缺失值，再计算与解释，给出数据来源和计算范围。使用现有 read_csv、inspect_json、calculator。"
+    }
+  ]
+}

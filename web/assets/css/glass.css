@@ -1,0 +1,186 @@
+/* Optical surfaces share a bounded blur and a separate, non-interactive rim. */
+:root {
+  --glass-blur: 26px;
+  --glass-light-opacity: .6;
+  --glass-dark-opacity: .62;
+  --glass-fill: rgb(250 252 255 / var(--glass-light-opacity));
+  --glass-edge: rgb(255 255 255 / .75);
+  --glass-sheen: rgb(255 255 255 / .38);
+  --glass-shadow: rgb(32 45 79 / .12);
+  --glass-reading: rgb(250 252 255 / .87);
+  --glass-inner: rgb(255 255 255 / .32);
+}
+:root[data-theme=dark] {
+  --glass-fill: rgb(24 32 47 / var(--glass-dark-opacity));
+  --glass-edge: rgb(224 240 255 / .23);
+  --glass-sheen: rgb(217 236 255 / .13);
+  --glass-shadow: rgb(0 5 15 / .28);
+  --glass-reading: rgb(18 24 36 / .9);
+  --glass-inner: rgb(228 239 255 / .07);
+}
+:root[data-material=glass] {--muted: #627086}
+:root[data-material=glass][data-theme=dark] {--muted: #aab8cf}
+:root[data-material=glass] body::before {
+  inset: 0;
+  border-radius: 0;
+  background: radial-gradient(ellipse at 10% 20%,color-mix(in srgb,var(--theme-color,#9db2db) 40%,transparent),transparent 60%),url('/assets/art/glass-ribbon.svg') center/cover;
+  animation: none;
+  filter: none;
+  transform: none;
+  opacity: 1;
+}
+:root[data-material=glass] body::after {background: rgb(237 242 251 / .22)}
+:root[data-material=glass][data-theme=dark] body::before {opacity: .54}
+:root[data-material=glass][data-theme=dark] body::after {background: rgb(8 14 28 / .44)}
+:root[data-material=glass] #app {gap: 12px}
+:root[data-material=glass] #app>main {
+  background: var(--glass-reading);
+  border: 1px solid var(--glass-edge);
+  border-radius: 26px;
+  box-shadow: 0 12px 50px var(--glass-shadow),inset 0 1px 0 var(--glass-sheen);
+}
+.glass-surface {--glass-glow: 0}
+:root[data-material=glass] :is(.sidebar,.topbar,.composer,.settings-group,.provider-card,.mcp-card,.storage-manage-row),
+.glass-showcase .glass-surface {position: relative}
+:root[data-material=glass] .glass-surface,
+.glass-showcase .glass-surface {
+  isolation: isolate;
+  border: 1px solid var(--glass-edge);
+  background: linear-gradient(135deg,var(--glass-sheen),transparent 42%),var(--glass-fill);
+  box-shadow: inset 0 1px 0 var(--glass-sheen),inset 0 -1px 0 rgb(0 0 0 / .04),0 12px 40px var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+}
+:root[data-material=glass] .glass-surface::after,
+.glass-showcase .glass-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid transparent;
+  background: radial-gradient(ellipse at 10% 0%,var(--glass-sheen),transparent 48%) border-box;
+  mask: linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+:root[data-material=glass] .glass-surface.glass-lit {
+  background-image: radial-gradient(180px circle at var(--glass-x,50%) var(--glass-y,50%),rgb(255 255 255 / .18),transparent 75%),linear-gradient(135deg,var(--glass-sheen),transparent 42%);
+}
+:root[data-material=glass] .sidebar {border-radius: 28px}
+:root[data-material=glass] .topbar {
+  border-width: 0 0 1px;
+  border-radius: 25px 25px 0 0;
+  --glass-blur: 18px;
+  box-shadow: inset 0 1px 0 var(--glass-sheen);
+}
+:root[data-material=glass] .composer {border-radius: 28px;box-shadow: inset 0 1px 0 var(--glass-sheen),0 12px 38px var(--glass-shadow)}
+:root[data-material=glass] .composer textarea {background: transparent;box-shadow: none}
+:root[data-material=glass] :is(.floating-control,.command-menu,.session-context-menu,dialog) {border-radius: 24px}
+:root[data-material=glass] :is(.custom-select,.unified-policy-pill,.model-pill,.review-toggle,.attachment-add,.compact-context) {
+  border-radius: 999px;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-inner);
+  box-shadow: inset 0 1px 0 var(--glass-sheen);
+  color: var(--ink);
+}
+:root[data-material=glass] .tabs {border-radius: 18px;background: var(--glass-inner);padding: 4px}
+:root[data-material=glass] .tabs button {border-radius: 14px}
+:root[data-material=glass] .list-item.active {
+  border-radius: 16px;
+  background: color-mix(in srgb,var(--accent-color,#7198ed) 15%,var(--glass-inner));
+  box-shadow: inset 0 1px 0 var(--glass-sheen);
+}
+:root[data-material=glass] .workbench-drawer {background: var(--glass-reading)}
+:root[data-material=glass] .in-settings .settings-view {background: transparent}
+:root[data-material=glass] .in-settings .settings-view::before,
+:root[data-material=glass] .in-settings .settings-view::after {display: none}
+:root[data-material=glass] .in-settings .settings-nav {
+  background: var(--glass-fill)!important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border-right: 1px solid var(--glass-edge);
+}
+:root[data-material=glass] .in-settings .settings-content {background: rgb(246 249 255 / .28);backdrop-filter: none}
+:root[data-material=glass][data-theme=dark] .in-settings .settings-content {background: rgb(13 21 36 / .24)}
+:root[data-material=glass] .in-settings :is(.settings-group,.provider-card) {background: linear-gradient(135deg,var(--glass-sheen),transparent 42%),var(--glass-fill)}
+:root[data-material=glass] :is(.settings-group,.provider-card,.mcp-card,.storage-manage-row) {
+  border-radius: 22px;
+  backdrop-filter: blur(min(var(--glass-blur),24px)) saturate(1.5);
+  -webkit-backdrop-filter: blur(min(var(--glass-blur),24px)) saturate(1.5);
+}
+:root[data-material=glass] :is(.select-option,.command-option,.context-option) {border-radius: 14px}
+:root[data-material=glass] :is(.select-option,.command-option,.context-option):hover {background: var(--glass-inner)}
+
+/* A live material sample stays visible when comparing against other materials. */
+.glass-settings {margin-top: 25px}
+.glass-settings-heading {display: flex;justify-content: space-between;align-items: start;gap: 18px}
+.glass-settings-heading h3 {margin: 0 0 8px;font-size: 16px}
+.glass-settings-heading p {margin: 0;max-width: 450px;line-height: 1.7}
+.glass-enable {white-space: nowrap}
+.glass-showcase {
+  position: relative;
+  height: 220px;
+  border-radius: 24px;
+  background: url('/assets/art/glass-ribbon.svg') 50% 50%/cover;
+  overflow: hidden;
+  margin: 22px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #fff;
+}
+.glass-showcase::before {content: '';position: absolute;inset: 0;background: rgb(21 29 54 / .2)}
+.glass-showcase .glass-surface {--glass-fill: rgb(28 32 48 / var(--glass-dark-opacity));--glass-edge: rgb(255 255 255 / .36);--glass-sheen: rgb(255 255 255 / .2)}
+.glass-sample-dock {display: flex;align-items: center;justify-content: space-evenly;width: 238px;height: 76px;border-radius: 40px}
+.glass-sample-dock .ui-icon {width: 25px;height: 25px;margin: 0}
+.glass-sample-orb {width: 76px;height: 76px;border-radius: 50%;display: grid;place-items: center}
+.glass-sample-orb img {width: 38px;height: 38px;filter: drop-shadow(0 3px 10px #0003)}
+.glass-sample-caption {position: absolute;bottom: 15px;left: 19px;font: 9px/1.6 Consolas,monospace;letter-spacing: .19em;opacity: .85}
+.glass-variants {display: flex;gap: 7px;padding: 5px;border: 1px solid var(--line);border-radius: 18px;background: var(--glass-inner)}
+.glass-variant {flex: 1;display: grid;gap: 5px;padding: 13px 10px;border-radius: 13px;color: var(--ink);transition: background .2s,box-shadow .2s}
+.glass-variant span {font-size: 11px;color: var(--muted)}
+.glass-variant[aria-pressed=true] {background: var(--glass-fill);box-shadow: inset 0 1px 0 var(--glass-sheen),0 4px 14px var(--glass-shadow)}
+.glass-control-row {display: flex;align-items: center;justify-content: space-between;gap: 24px;padding: 22px 0;border-bottom: 1px solid var(--line)}
+.glass-control-row strong {display: block;font-size: 13px;margin-bottom: 6px}
+.glass-control-row p {font-size: 11px;color: var(--muted);margin: 0;line-height: 1.7}
+.glass-range-wrap {display: flex;align-items: center;gap: 12px;min-width: 155px}
+.glass-range-wrap input[type=range] {width: 140px;max-width: 30vw;padding: 0;accent-color: var(--accent-color,var(--blue));box-shadow: none;background: transparent;border: 0}
+.glass-range-wrap output {font: 11px Consolas,monospace;min-width: 32px;color: var(--muted)}
+.glass-settings-note {font-size: 11px;color: var(--muted);line-height: 1.8;margin-bottom: 0}
+.glass-controls[disabled] {opacity: .55}
+.glass-controls {border: 0;padding: 0;margin: 0;min-width: 0}
+:root[data-material=glass] .in-settings .settings-nav {border-radius: 0}
+@media(max-width:760px) {
+  :root[data-material=glass] #app {gap: 0}
+  :root[data-material=glass] .sidebar {background: var(--glass-fill)}
+  .glass-showcase {height: 180px;gap: 12px}
+  .glass-sample-dock {width: 170px;height: 60px}
+  .glass-sample-orb {width: 60px;height: 60px}
+  .glass-sample-orb img {width: 30px;height: 30px}
+  .glass-settings-heading {flex-wrap: wrap}
+  .glass-control-row {gap: 12px;flex-wrap: wrap}
+  .glass-range-wrap {min-width: 0;flex: 1;justify-content: end}
+  .glass-variant {padding: 11px 6px}
+  .glass-variant span {display: none}
+  .glass-variant strong {white-space: nowrap}
+  .glass-settings {padding: 16px}
+  .glass-control-row {display: grid;grid-template-columns: minmax(0,1fr) auto}
+  .glass-control-row:has(input[type=range]) {grid-template-columns: 1fr}
+}
+@media(prefers-reduced-motion:reduce) {
+  .glass-variant {transition: none}
+  :root[data-material=glass] .glass-surface.glass-lit {background-image: linear-gradient(135deg,var(--glass-sheen),transparent 42%)}
+}
+:root[data-motion=reduced] .glass-variant {transition: none}
+@media(prefers-reduced-transparency:reduce) {
+  :root {--glass-light-opacity: .96!important;--glass-dark-opacity: .96!important}
+  :root[data-material=glass] .glass-surface,:root[data-material=glass] .in-settings .settings-nav {backdrop-filter: none!important;-webkit-backdrop-filter: none!important}
+}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  :root {--glass-light-opacity: .96!important;--glass-dark-opacity: .96!important}
+}
+@media(forced-colors:active) {
+  :root[data-material=glass] .glass-surface {background: Canvas;border-color: CanvasText;box-shadow: none;backdrop-filter: none}
+  .glass-surface::after,.glass-showcase {display: none}
+}

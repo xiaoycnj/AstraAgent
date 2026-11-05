@@ -1,0 +1,8 @@
+* text=auto
+*.bat text eol=crlf
+*.pyd binary
+*.dll binary
+*.ico binary
+*.png binary
+*.woff binary
+*.woff2 binary

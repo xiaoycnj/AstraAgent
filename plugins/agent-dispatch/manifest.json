@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "agent-dispatch",
+  "name": "子智能体调度",
+  "version": "1.0.0",
+  "description": "将可独立完成的问题交给 dispatch_agents，每批最多三项。子智能体使用当前模型和显式任务上下文，读取获授权资料，综合其结果并标注失败。",
+  "tools": [
+    "dispatch_agents",
+    "list_agent_jobs"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "子智能体调度",
+      "prompt": "将可独立完成的问题交给 dispatch_agents，每批最多三项。子智能体使用当前模型和显式任务上下文，读取获授权资料，综合其结果并标注失败。"
+    }
+  ]
+}

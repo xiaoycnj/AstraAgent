@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "code-review",
+  "name": "代码审阅室",
+  "version": "1.0.0",
+  "description": "先用 search_files、search_text、read_file 获取相关实现。逐条报告可复现的错误与文件位置，区分检查过的证据与推断。必要时派发独立审阅。",
+  "tools": [],
+  "skills": [
+    {
+      "id": "main",
+      "name": "代码审阅室",
+      "prompt": "先用 search_files、search_text、read_file 获取相关实现。逐条报告可复现的错误与文件位置，区分检查过的证据与推断。必要时派发独立审阅。"
+    }
+  ]
+}

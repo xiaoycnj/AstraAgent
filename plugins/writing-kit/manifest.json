@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "writing-kit",
+  "name": "写作工作坊",
+  "version": "1.0.0",
+  "description": "示例插件：提供结构化改稿 Skill，默认关闭。",
+  "permissions": [],
+  "skills": [
+    {
+      "id": "rewrite",
+      "name": "结构化改稿",
+      "prompt": "先识别文章的目标读者、主题和结构问题，再提供保留作者语气的修改版本，最后解释三处最关键的修改。"
+    }
+  ],
+  "tools": []
+}

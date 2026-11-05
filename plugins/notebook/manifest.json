@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "notebook",
+  "name": "项目笔记库",
+  "version": "1.0.0",
+  "description": "使用 manage_note 保存可复用资料、摘要和研究笔记，给出来源和日期。",
+  "tools": [
+    "manage_note"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "项目笔记库",
+      "prompt": "使用 manage_note 保存可复用资料、摘要和研究笔记，给出来源和日期。"
+    }
+  ]
+}

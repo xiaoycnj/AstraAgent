@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "world-tree",
+  "name": "世界树",
+  "version": "1.0.0",
+  "description": "使用 world_tree 保存长期主题、能力、项目事实，parent 指向已有节点 ID。事实必须来自用户或可核实结果，冲突时更新旧节点。",
+  "tools": [
+    "world_tree"
+  ],
+  "skills": [
+    {
+      "id": "main",
+      "name": "世界树",
+      "prompt": "使用 world_tree 保存长期主题、能力、项目事实，parent 指向已有节点 ID。事实必须来自用户或可核实结果，冲突时更新旧节点。"
+    }
+  ]
+}

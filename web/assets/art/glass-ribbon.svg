@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" fill="none">
+  <defs>
+    <linearGradient id="base" x1="180" y1="100" x2="1400" y2="1100" gradientUnits="userSpaceOnUse"><stop stop-color="#aab9d4"/><stop offset=".48" stop-color="#8299b5"/><stop offset="1" stop-color="#e4bba7"/></linearGradient>
+    <linearGradient id="copper" x1="70" y1="760" x2="1010" y2="180" gradientUnits="userSpaceOnUse"><stop stop-color="#4d526e"/><stop offset=".32" stop-color="#eac3a4"/><stop offset=".47" stop-color="#fff0d4"/><stop offset=".51" stop-color="#b97856"/><stop offset=".75" stop-color="#91596e"/><stop offset="1" stop-color="#524c7c"/></linearGradient>
+    <linearGradient id="blue" x1="470" y1="1060" x2="1230" y2="220" gradientUnits="userSpaceOnUse"><stop stop-color="#7d98aa"/><stop offset=".4" stop-color="#345c7c"/><stop offset=".64" stop-color="#9dd1dc"/><stop offset=".67" stop-color="#d7edf2"/><stop offset=".71" stop-color="#6f86aa"/><stop offset="1" stop-color="#444b71"/></linearGradient>
+    <linearGradient id="rim" x1="200" y1="800" x2="1430" y2="200" gradientUnits="userSpaceOnUse"><stop stop-color="#fff8e6" stop-opacity="0"/><stop offset=".44" stop-color="#fff8e6" stop-opacity=".8"/><stop offset=".7" stop-color="#effbff" stop-opacity=".5"/><stop offset="1" stop-color="#effbff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="light"><stop stop-color="#fff8e9" stop-opacity=".55"/><stop offset="1" stop-color="#fff8e9" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path fill="url(#base)" d="M0 0h1600v1100H0z"/>
+  <path d="M-220 1160C-50 650 460 760 680 350 850 35 1100-70 1690 80V1100Z" fill="url(#copper)"/>
+  <path d="M260 1220C370 780 1020 1050 1120 575 1180 290 1290 160 1690 125V1200Z" fill="url(#blue)"/>
+  <path d="M-160 990C60 650 460 760 680 350 850 35 1100-70 1690 80" stroke="url(#rim)" stroke-width="3"/>
+  <path d="M260 1220C370 780 1020 1050 1120 575 1180 290 1290 160 1690 125" stroke="url(#rim)" stroke-width="3"/>
+  <ellipse cx="330" cy="210" rx="850" ry="500" fill="url(#light)"/>
+</svg>
