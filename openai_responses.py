@@ -25,7 +25,9 @@ def payload_for(payload):
     return result
 
 def call(data,c,endpoint,payload=None,emit=None):
+    task_control.check(c)
     token=openai_oauth.manager(data).access_token()
+    task_control.check(c)
     headers={'Authorization':'Bearer '+token,'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'AstraAgent/2.4'}
     if endpoint=='/models':
         try:

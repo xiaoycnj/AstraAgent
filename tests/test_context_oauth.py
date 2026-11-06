@@ -49,6 +49,10 @@ class ContextOAuth(unittest.TestCase):
             self.assertEqual(result['choices'][0]['message']['tool_calls'][0]['id'],'abc')
             events.pop()
             with self.assertRaisesRegex(ValueError,'未收到完成事件'):responses.call(Path(directory),{'timeout':10},'/chat/completions',{'model':'mock','messages':[]})
+    def test_cancel_during_token_refresh_prevents_inference(self):
+        with tempfile.TemporaryDirectory() as folder,patch.object(oauth.Manager,'access_token',return_value='token'),patch.object(responses.task_control,'check',side_effect=[None,responses.task_control.Cancelled()]),patch.object(responses,'build_opener') as request:
+            with self.assertRaises(responses.task_control.Cancelled):responses.call(Path(folder),{'timeout':10},'/chat/completions',{'model':'mock','messages':[]})
+            request.assert_not_called()
     def test_oauth_pkce_state_cancel_and_account_preservation(self):
         with tempfile.TemporaryDirectory() as folder:
             manager=oauth.Manager(Path(folder))
