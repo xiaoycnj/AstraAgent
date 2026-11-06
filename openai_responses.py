@@ -59,7 +59,8 @@ def call(data,c,endpoint,payload=None,emit=None):
                     if item is not None:item['arguments']+=event.get('delta','')
                 elif kind=='response.output_item.done' and event.get('item',{}).get('type')=='function_call':calls[event['item']['id']]=event['item']
                 elif kind in ('response.failed','response.incomplete','error'):raise ValueError('OpenAI OAuth 推理未完成，请检查账户额度或重试')
-                elif kind=='response.completed':completed=event['response']
+                elif kind=='response.completed':
+                    completed=event['response'];c['_reported_usage']=completed.get('usage')
     except HTTPError as error:
         status=error.code;error.close();raise ValueError('OpenAI OAuth 请求失败（HTTP '+str(status)+'），请检查账户授权或额度') from None
     if completed is None or completed.get('status','completed')!='completed':raise ValueError('OpenAI OAuth 流中断，未收到完成事件')

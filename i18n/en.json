@@ -931,6 +931,25 @@
     "回到最新": "Back to latest",
     "对话快速导航": "Conversation navigation",
     "跳转到第 {0} 条消息": "Jump to message {0}",
-    "正在停止，保留已有输出": "Stopping; keeping received output"
+    "正在停止，保留已有输出": "Stopping; keeping received output",
+    "Token 活动": "Token activity",
+    "每天": "Daily",
+    "每周": "Weekly",
+    "累计总量": "Cumulative",
+    "累计 Token": "Total tokens",
+    "输入": "Input",
+    "输出": "Output",
+    "缓存命中": "Cache hits",
+    "正在思考": "Thinking",
+    "正在生成": "Generating",
+    "正在使用工具": "Using a tool",
+    "等待模型提供可显示的思考摘要。": "Waiting for a model-provided reasoning summary.",
+    "请求流式 Token 用量": "Request streaming token usage",
+    "接口支持 stream_options.include_usage 时可开启。不返回用量的调用会单独计数。": "Enable when the API supports stream_options.include_usage. Calls without usage are counted separately.",
+    "仅统计服务商已上报用量。": "Only provider-reported usage is counted.",
+    "统计开始于": "Tracking since",
+    "包含对话、工具循环、压缩和记忆的模型调用。": "Includes model calls for chat, tool loops, compaction and memory.",
+    "{0} 次调用未返回 Token 用量。": "{0} calls did not report token usage.",
+    "月": "mo"
   }
 }

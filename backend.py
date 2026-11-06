@@ -1,6 +1,7 @@
 """Local browser workbench. Standard library only; Python 3.10+."""
 import argparse
 import extensions
+import usage_meter
 import openai_oauth
 import openai_responses
 import local_account
@@ -115,6 +116,9 @@ def validate_config(body, previous):
     result = dict(previous)
     for field, limit in [('base_url', 2000), ('model', 200), ('system_prompt', 12000)]:
         if field in body: result[field] = text(body[field], field, limit, True)
+    if 'request_usage' in body:
+        if type(body['request_usage']) is not bool:raise ApiError(400,'用量开关格式无效')
+        result['request_usage']=body['request_usage']
     if 'models' in body:
         models=body['models']
         if not isinstance(models,list) or len(models)>500:raise ApiError(400,'模型列表最多 500 项')
@@ -148,7 +152,7 @@ class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl): return None
 
 def upstream(c, endpoint, payload=None):
-    return task_control.io_call(c.get('_cancel_token'),lambda:_upstream(c,endpoint,payload))
+    return task_control.io_call(c.get('_cancel_token'),lambda:usage_meter.metered(DATA,c,lambda config:_upstream(config,endpoint,payload))) if endpoint=='/chat/completions' else task_control.io_call(c.get('_cancel_token'),lambda:_upstream(c,endpoint,payload))
 
 
 def _upstream(c, endpoint, payload=None):
@@ -174,15 +178,16 @@ def _upstream(c, endpoint, payload=None):
     except (ValueError, UnicodeError): raise ApiError(502, '模型服务未返回有效 JSON。') from None
 
 def stream_upstream(c, payload, emit):
-    if c.get('auth_type')=='openai_oauth':return task_control.io_call(c.get('_cancel_token'),lambda:openai_responses.call(DATA,c,'/chat/completions',payload,emit))
+    if c.get('auth_type')=='openai_oauth':return task_control.io_call(c.get('_cancel_token'),lambda:usage_meter.metered(DATA,c,lambda config:openai_responses.call(DATA,config,'/chat/completions',payload,emit)))
     def guarded_emit(event):
         task_control.check(c)
         emit(event)
-    return task_control.io_call(c.get('_cancel_token'),lambda:_stream_upstream(c,payload,guarded_emit))
+    return task_control.io_call(c.get('_cancel_token'),lambda:usage_meter.metered(DATA,c,lambda config:_stream_upstream(config,payload,guarded_emit)))
 
 
 def _stream_upstream(c, payload, emit):
     payload={**payload,'stream':True}
+    if c.get('request_usage'):payload['stream_options']={'include_usage':True}
     headers={'Content-Type':'application/json','Accept':'text/event-stream'}
     if c['api_key']: headers['Authorization']='Bearer '+c['api_key']
     request=Request(c['base_url']+'/chat/completions',data=json.dumps(payload).encode(),headers=headers)
@@ -204,6 +209,7 @@ def _stream_upstream(c, payload, emit):
                 if data==b'[DONE]': break
                 event=json.loads(data)
                 if event.get('error'): raise ApiError(502,'模型流返回错误。')
+                if isinstance(event.get('usage'),dict):c['_reported_usage']=event['usage']
                 choices=event.get('choices',[])
                 if not choices: continue
                 delta=choices[0].get('delta',{})
@@ -964,7 +970,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.5.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.6.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/profile':
             if method=='GET':return self.reply(200,local_account.profile(DATA))
@@ -972,6 +978,11 @@ class Handler(BaseHTTPRequestHandler):
                 try: result=local_account.save_profile(DATA,self.body())
                 except ValueError as e:raise ApiError(400,str(e)) from None
                 return self.reply(200,result)
+        if pathname == '/api/usage' and method=='GET':
+            from urllib.parse import parse_qs
+            query=parse_qs(urlsplit(self.path).query)
+            try:return self.reply(200,usage_meter.activity(DATA,query.get('end',[None])[0],int(query.get('offset',['0'])[0])))
+            except (ValueError,TypeError):raise ApiError(400,'用量日期或时区参数无效') from None
         if pathname == '/api/profile/stats' and method=='GET':
             with database() as db:
                 counts={name:db.execute('SELECT COUNT(*) FROM '+name).fetchone()[0] for name in ['sessions','messages','canvases','runs']}
@@ -1309,7 +1320,7 @@ def main():
         except Exception: pass
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V2.5.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V2.6.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')
