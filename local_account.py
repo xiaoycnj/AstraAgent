@@ -1,6 +1,9 @@
 """Local identity, editable memory and OpenAI-compatible speech configuration."""
 import json
 import re
+import base64
+import secrets
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request,build_opener
 
@@ -78,3 +81,73 @@ def speech(data,text,no_redirect):
             return content,'audio/mpeg' if mime=='application/octet-stream' else mime
     except ValueError:raise
     except Exception:raise ValueError('TTS 请求失败，请检查接口、密钥与模型配置') from None
+
+
+MAX_AUDIO=5*1024*1024
+
+
+def stt_config(data):
+    return read_json(data/'stt.json',{'base_url':'','api_key':'','model':'','language':''})
+
+
+def public_stt(config):
+    return {key:value for key,value in config.items() if key!='api_key'}|{'has_key':bool(config.get('api_key'))}
+
+
+def save_stt(data,body):
+    config=stt_config(data)
+    for key,limit in [('base_url',2000),('model',200),('language',8)]:
+        value=body.get(key,config[key])
+        if not isinstance(value,str) or len(value)>limit or any(ord(char)<32 for char in value):raise ValueError('STT 配置无效')
+        config[key]=value.strip()
+    config['base_url']=config['base_url'].rstrip('/').removesuffix('/audio/transcriptions')
+    parsed=urlsplit(config['base_url'])
+    if config['base_url'] and (parsed.scheme not in ('http','https') or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment):raise ValueError('STT 地址无效')
+    if config['language'] and not re.fullmatch('[a-zA-Z]{2,3}(?:-[a-zA-Z]{2})?',config['language']):raise ValueError('STT 语言代码无效')
+    if type(body.get('clear_key',False)) is not bool:raise ValueError('STT 密钥开关无效')
+    if body.get('clear_key'):config['api_key']=''
+    elif body.get('api_key'):
+        key=body['api_key']
+        if not isinstance(key,str) or len(key)>4096 or '\r' in key or '\n' in key:raise ValueError('STT 密钥无效')
+        config['api_key']=key
+    write_json(data/'stt.json',config)
+    return public_stt(config)
+
+
+def transcribe(data,body,no_redirect):
+    config=stt_config(data)
+    if not config['base_url'] or not config['model']:raise ValueError('请先在设置 → 语音中配置 STT API')
+    encoded=body.get('data')
+    mime=str(body.get('mime','')).split(';')[0].lower()
+    extensions={'audio/webm':'webm','audio/ogg':'ogg','audio/mp4':'mp4','audio/wav':'wav'}
+    if mime not in extensions or not isinstance(encoded,str) or len(encoded)>MAX_AUDIO*4//3+8:raise ValueError('录音格式无效或超过 5 MB')
+    try:audio=base64.b64decode(encoded,validate=True)
+    except ValueError:raise ValueError('录音编码无效') from None
+    if not 1<=len(audio)<=MAX_AUDIO:raise ValueError('录音为空或超过 5 MB')
+    signatures={'audio/webm':audio.startswith(b'\x1aE\xdf\xa3'),'audio/ogg':audio.startswith(b'OggS'),'audio/mp4':audio[4:8]==b'ftyp','audio/wav':audio.startswith(b'RIFF') and audio[8:12]==b'WAVE'}
+    if not signatures[mime]:raise ValueError('录音文件头无效')
+    boundary='AstraAudio'+secrets.token_hex(24)
+    fields={'model':config['model'],'response_format':'json'}
+    if config['language']:fields['language']=config['language']
+    parts=[]
+    for name,value in fields.items():
+        parts.append(('--'+boundary+'\r\nContent-Disposition: form-data; name="'+name+'"\r\n\r\n'+value+'\r\n').encode('utf-8'))
+    parts.append(('--'+boundary+'\r\nContent-Disposition: form-data; name="file"; filename="recording.'+extensions[mime]+'"\r\nContent-Type: '+mime+'\r\n\r\n').encode('ascii'))
+    parts.extend([audio,('\r\n--'+boundary+'--\r\n').encode('ascii')])
+    headers={'Content-Type':'multipart/form-data; boundary='+boundary,'Accept':'application/json'}
+    if config['api_key']:headers['Authorization']='Bearer '+config['api_key']
+    request=Request(config['base_url']+'/audio/transcriptions',data=b''.join(parts),headers=headers)
+    try:
+        with build_opener(no_redirect()).open(request,timeout=90) as response:
+            raw=response.read(256001)
+        if len(raw)>256000:raise ValueError('STT 返回内容过大')
+        result=json.loads(raw)
+        text=result.get('text') if isinstance(result,dict) else None
+        if not isinstance(text,str) or not text.strip() or len(text)>32000:raise ValueError('STT 未返回有效文字')
+        return {'text':text.strip()}
+    except HTTPError as error:
+        code=error.code
+        error.close()
+        raise ValueError('STT 请求失败（HTTP '+str(code)+'），请检查接口、模型和额度') from None
+    except (ValueError,UnicodeError):raise ValueError('STT 未返回有效文字，请检查接口响应') from None
+    except Exception:raise ValueError('STT 连接失败或超时，请检查服务配置') from None

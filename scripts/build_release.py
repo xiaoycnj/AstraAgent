@@ -6,7 +6,7 @@ from pathlib import Path
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '2.6.2'
+VERSION = '2.7.0'
 ROOT_FILES = '''agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
 extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py

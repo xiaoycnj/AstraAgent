@@ -35,7 +35,8 @@ function currentProject() {
 }
 function updateProjectControls() {
     const project = currentProject();
-    projectButton.textContent = project ? project.name : '打开项目';
+    const label = projectButton.querySelector('span') || projectButton;
+    label.textContent = project ? project.name : '打开项目';
     projectButton.title = project?.path || '选择真实项目目录';
     cancelTaskButton.hidden = !state.pending.has(state.session?.id);
     projectRoot.textContent = project?.path || '未绑定项目 · 使用应用工作区';

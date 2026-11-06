@@ -107,7 +107,7 @@ function applyGlassPreferences() {
 
 const glassSurfaceSelector = [
     '.sidebar', '.topbar', '.composer', '.floating-control', '.command-menu',
-    '.session-context-menu', 'dialog', '.settings-group', '.provider-card',
+    '.session-context-menu', '.conversation-menu', '.resource-panel', 'dialog', '.settings-group', '.provider-card',
     '.mcp-card', '.storage-manage-row'
 ].join(',');
 function markGlassSurfaces(node) {

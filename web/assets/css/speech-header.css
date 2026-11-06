@@ -1,0 +1,18 @@
+.voice-input-status { display: flex; align-items: center; gap: 12px; color: var(--muted); padding: 8px 10px; font-size: 12px; }
+#send[data-voice-mode="mic"],#send[data-voice-mode="recording"] { touch-action: none; user-select: none; -webkit-user-select: none; }
+#send.voice-recording { background: #e34b65; box-shadow: 0 0 0 6px #e34b6525; animation: voice-pulse 1.2s ease-in-out infinite; }
+.header-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.header-icon,#workbench-open.header-icon { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 7px; border: 0; background: transparent; color: var(--muted); border-radius: 10px; box-shadow: none; }
+.header-icon:hover,#workbench-open.header-icon:hover { color: var(--ink); background: color-mix(in srgb,var(--ink) 7%,transparent); }
+.header-divider { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.conversation-menu { position: absolute; z-index: 20; top: calc(100% - 4px); right: 20px; width: 270px; max-width: calc(100vw - 24px); max-height: 75vh; overflow: auto; padding: 7px; border-radius: 18px; background: color-mix(in srgb,var(--soft) 95%,transparent); color: var(--ink); border: 1px solid var(--line); backdrop-filter: blur(24px); box-shadow: 0 16px 55px #0003; }
+.conversation-menu>button { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px; text-align: left; font-size: 13px; font-weight: 450; border: 0; border-radius: 9px; background: transparent; color: var(--ink); box-shadow: none; }
+.conversation-menu>button:hover,.conversation-menu>button:focus-visible { background: color-mix(in srgb,var(--ink) 7%,transparent); }
+.conversation-menu>button.danger-text { color: #e46c78; }
+.conversation-menu>button:disabled { opacity: .4; }
+.conversation-menu svg { width: 17px; height: 17px; flex-shrink: 0; }
+.conversation-menu .save-status { display: block; padding: 9px 12px; font-size: 10px; }
+#stt-form { margin-bottom: 28px; }
+@keyframes voice-pulse { 50% { box-shadow: 0 0 0 9px #e34b6512; } }
+@media (prefers-reduced-motion: reduce) { #send.voice-recording { animation: none; } }
+@media(max-width:600px) { .conversation-menu { right: 8px; } .voice-input-status { flex-wrap: wrap; } }

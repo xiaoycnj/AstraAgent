@@ -154,4 +154,14 @@ class Integration(unittest.TestCase):
         self.assertEqual(self.call(path,'DELETE')[0],409)
         worker.join(); self.assertEqual(result[0][0],200)
 
+    def test_pinned_sessions_and_stt_settings(self):
+        first=self.call('/api/sessions','POST',{'title':'first'})[1]
+        self.call('/api/sessions','POST',{'title':'second'})
+        self.assertEqual(self.call('/api/sessions/'+first['id'],'PATCH',{'pinned':True})[0],200)
+        self.assertEqual(self.call('/api/sessions')[1][0]['id'],first['id'])
+        self.assertEqual(self.call('/api/sessions/'+first['id'],'PATCH',{'pinned':'yes'})[0],400)
+        self.assertEqual(self.call('/api/stt/settings','PUT',{'base_url':'http://127.0.0.1:1234/v1','model':'test','api_key':'private-fixture'})[0],200)
+        self.assertNotIn('private-fixture',json.dumps(self.call('/api/stt/settings')[1]))
+        self.assertEqual(self.call('/api/stt','POST',{'data':'bad','mime':'audio/webm'})[0],400)
+
 if __name__=='__main__': unittest.main(verbosity=2)

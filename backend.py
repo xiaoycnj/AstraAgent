@@ -86,6 +86,7 @@ def initialize():
         if 'model' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}: db.execute("ALTER TABLE messages ADD COLUMN model TEXT NOT NULL DEFAULT ''")
         if 'liked' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}: db.execute('ALTER TABLE messages ADD COLUMN liked INTEGER NOT NULL DEFAULT 0')
         if 'project_id' not in {r['name'] for r in db.execute('PRAGMA table_info(sessions)')}:db.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
+        if 'pinned' not in {r['name'] for r in db.execute('PRAGMA table_info(sessions)')}:db.execute('ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0')
         session_columns={r['name'] for r in db.execute('PRAGMA table_info(sessions)')}
         for column,definition in [('archived','INTEGER NOT NULL DEFAULT 0'),('project','TEXT NOT NULL DEFAULT \'\''),('parent_id','TEXT')]:
             if column not in session_columns: db.execute(f'ALTER TABLE sessions ADD COLUMN {column} {definition}')
@@ -778,7 +779,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get_content_type() != 'application/json': raise ApiError(415, '请发送 application/json。')
         try:
             size = int(self.headers.get('Content-Length', '0'))
-            if not 0 < size <= (8_000_000 if urlsplit(self.path).path=='/api/attachments' else 2_000_000): raise ValueError()
+            if not 0 < size <= (8_000_000 if urlsplit(self.path).path in ('/api/attachments','/api/stt') else 2_000_000): raise ValueError()
             value = json.loads(self.rfile.read(size))
             if not isinstance(value, dict): raise ValueError()
             return value
@@ -796,7 +797,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(403, '页面会话已失效，请刷新页面。')
             self.route()
         except ApiError as e: self.reply(e.code, {'error': e.message})
-        except (BrokenPipeError, ConnectionResetError): pass
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError): pass
         except sqlite3.Error: self.reply(500, {'error': '数据库操作失败，请检查 data 目录是否可写。'})
         except Exception as e:
             print('Internal error:', type(e).__name__, flush=True)
@@ -988,7 +989,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.6.2', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.7.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/profile':
             if method=='GET':return self.reply(200,local_account.profile(DATA))
@@ -1018,6 +1019,17 @@ class Handler(BaseHTTPRequestHandler):
             if method=='DELETE':
                 with CONFIG_LOCK: target.unlink(missing_ok=True)
                 return self.reply(200,{'ok':True})
+        if pathname=='/api/stt/settings':
+            if method=='GET':return self.reply(200,local_account.public_stt(local_account.stt_config(DATA)))
+            if method=='PUT':
+                try:
+                    with CONFIG_LOCK:result=local_account.save_stt(DATA,self.body())
+                except ValueError as error:raise ApiError(400,str(error)) from None
+                return self.reply(200,result)
+        if pathname=='/api/stt' and method=='POST':
+            try:result=local_account.transcribe(DATA,self.body(),NoRedirect)
+            except ValueError as error:raise ApiError(400,str(error)) from None
+            return self.reply(200,result)
         if pathname=='/api/tts/settings':
             if method=='GET':return self.reply(200,local_account.public_tts(local_account.tts_config(DATA)))
             if method=='PUT':
@@ -1109,7 +1121,7 @@ class Handler(BaseHTTPRequestHandler):
         path = pathname.strip('/').split('/')
         if path == ['api', 'sessions']:
             with database() as db:
-                if method == 'GET': return self.reply(200, [dict(r) for r in db.execute('SELECT s.*, (SELECT COUNT(*) FROM messages m WHERE m.session_id=s.id) AS message_count FROM sessions s ORDER BY s.rowid DESC')])
+                if method == 'GET': return self.reply(200, [dict(r) for r in db.execute('SELECT s.*, (SELECT COUNT(*) FROM messages m WHERE m.session_id=s.id) AS message_count FROM sessions s ORDER BY s.pinned DESC,s.rowid DESC')])
                 if method == 'POST':
                     title = text(self.body().get('title', '新会话'), '标题'); sid = uuid.uuid4().hex
                     db.execute('INSERT INTO sessions(id,title) VALUES(?,?)', (sid, title)); db.commit()
@@ -1129,6 +1141,9 @@ class Handler(BaseHTTPRequestHandler):
                         else:
                             body=self.body()
                             if 'title' in body: db.execute('UPDATE sessions SET title=? WHERE id=?',(text(body['title'],'标题'),sid))
+                            if 'pinned' in body:
+                                if type(body['pinned']) is not bool:raise ApiError(400,'置顶状态无效')
+                                db.execute('UPDATE sessions SET pinned=? WHERE id=?',(int(body['pinned']),sid))
                             if 'archived' in body:
                                 if type(body['archived']) is not bool: raise ApiError(400,'归档状态无效')
                                 db.execute('UPDATE sessions SET archived=? WHERE id=?',(int(body['archived']),sid))
@@ -1350,7 +1365,7 @@ def main():
         except Exception: pass
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V2.6.2\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V2.7.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

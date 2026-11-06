@@ -141,6 +141,7 @@ def main():
                     'python_executable': sys.executable,
                     'webview_runtime': str(bundled_webview) if bundled_webview else 'system',
                     'language_control': main_window.evaluate_js("!!document.getElementById('ui-language')"),
+                    'audio_capture_api': main_window.evaluate_js("typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof MediaRecorder === 'function'"),
                     'main_icon_loaded': native_details(main_window)['icon_loaded'],
                     'icon': str(ICON),
                 }), encoding='utf-8')
