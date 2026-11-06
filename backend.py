@@ -160,7 +160,7 @@ def _upstream(c, endpoint, payload=None):
     if not c['base_url']: raise ApiError(400, '请先填写接口地址。')
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'AstraRemake/1.0'}
     if c['api_key']: headers['Authorization'] = 'Bearer ' + c['api_key']
-    request = Request(c['base_url'] + endpoint, data=None if payload is None else json.dumps(payload).encode(), headers=headers)
+    request = Request(c['base_url'] + endpoint, data=None if payload is None else json.dumps(payload,sort_keys=True).encode(), headers=headers)
     try:
         task_control.check(c)
         with build_opener(NoRedirect()).open(request, timeout=c['timeout']) as response, ExitStack() as resources:
@@ -190,7 +190,7 @@ def _stream_upstream(c, payload, emit):
     if c.get('request_usage'):payload['stream_options']={'include_usage':True}
     headers={'Content-Type':'application/json','Accept':'text/event-stream'}
     if c['api_key']: headers['Authorization']='Bearer '+c['api_key']
-    request=Request(c['base_url']+'/chat/completions',data=json.dumps(payload).encode(),headers=headers)
+    request=Request(c['base_url']+'/chat/completions',data=json.dumps(payload,sort_keys=True).encode(),headers=headers)
     content='';calls={};total=0
     try:
         task_control.check(c)
@@ -229,17 +229,29 @@ def _stream_upstream(c, payload, emit):
 
 def completion(c, messages, emit=None):
     if not c['model']: raise ApiError(400, '请先填写模型名称。')
-    personal_context=local_account.context(ROOT,DATA)
+    personal_context=local_account.context(ROOT,DATA,include_memory=False)
     if personal_context:
         messages=[dict(m) for m in messages]
         if messages and messages[0].get('role')=='system': messages[0]['content']+='\n\n'+personal_context
         else: messages=[{'role':'system','content':personal_context}]+messages
+    dynamic_context=local_account.context(ROOT,DATA,include_profile=False)
     if local_account.profile(DATA).get('use_memory'):
         tree=agent_hub.tree_context(DATA)
-        if tree:messages=[{'role':'system','content':'世界树长期背景资料，按事实参考：\n'+tree}]+list(messages)
+        if tree:dynamic_context+='\n\n世界树长期背景资料，按事实参考：\n'+tree
+    dynamic_context=dynamic_context.strip()
+    position=runtime_engine.context_position(database,c,messages,dynamic_context)
+    if dynamic_context:
+        # Anchor unchanged background at its first turn to preserve the prefix.
+        messages=list(messages)
+        messages.insert(position,{'role':'system','content':dynamic_context})
     payload = {'model': c['model'], 'messages': list(messages), 'stream': False}
     if c.get('reasoning') in ('low','medium','high'): payload['reasoning_effort'] = c['reasoning']
     enabled = c.get('tools', [])
+    # Snapshot schemas for this run. Newly loaded tools append without moving
+    # previously advertised schemas; changed MCP schemas take effect next run.
+    definitions=TOOL_DEFS+mcp_client.definitions(DATA) if enabled else []
+    tool_catalog={t['function']['name']:json.loads(json.dumps(t,sort_keys=True)) for t in definitions}
+    advertised=[]
     seen_calls={}
     call_count=0
     budget_exhausted=False
@@ -251,7 +263,11 @@ def completion(c, messages, emit=None):
             payload.pop('tools',None)
             payload['messages'].append({'role':'user','content':'本轮已到执行预算或检测到重复调用。现在停止工具，依据实际结果总结完成项、失败项和下一步，保留可继续的工作状态。'})
             if emit:emit({'type':'budget','name':'执行预算收尾，保存当前进展'})
-        elif enabled:payload['tools']=[t for t in TOOL_DEFS+mcp_client.definitions(DATA) if t['function']['name'] in enabled]
+        elif enabled:
+            advertised=[name for name in advertised if name in enabled]
+            advertised.extend(sorted(name for name in set(enabled) if name in tool_catalog and name not in advertised))
+            payload['tools']=[tool_catalog[name] for name in advertised]
+        else:payload.pop('tools',None)
         if c.get('auto_compact'):
             try:runtime_engine.compact_payload(c,payload,upstream,emit)
             except Exception:
@@ -712,13 +728,13 @@ def request_config(body):
     if not isinstance(selected_plugins,list) or len(selected_plugins)>8 or any(not isinstance(x,str) for x in selected_plugins): raise ApiError(400,'插件选择无效。')
     all_catalog=extensions.catalog(ROOT,DATA,True)
     c['runtime_plugins']=[]
-    for pid in selected_plugins:
+    for pid in sorted(set(selected_plugins)):
         plugin=next((p for p in all_catalog['plugins'] if p['id']==pid and p['supported']),None)
         if not plugin: raise ApiError(400,'插件不可用：'+pid)
         c['runtime_plugins'].append(pid)
         c['system_prompt']+='\n'+'\n'.join(v['prompt'] for v in all_catalog['skills'].values() if v['source']=='plugin:'+pid)
     active_plugins={p['id'] for p in extensions.catalog(ROOT,DATA)['plugins'] if p['enabled']}
-    for pid in list(dict.fromkeys([*active_plugins,*c['runtime_plugins']])):
+    for pid in sorted(active_plugins | set(c['runtime_plugins'])):
         if pid not in agent_hub.PLUGINS:continue
         if enabled:
             if pid not in c['runtime_plugins']:c['runtime_plugins'].append(pid)
@@ -970,7 +986,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.6.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.6.1', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/profile':
             if method=='GET':return self.reply(200,local_account.profile(DATA))
@@ -1320,7 +1336,7 @@ def main():
         except Exception: pass
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V2.6.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V2.6.1\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

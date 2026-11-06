@@ -37,7 +37,7 @@ def call(data,c,endpoint,payload=None,emit=None):
             return {'data':[{'id':model.get('slug',model.get('id')),'name':model.get('display_name',model.get('id'))} for model in models if model.get('visibility','list')=='list']}
         except Exception as error:raise ValueError('无法读取 OpenAI OAuth 模型目录') from error
     if endpoint!='/chat/completions':raise ValueError('OAuth 提供商不支持此接口')
-    request=Request(openai_oauth.RESOURCE+'/responses',data=json.dumps(payload_for(payload)).encode(),headers=headers)
+    request=Request(openai_oauth.RESOURCE+'/responses',data=json.dumps(payload_for(payload),sort_keys=True).encode(),headers=headers)
     completed=None;fragments=[];calls={};buffer=[]
     try:
         with build_opener(openai_oauth.NoRedirect()).open(request,timeout=c['timeout']) as response,ExitStack() as resources:

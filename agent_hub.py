@@ -217,8 +217,8 @@ def snapshot(data):
 
 def tree_context(data):
     with database(data) as db:
-        rows=db.execute("SELECT title,content FROM records WHERE kind='tree' AND status!='archived' ORDER BY updated DESC LIMIT 40").fetchall()
-    return '\n'.join(row['title']+': '+row['content'] for row in rows)[:10000]
+        rows=db.execute("SELECT id,title,content FROM records WHERE kind='tree' AND status!='archived' ORDER BY updated DESC,id LIMIT 40").fetchall()
+    return '\n'.join(row['title']+': '+row['content'] for row in sorted(rows,key=lambda row:row['id']))[:10000]
 
 def execute(root,data,name,args,config,emit,delegate):
     try:

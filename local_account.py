@@ -35,11 +35,11 @@ def memories(root):
         result.append({'id':path.stem,'content':path.read_text(encoding='utf-8')})
     return result
 
-def context(root,data):
+def context(root,data,include_profile=True,include_memory=True):
     p=profile(data);parts=[]
-    if p['inject_profile']: parts.append('本地用户资料：\n'+json.dumps({k:p[k] for k in ['display_name','username','role','bio']},ensure_ascii=False))
-    if p['instructions']:parts.append('用户自定义指令：\n'+p['instructions'])
-    if p['use_memory']:
+    if include_profile and p['inject_profile']: parts.append('本地用户资料：\n'+json.dumps({k:p[k] for k in ['display_name','username','role','bio']},ensure_ascii=False))
+    if include_profile and p['instructions']:parts.append('用户自定义指令：\n'+p['instructions'])
+    if include_memory and p['use_memory']:
         notes='\n\n'.join('【'+x['id']+'】\n'+x['content'] for x in memories(root))
         if notes:parts.append('本地记忆（用户保存的背景资料）：\n'+notes[:20000])
     return '\n\n'.join(parts)

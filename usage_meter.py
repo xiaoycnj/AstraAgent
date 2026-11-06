@@ -26,6 +26,8 @@ def counts(usage):
     if total is None and incoming is not None and outgoing is not None:total=incoming+outgoing
     detail=usage.get('input_tokens_details',usage.get('prompt_tokens_details',{}))
     cached=number(detail.get('cached_tokens')) if isinstance(detail,dict) else None
+    if cached is None:cached=number(usage.get('prompt_cache_hit_tokens'))
+    if cached is not None and incoming is not None and cached>incoming:cached=None
     return incoming,outgoing,total,cached
 
 def record(data,key,model,source,status,usage,stamp=None):
@@ -51,8 +53,10 @@ def activity(data,end=None,offset=0):
     with database(data) as db:
         rows=db.execute("SELECT date(stamp,'unixepoch',?) day,COALESCE(SUM(total),0) total,COUNT(*) calls,SUM(CASE WHEN total IS NULL THEN 1 ELSE 0 END) unreported FROM usage_events GROUP BY day",(str(offset)+' minutes',)).fetchall()
         lifetime=db.execute('SELECT COALESCE(SUM(total),0) total,COALESCE(SUM(input),0) input,COALESCE(SUM(output),0) output,COALESCE(SUM(cached),0) cached,COUNT(*) calls,COUNT(input) input_reported,COUNT(output) output_reported,COUNT(cached) cached_reported,COALESCE(SUM(CASE WHEN total IS NULL THEN 1 ELSE 0 END),0) unreported FROM usage_events').fetchone()
+        cache=dict(db.execute('SELECT COALESCE(SUM(input),0) input,COALESCE(SUM(cached),0) cached,COUNT(*) calls FROM usage_events WHERE input>0 AND cached IS NOT NULL AND cached<=input').fetchone())
+        cache['rate']=cache['cached']/cache['input'] if cache['input'] else None
         since=float(db.execute("SELECT value FROM usage_metadata WHERE key='since'").fetchone()[0])
     lookup={row['day']:dict(row) for row in rows}
     days=[{'day':(start+timedelta(days=i)).isoformat(),'total':0,'calls':0,'unreported':0} for i in range(365)]
     for item in days:item.update(lookup.get(item['day'],{}))
-    return {'before_total':sum(item['total'] for item in lookup.values() if item['day']<start.isoformat()),'days':days,'totals':dict(lifetime),'since':since,'offset_minutes':offset,'includes_model_subrequests':True}
+    return {'before_total':sum(item['total'] for item in lookup.values() if item['day']<start.isoformat()),'days':days,'totals':dict(lifetime),'cache':cache,'since':since,'offset_minutes':offset,'includes_model_subrequests':True}

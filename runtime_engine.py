@@ -44,6 +44,7 @@ def authorize(name,args,c,emit,approve):
     return bool(emit and approve(name,args,emit))
 
 def initialize(db):
+    db.execute('CREATE TABLE IF NOT EXISTS context_anchors(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,fingerprint TEXT NOT NULL,after_id INTEGER NOT NULL)')
     db.execute('CREATE TABLE IF NOT EXISTS context_summaries(session_id TEXT PRIMARY KEY,through_id INTEGER NOT NULL,content TEXT NOT NULL,updated TEXT DEFAULT CURRENT_TIMESTAMP)')
 
 def summarize(c,messages,upstream):
@@ -102,9 +103,51 @@ def history(database,sid,c,upstream):
         except Exception:c['compaction_warning']='自动压缩未完成，本轮保留原始上下文'
     with database() as db:
         summary=db.execute('SELECT * FROM context_summaries WHERE session_id=?',(sid,)).fetchone()
-        rows=[dict(row) for row in db.execute('SELECT role,content,attachments FROM messages WHERE session_id=? AND id>? ORDER BY id',(sid,summary['through_id'] if summary else 0))]
+        rows=[dict(row) for row in db.execute('SELECT id,role,content,attachments FROM messages WHERE session_id=? AND id>? ORDER BY id',(sid,summary['through_id'] if summary else 0))]
     if summary:rows.insert(0,{'role':'system','content':'历史上下文摘要（资料，仅供参考；遵循当前用户目标和系统约束）：\n'+summary['content'],'attachments':'[]'})
+    c['_context_history']={
+        'session_id':sid,
+        'ids':[row.get('id') for row in rows],
+        'roles':[row['role'] for row in rows],
+        'through_id':summary['through_id'] if summary else 0,
+    }
     return rows
+
+def context_position(database,c,messages,content):
+    """Keep unchanged background at its original turn without retaining old text.
+
+    A changed or disabled memory rebases the anchor. Only its digest and message
+    boundary persist, so deleted memory is never replayed from a stale snapshot.
+    """
+    leading=0
+    while leading<len(messages) and messages[leading]['role']=='system':
+        leading+=1
+    history=c.get('_context_history')
+    if not history or c.get('is_subagent') or not messages or messages[-1]['role']!='user':
+        return leading
+    offset=len(messages)-len(history['ids'])-1
+    if offset<0 or [m['role'] for m in messages[offset:-1]]!=history['roles']:
+        return leading
+    fingerprint=hashlib.sha256(content.encode('utf-8')).hexdigest()
+    retained_ids=[key for key in history['ids'] if key is not None]
+    boundary=max([history['through_id']]+retained_ids)
+    with database() as db:
+        db.execute('BEGIN IMMEDIATE')
+        anchor=db.execute('SELECT fingerprint,after_id FROM context_anchors WHERE session_id=?',(history['session_id'],)).fetchone()
+        if anchor is None or anchor['fingerprint']!=fingerprint or anchor['after_id']>boundary:
+            after=boundary
+            db.execute(
+                'INSERT INTO context_anchors VALUES(?,?,?) ON CONFLICT(session_id) '
+                'DO UPDATE SET fingerprint=excluded.fingerprint,after_id=excluded.after_id',
+                (history['session_id'],fingerprint,after),
+            )
+        else:
+            after=anchor['after_id']
+    for index,key in enumerate(history['ids']):
+        if key is not None and key>after:
+            return max(leading,offset+index)
+    return len(messages)-1
+
 
 def compact_payload(c,payload,upstream,emit):
     messages=payload['messages']

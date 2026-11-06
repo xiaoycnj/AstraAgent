@@ -35,6 +35,11 @@ function showUsageTooltip(event,label){usageTooltip.textContent=label;usageToolt
 function drawUsage(){
  if(!usageData)return;usageGrid.replaceChildren();usageMonths.replaceChildren();usageTotals.replaceChildren();usageTooltip.hidden=true;
  for(const [label,key,reported] of [['累计 Token','total',usageData.totals.calls-usageData.totals.unreported],['输入','input',usageData.totals.input_reported],['输出','output',usageData.totals.output_reported],['缓存命中','cached',usageData.totals.cached_reported]]){const box=elem('div');const value=usageData.totals.calls&&!reported?'—':Number(usageData.totals[key]).toLocaleString();box.append(elem('strong','',value),elem('span','',label));usageTotals.append(box);}
+ const cache=usageData.cache;
+ const cacheBox=elem('div');
+ cacheBox.title=uiText('命中率仅基于同时上报输入与缓存计数的请求。');
+ cacheBox.append(elem('strong','',cache?.rate==null?'—':(cache.rate*100).toFixed(1)+'%'),elem('span','','缓存命中率'));
+ usageTotals.append(cacheBox);
  for(const button of usageModes.children){const active=button.dataset.mode===usageMode;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active));}
  const days=usageData.days;const leading=new Date(days[0].day+'T00:00:00Z').getUTCDay();let cells=[],running=usageData.before_total||0;
  if(usageMode==='weekly'){

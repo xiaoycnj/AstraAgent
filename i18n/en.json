@@ -950,6 +950,8 @@
     "统计开始于": "Tracking since",
     "包含对话、工具循环、压缩和记忆的模型调用。": "Includes model calls for chat, tool loops, compaction and memory.",
     "{0} 次调用未返回 Token 用量。": "{0} calls did not report token usage.",
-    "月": "mo"
+    "月": "mo",
+    "缓存命中率": "Cache hit rate",
+    "命中率仅基于同时上报输入与缓存计数的请求。": "The rate only includes requests reporting both input and cached token counts."
   }
 }

@@ -72,7 +72,10 @@ class Integration(unittest.TestCase):
         self.assertEqual(self.call(path+'/chat','POST',{'content':'你好'})[0],200)
         self.assertEqual(len(self.call(path+'/messages')[1]),2)
         self.call(path+'/chat','POST',{'content':'第二轮'})
-        self.assertEqual(len(MockAI.calls[-1]['body']['messages']),4)
+        dialogue=[message for message in MockAI.calls[-1]['body']['messages'] if message['role']!='system']
+        self.assertEqual([message['role'] for message in dialogue],['user','assistant','user'])
+        self.assertEqual(dialogue[0]['content'],'你好')
+        self.assertEqual(dialogue[-1]['content'],'第二轮')
         MockAI.fail=True
         code,result=self.call(path+'/chat','POST',{'content':'失败不保存'})
         self.assertEqual(code,502); self.assertNotIn('private provider',result['error'])
