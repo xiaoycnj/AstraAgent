@@ -434,3 +434,17 @@ Git 仓库托管源代码和必要应用依赖。标准与 Lite 二进制发行�
 官方模型接口文档 https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference
 
 关于页的“点击查看开源声明”以弹窗集中显示项目 MIT 与所有随包第三方原文，鸣谢按用户指定文字列出作者和贡献者。
+
+
+## V2.5 稳定输出与对话导航
+
+普通流式对话在输入框旁提供“停止生成”，取消后保留已接收内容并关闭当前请求，刷新页面继续显示已保存的部分回复。请求尚未登记时停止按钮会等待当前请求注册并重试，避免误操作旧任务。多人格审查仍使用原有非流式请求流程。
+
+生成期间只更新当前回复的轻量文本，保持历史消息节点与附件、按钮稳定；结束或停止后恢复完整 Markdown、代码和 LaTeX 渲染。向上阅读时保留当前位置，点击“回到最新”恢复跟随。
+
+消息区的条纹导航根据可视高度合并采样，最多 120 条。悬停时邻近条纹渐变伸长并显示安全文本预览，点击或键盘确认可跳转消息。尊重系统减少动态效果设置。
+
+交互设计参考公开的 ZCode、DeepSeek Harness 与 Qoder 资料，导航与渲染代码为项目内实现。
+https://github.com/zai-org/zcode
+https://github.com/deepseek-ai/deepseek-harness
+https://docs.qoder.com/user-guide/chat/overview
