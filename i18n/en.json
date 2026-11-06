@@ -952,6 +952,19 @@
     "{0} 次调用未返回 Token 用量。": "{0} calls did not report token usage.",
     "月": "mo",
     "缓存命中率": "Cache hit rate",
-    "命中率仅基于同时上报输入与缓存计数的请求。": "The rate only includes requests reporting both input and cached token counts."
+    "命中率仅基于同时上报输入与缓存计数的请求。": "The rate only includes requests reporting both input and cached token counts.",
+    "会话附件": "Conversation files",
+    "正在加载附件…": "Loading files…",
+    "待发送": "Pending send",
+    "新建输出": "New output",
+    "添加来源": "Add source",
+    "创建输出内容": "Create an output",
+    "添加图片或文档": "Add an image or document",
+    "输出名称": "Output name",
+    "输出正文": "Output content",
+    "写下要保存的输出内容…": "Write the output content to save…",
+    "保存输出": "Save output",
+    "已保存到会话输出": "Saved to conversation outputs",
+    "保存为输出": "Save as output"
   }
 }

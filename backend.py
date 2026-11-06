@@ -92,6 +92,7 @@ def initialize():
         db.execute("UPDATE runs SET status='interrupted' WHERE status IN ('running','waiting')")
         stream_journal.initialize(db)
         runtime_engine.initialize(db)
+        attachments.initialize(db)
         if 'revision' not in {r['name'] for r in db.execute('PRAGMA table_info(canvases)')}:
             db.execute('ALTER TABLE canvases ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
         if 'persona' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}:
@@ -875,6 +876,7 @@ class Handler(BaseHTTPRequestHandler):
             try:item=attachments.meta(DATA,parts[2])
             except ValueError as e:raise ApiError(404,str(e)) from None
             if len(parts)==3:return self.reply(200,attachments.public(item))
+            if parts[3:]==['preview']:return self.reply(200,{'name':item['name'],'kind':item['kind'],'text':item.get('text','')})
             if parts[3:]!=['content']:raise ApiError(404,'附件路径无效')
             raw=(attachments.location(DATA,parts[2])/'content').read_bytes()
             self.send_response(200);self.send_header('Content-Type',item['mime']);self.send_header('Content-Length',str(len(raw)));self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
@@ -986,7 +988,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.6.1', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.6.2', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/profile':
             if method=='GET':return self.reply(200,local_account.profile(DATA))
@@ -1152,6 +1154,9 @@ class Handler(BaseHTTPRequestHandler):
                             query+=' AND id'+(' < ?' if 'before_id' in branch_body else ' <= ?')
                             parameters.append(cutoff)
                         db.execute(query+' ORDER BY id',parameters)
+                        outputs='INSERT INTO session_outputs(session_id,attachment_id) SELECT ?,attachment_id FROM session_outputs WHERE session_id=?'
+                        if cutoff is not None:outputs+=' AND (message_id IS NULL OR message_id'+(' < ?' if 'before_id' in branch_body else ' <= ?')+')'
+                        db.execute(outputs,parameters)
                         db.commit()
                     return self.reply(201,{'id':branch,'title':title,'parent_id':sid,'project_id':source['project_id']})
                 if path[3:] == ['compact'] and method=='POST':
@@ -1172,6 +1177,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.reply(200,dict(row) if row else None)
                 if path[3:] == ['runs'] and method == 'GET':
                     return self.reply(200,[{**dict(r),'events':json.loads(r['events'])} for r in db.execute('SELECT * FROM runs WHERE session_id=? ORDER BY rowid DESC LIMIT 20',(sid,))])
+                if path[3:] == ['resources']:
+                    if method=='GET':return self.reply(200,attachments.resources(db,DATA,sid))
+                    if method=='POST':
+                        body=self.body()
+                        db.execute('BEGIN IMMEDIATE')
+                        if not db.execute('SELECT id FROM sessions WHERE id=?',(sid,)).fetchone():raise ApiError(404,'会话不存在。')
+                        try:item=attachments.save_output(db,DATA,sid,body)
+                        except ValueError as error:raise ApiError(400,str(error)) from None
+                        return self.reply(201,item)
                 if path[3:] == ['messages'] and method == 'GET': return self.reply(200, [dict(r) for r in db.execute('SELECT * FROM messages WHERE session_id=? ORDER BY id', (sid,))])
             if path[3:] == ['chat'] and method == 'POST':
                 request_body = self.body()
@@ -1336,7 +1350,7 @@ def main():
         except Exception: pass
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V2.6.1\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V2.6.2\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

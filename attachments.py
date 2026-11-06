@@ -3,6 +3,58 @@ import base64,hashlib,io,json,re,secrets,subprocess,sys,zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
 MAX_FILE=5*1024*1024
+
+def initialize(db):
+    db.execute('CREATE TABLE IF NOT EXISTS session_outputs(session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,attachment_id TEXT NOT NULL,message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,PRIMARY KEY(session_id,attachment_id),UNIQUE(session_id,message_id))')
+
+
+def resources(db,data,sid):
+    sources={}
+    for row in db.execute('SELECT id,attachments FROM messages WHERE session_id=? ORDER BY id',(sid,)):
+        try:ids=json.loads(row['attachments'])
+        except (TypeError,ValueError):continue
+        if not isinstance(ids,list):continue
+        for key in ids:
+            if not isinstance(key,str) or key in sources:continue
+            try:item=public(meta(data,key))
+            except ValueError:item={'id':key,'name':'附件不可用','kind':'missing','size':0,'unavailable':True}
+            sources[key]={**item,'message_id':row['id']}
+    outputs=[]
+    for row in db.execute('SELECT attachment_id,message_id FROM session_outputs WHERE session_id=? ORDER BY rowid',(sid,)):
+        try:item=public(meta(data,row['attachment_id']))
+        except ValueError:item={'id':row['attachment_id'],'name':'输出不可用','kind':'missing','size':0,'unavailable':True}
+        outputs.append({**item,'message_id':row['message_id']})
+    return {'sources':list(sources.values()),'outputs':outputs}
+
+
+def save_output(db,data,sid,body):
+    """Create a bounded Markdown output in the same transaction as its link."""
+    message_id=body.get('message_id')
+    if message_id is not None:
+        if type(message_id) is not int:raise ValueError('消息 ID 无效')
+        message=db.execute("SELECT content FROM messages WHERE session_id=? AND id=? AND role='assistant'",(sid,message_id)).fetchone()
+        if message is None:raise ValueError('只能保存当前会话中的助手回复')
+        existing=db.execute('SELECT attachment_id FROM session_outputs WHERE session_id=? AND message_id=?',(sid,message_id)).fetchone()
+        if existing:return public(meta(data,existing['attachment_id']))
+        content=message['content']
+        name='Astra-output-'+str(message_id)+'.md'
+    else:
+        content=body.get('content')
+        name=body.get('name','未命名输出.md')
+    if not isinstance(content,str) or not content.strip() or len(content)>60000:raise ValueError('输出正文需为 1 至 60000 字符')
+    if not isinstance(name,str) or not name.strip() or len(name)>200:raise ValueError('输出名称无效')
+    if not name.lower().endswith('.md'):name+='.md'
+    item=upload(data,{'name':name,'data':base64.b64encode(content.encode('utf-8')).decode('ascii')})
+    try:
+        db.execute('INSERT INTO session_outputs VALUES(?,?,?)',(sid,item['id'],message_id))
+        db.commit()
+    except Exception:
+        folder=location(data,item['id'])
+        (folder/'content').unlink(missing_ok=True)
+        (folder/'meta.json').unlink(missing_ok=True)
+        folder.rmdir()
+        raise
+    return item
 TEXT_EXT={'.txt','.md','.csv','.json','.py','.js','.ts','.html','.css','.xml','.yaml','.yml','.sql','.log','.tex','.rs','.java','.go','.cpp','.c','.h','.sh','.ps1','.toml','.ini','.vue','.jsx','.tsx','.svg'}
 def location(data,key):
     if not isinstance(key,str) or not re.fullmatch('[a-f0-9]{32}',key):raise ValueError('附件 ID 无效')
