@@ -10,13 +10,18 @@ def valid_id(value):
 
 def catalog(root,data,include_disabled=False):
     skills={};errors=[];plugins=[]
+    disabled_path=data/"skill-settings.json"
+    try:skill_states=json.loads(disabled_path.read_text(encoding="utf-8")) if disabled_path.exists() else {}
+    except (ValueError,OSError):skill_states={};errors.append("Skill 状态无法读取")
     for path in sorted((root/'skills').glob('*/SKILL.md')):
         try:
             key=valid_id(path.parent.name)
             if not path.resolve().is_relative_to((root/'skills').resolve()) or path.stat().st_size>50000: raise ValueError('Skill 路径或大小无效')
             content=path.read_text(encoding='utf-8');title,_,prompt=content.partition('\n')
             if not title.startswith('# ') or not prompt.strip() or len(prompt.strip())>12000: raise ValueError('Skill 需以 # 名称 开头并包含提示词，正文最多 12000 字符')
-            skills[key]={'name':title[2:].strip(),'prompt':prompt.strip(),'source':'skills/'+key+'/SKILL.md','editable':True}
+            active=key=='general' or skill_states.get(key,True) is True
+            if not active and not include_disabled:continue
+            skills[key]={'enabled':active,'name':title[2:].strip(),'prompt':prompt.strip(),'source':'skills/'+key+'/SKILL.md','editable':True}
         except (ValueError,OSError) as e: errors.append(str(path.name)+': '+str(e))
     state_path=data/'extensions.json'
     try: enabled=json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
@@ -52,3 +57,14 @@ def toggle_plugin(root,data,pid,active):
     if active and not plugin['supported']: raise ValueError('此插件需要尚未支持的可执行工具适配器')
     path=data/'extensions.json';state=json.loads(path.read_text(encoding='utf-8')) if path.exists() else {};state[pid]=active
     temp=path.with_suffix('.tmp');temp.write_text(json.dumps(state),encoding='utf-8');temp.replace(path)
+
+
+def toggle_skill(root,data,key,active):
+    valid_id(key)
+    if key=='general' and not active:raise ValueError('通用助手始终可用')
+    available=catalog(root,data,True)['skills']
+    if key not in available or not available[key]['editable']:raise ValueError('请通过所属插件管理此 Skill')
+    path=data/'skill-settings.json'
+    state=json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+    state[key]=bool(active);temporary=path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(state),encoding='utf-8');temporary.replace(path)

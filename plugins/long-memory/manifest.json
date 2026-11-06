@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "long-memory",
   "name": "主动长期记忆",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "遇到用户明确表达的长期事实、偏好与项目决定，使用 remember_memory 自动保存。用 recall_memory 检索。不要保存密码、临时任务或助手猜测。",
   "tools": [
     "recall_memory"
@@ -11,7 +11,7 @@
     {
       "id": "main",
       "name": "主动长期记忆",
-      "prompt": "遇到用户明确表达的长期事实、偏好与项目决定，使用 remember_memory 自动保存。用 recall_memory 检索。不要保存密码、临时任务或助手猜测。"
+      "prompt": "遇到用户明确表达的长期事实、偏好与项目决定，使用 remember_memory 自动保存。用 recall_memory 检索。不要保存密码、临时任务或助手猜测。\n\n工作规程\n只保存用户明确的稳定偏好、已确认决定和可复用事实。先检索并去重，冲突时保留时间和来源；密码、令牌、推测以及临时聊天不进入长期记忆。\n\n依据工具真实返回值报告结果。未获批准的操作停止并说明，保留已完成的产物和可继续步骤。"
     }
   ]
 }

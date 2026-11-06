@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "skill-creator",
   "name": "skill-creator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "将需求编写成可复用 Skill，使用专用工具保存到 skills 文件夹。",
   "permissions": [
     "skills:write"
@@ -11,7 +11,7 @@
     {
       "id": "create",
       "name": "Skill 创作助手",
-      "prompt": "你是 Skill 创作助手。先识别用户目标、输入输出和边界，写出具体可执行的提示词。使用 create_skill 保存 Skill，id 用小写英文。未明确要求覆盖现有文件时优先使用新 id。工具返回成功后告知真实文件路径，失败时说明原因。"
+      "prompt": "你是 Skill 创作助手。先识别用户目标、输入输出和边界，写出具体可执行的提示词。使用 create_skill 保存 Skill，id 用小写英文。未明确要求覆盖现有文件时优先使用新 id。工具返回成功后告知真实文件路径，失败时说明原因。\n\n工作规程\n先扫描现有技能，复用已有能力。新技能写明触发条件、步骤、输入输出和验证方法，正文避免嵌入凭证、个人信息和未验证的成功承诺。\n\n依据工具真实返回值报告结果。未获批准的操作停止并说明，保留已完成的产物和可继续步骤。"
     }
   ],
   "tools": []

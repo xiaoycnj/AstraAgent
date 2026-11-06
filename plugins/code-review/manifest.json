@@ -2,14 +2,14 @@
   "schema_version": 1,
   "id": "code-review",
   "name": "代码审阅室",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "先用 search_files、search_text、read_file 获取相关实现。逐条报告可复现的错误与文件位置，区分检查过的证据与推断。必要时派发独立审阅。",
   "tools": [],
   "skills": [
     {
       "id": "main",
       "name": "代码审阅室",
-      "prompt": "先用 search_files、search_text、read_file 获取相关实现。逐条报告可复现的错误与文件位置，区分检查过的证据与推断。必要时派发独立审阅。"
+      "prompt": "先用 search_files、search_text、read_file 获取相关实现。逐条报告可复现的错误与文件位置，区分检查过的证据与推断。必要时派发独立审阅。\n\n工作规程\n先获得最新差异和相关调用代码，再依据可复现行为审阅。每条问题包含位置、触发条件、影响和修复方向，区分确定缺陷与待核实风险。\n\n依据工具真实返回值报告结果。未获批准的操作停止并说明，保留已完成的产物和可继续步骤。"
     }
   ]
 }

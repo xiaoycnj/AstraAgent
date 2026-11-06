@@ -26,7 +26,7 @@ def isolated_app(folder):
     for name in ['cli.py','backend.py','server.py','watchdog.py','extensions.py','local_account.py',
                  'agent_environment.py','workbench.py','attachments.py','workspace_tools.py','agent_hub.py',
                  'stream_journal.py','runtime_engine.py','mcp_client.py','storage_manager.py',
-                 'project_workspace.py','task_control.py','runtime_paths.py','ui_locale.py']:
+                 'project_workspace.py','task_control.py','runtime_paths.py','ui_locale.py','openai_oauth.py','openai_responses.py']:
         shutil.copyfile(ROOT / name, folder / name)
     skill = folder / 'skills/general'
     skill.mkdir(parents=True)

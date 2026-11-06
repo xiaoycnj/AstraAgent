@@ -416,3 +416,21 @@ python.bat scripts\build_release.py --edition all --output G:\AstraAgent-release
 AstraAgent 原创代码采用 MIT License，Copyright (c) 2026 cnxiaoy。完整条款见 [LICENSE](LICENSE)。随项目分发的第三方库、字体、品牌图标与运行时按各自许可提供，原始版权声明保留在对应目录以及 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 Git 仓库托管源代码和必要应用依赖。标准与 Lite 二进制发行包及 SHA-256 校验文件通过 GitHub Releases 分发。data、个人记忆、密钥、运行时二进制与本地缓存由 .gitignore 排除。
+
+
+## V2.4 统一能力管理与 OAuth
+
+设置中的“插件与技能”合并插件、Skills、MCP、Tools 四个分类，提供搜索、统一开关、编辑与服务连接。独立 Skill 可以启停，通用助手始终保留，插件贡献的技能随插件管理。内置五个 Skill 与十四个插件补充了输入、执行、权限、证据和完成条件。
+
+上下文压缩按有界分段递进合并，保留最近指令和完整工具调用/结果组。自动压缩仅在缩减有效时替换请求，失败时保留原上下文。会话摘要写入使用事务与原始消息快照校验，遇到并发编辑或删除会拒绝覆盖。原始对话和附件继续保存在本机。
+
+服务商页面新增 OpenAI · ChatGPT OAuth。此版本按用户配置的正式 OAuth client ID 与 `http://127.0.0.1:端口/auth/callback` 发起浏览器授权，使用 PKCE S256、state 和 OIDC nonce，验证 RS256 身份签名、issuer、audience、有效期及账号身份。凭证仅保存在 `data/openai-oauth.dpapi`，通过当前 Windows 用户的 DPAPI 加密，临近过期时刷新。断开本机登录会清除本机凭证，远端授权可在 ChatGPT 的 Usage 设置管理。
+
+登录成功后会出现独立的 OpenAI · ChatGPT OAuth 服务商。模型推理经过官方 `https://api.openai.com/v1/responses`，固定 `store=false`、`stream=true`，读取到完成事件才算成功。工具调用与现有 Agent 循环共用权限。模型目录由授权账户提供，实际可用性取决于该账户的授权、计划及额度。
+
+使用者需提供为应用注册的 client ID 和允许的回调地址。当前发行未内置注册身份，真实 OpenAI 登录与付费模型推理需要使用者自行授权。自动化测试使用模拟授权与推理服务，覆盖 PKCE/state、真实 RSA 签名校验、DPAPI、流完成及工具转换。
+
+官方接入文档 https://developers.openai.com/siwc/token-sharing-open-source/sign-in
+官方模型接口文档 https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference
+
+关于页的“点击查看开源声明”以弹窗集中显示项目 MIT 与所有随包第三方原文，鸣谢按用户指定文字列出作者和贡献者。

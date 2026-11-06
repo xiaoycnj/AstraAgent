@@ -906,6 +906,25 @@
     "AstraAgent 已在运行。请使用应用内的新窗口。": "AstraAgent is already running. Use New window in the app.",
     "标准版 · 完整运行环境": "Standard edition · Complete runtime",
     "Lite 版 · 使用本机环境": "Lite edition · System runtime",
-    "开发工作区": "Development workspace"
+    "开发工作区": "Development workspace",
+    "插件与技能": "Plugins & Skills",
+    "搜索插件、技能和服务": "Search plugins, skills and servers",
+    "搜索能力": "Search capabilities",
+    "点击查看开源声明": "View open-source notices",
+    "开源版权声明": "Open-source notices",
+    "鸣谢": "Acknowledgements",
+    "作者：cnxiaoy": "Author: cnxiaoy",
+    "贡献者：Codex（OpenAI-GPT-6.1 Sol及GPT-6 Astra），朱峰智能体维权群的群友": "Contributors: Codex (OpenAI-GPT-6.1 Sol and GPT-6 Astra), members of the ZhuFeng Agent Rights Group",
+    "OAuth Client ID": "OAuth Client ID",
+    "回调地址": "Redirect URI",
+    "打开 OpenAI 授权页面": "Open OpenAI authorization",
+    "取消登录": "Cancel sign-in",
+    "断开本机登录": "Disconnect local account",
+    "尚未登录": "Not signed in",
+    "等待浏览器授权": "Waiting for browser authorization",
+    "已连接": "Connected",
+    "请通过所属插件管理此 Skill": "Manage this Skill through its plugin",
+    "填写为 AstraAgent 注册的 client ID 和回调地址。登录后在对话中选择 OpenAI · ChatGPT OAuth，并获取或填写账户可用模型。": "Enter the client ID and redirect URI registered for AstraAgent. After sign-in, choose OpenAI · ChatGPT OAuth in chat and configure an available model.",
+    "插件 {0}": "Plugins {0}"
   }
 }

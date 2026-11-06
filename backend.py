@@ -1,6 +1,8 @@
 """Local browser workbench. Standard library only; Python 3.10+."""
 import argparse
 import extensions
+import openai_oauth
+import openai_responses
 import local_account
 import agent_environment
 import workbench
@@ -150,6 +152,7 @@ def upstream(c, endpoint, payload=None):
 
 
 def _upstream(c, endpoint, payload=None):
+    if c.get('auth_type')=='openai_oauth':return openai_responses.call(DATA,c,endpoint,payload)
     if not c['base_url']: raise ApiError(400, '请先填写接口地址。')
     headers = {'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'AstraRemake/1.0'}
     if c['api_key']: headers['Authorization'] = 'Bearer ' + c['api_key']
@@ -171,6 +174,7 @@ def _upstream(c, endpoint, payload=None):
     except (ValueError, UnicodeError): raise ApiError(502, '模型服务未返回有效 JSON。') from None
 
 def stream_upstream(c, payload, emit):
+    if c.get('auth_type')=='openai_oauth':return task_control.io_call(c.get('_cancel_token'),lambda:openai_responses.call(DATA,c,'/chat/completions',payload,emit))
     def guarded_emit(event):
         task_control.check(c)
         emit(event)
@@ -777,6 +781,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def route(self):
         pathname = urlsplit(self.path).path
+        if pathname.startswith('/api/openai-oauth/'):
+            action=pathname.rsplit('/',1)[-1];manager=openai_oauth.manager(DATA)
+            try:
+                if action=='begin' and self.command=='POST':return self.reply(200,manager.begin(self.body()))
+                if action=='cancel' and self.command=='POST':manager.cancel();return self.reply(200,manager.status())
+                if action=='logout' and self.command=='POST':return self.reply(200,manager.logout())
+                if action=='status' and self.command=='GET':
+                    status=manager.status()
+                    if status['connected']:
+                        with CONFIG_LOCK:
+                            rows=profiles()
+                            if not any(row['id']=='openai-oauth' for row in rows):
+                                profile={**DEFAULTS,'id':'openai-oauth','name':'OpenAI · ChatGPT OAuth','base_url':openai_oauth.RESOURCE,'api_key':'','auth_type':'openai_oauth'}
+                                rows.append(profile);temporary=DATA/'providers.tmp';temporary.write_text(json.dumps(rows,ensure_ascii=False),encoding='utf-8');temporary.replace(DATA/'providers.json')
+                    return self.reply(200,status)
+            except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
         if pathname == '/api/i18n':
             try:
                 if self.command == 'GET':
@@ -944,7 +964,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.3.1', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '2.4.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/profile':
             if method=='GET':return self.reply(200,local_account.profile(DATA))
@@ -1018,6 +1038,13 @@ class Handler(BaseHTTPRequestHandler):
                 if method=='GET':return self.reply(200,runtime_engine.evolve(ROOT,DATA,{'id':key,'action':'versions'}))
                 if method=='POST':return self.reply(200,runtime_engine.evolve(ROOT,DATA,{'id':key,'action':'rollback','version':self.body().get('version')}))
             except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
+        if pathname.startswith('/api/skill-state/') and method=='PUT':
+            try:
+                body=self.body()
+                if type(body.get('enabled')) is not bool:raise ValueError('开关格式无效')
+                with CONFIG_LOCK:extensions.toggle_skill(ROOT,DATA,pathname.rsplit('/',1)[-1],body['enabled'])
+                return self.reply(200,{'ok':True})
+            except ValueError as error:raise ApiError(400,str(error)) from None
         if pathname.startswith('/api/skills/') and method == 'PUT':
             body=self.body()
             try: extensions.save_skill(ROOT,pathname.rsplit('/',1)[-1],body)
@@ -1029,7 +1056,7 @@ class Handler(BaseHTTPRequestHandler):
                 with CONFIG_LOCK: extensions.toggle_plugin(ROOT,DATA,pathname.rsplit('/',1)[-1],body.get('enabled') is True)
             except ValueError as e: raise ApiError(400,str(e)) from None
             return self.reply(200,{'ok':True})
-        if pathname == '/api/capabilities' and method == 'GET': return self.reply(200, {**extensions.catalog(ROOT,DATA),'tools':TOOL_DEFS+mcp_client.definitions(DATA)})
+        if pathname == '/api/capabilities' and method == 'GET': return self.reply(200, {**extensions.catalog(ROOT,DATA),'all_skills':extensions.catalog(ROOT,DATA,True)['skills'],'tools':TOOL_DEFS+mcp_client.definitions(DATA)})
         if pathname == '/api/providers':
             if method == 'GET': return self.reply(200,[public_config(x) for x in profiles()])
             if method == 'POST':
@@ -1282,7 +1309,7 @@ def main():
         except Exception: pass
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V2.3.1\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V2.4.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')
