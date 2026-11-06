@@ -117,7 +117,9 @@ async function beginVoice(pointerId=null){
 }
 function releaseVoice(){
     const run=voiceRun;if(!run)return;
-    voiceIgnoreClick=true;setTimeout(()=>{voiceIgnoreClick=false;},0);
+    // A touch browser may dispatch its compatibility click after transcription.
+    // Consume that click, or reset at the next deliberate press.
+    voiceIgnoreClick=true;
     if(run.phase==='requesting'){cancelVoice();return;}
     if(run.phase!=='recording')return;
     run.phase='stopping';clearTimeout(run.timer);run.recorder.stop();stopVoiceTracks(run);
@@ -157,16 +159,19 @@ function insertVoiceDraft(){
     speechInput.dispatchEvent(new Event('input',{bubbles:true}));speechInput.focus();
 }
 speechButton.addEventListener('pointerdown',event=>{
-    if(event.button!==0||voiceSendable()||speechButton.disabled)return;
+    if(event.button!==0)return;
+    voiceIgnoreClick=false;
+    if(voiceSendable()||speechButton.disabled)return;
     event.preventDefault();speechButton.setPointerCapture(event.pointerId);beginVoice(event.pointerId);
 });
 window.addEventListener('pointerup',event=>{if(voiceRun?.pointerId===event.pointerId)releaseVoice();});
 speechButton.addEventListener('pointercancel',cancelVoice);
 speechButton.addEventListener('lostpointercapture',()=>{if(voiceRun?.phase==='recording')cancelVoice();});
 speechButton.addEventListener('click',event=>{
-    if(voiceRun||voiceIgnoreClick||!voiceSendable()){event.preventDefault();event.stopImmediatePropagation();}
+    if(voiceRun||voiceIgnoreClick||!voiceSendable()){voiceIgnoreClick=false;event.preventDefault();event.stopImmediatePropagation();}
 },true);
 speechButton.addEventListener('keydown',event=>{
+    if(voiceSendable()&&!voiceRun)voiceIgnoreClick=false;
     if(![' ','Enter'].includes(event.key)||voiceSendable())return;
     event.preventDefault();if(!event.repeat)beginVoice();
 });
