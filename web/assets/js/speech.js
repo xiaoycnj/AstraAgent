@@ -166,7 +166,7 @@ speechButton.addEventListener('pointerdown',event=>{
 });
 window.addEventListener('pointerup',event=>{if(voiceRun?.pointerId===event.pointerId)releaseVoice();});
 speechButton.addEventListener('pointercancel',cancelVoice);
-speechButton.addEventListener('lostpointercapture',()=>{if(voiceRun?.phase==='recording')cancelVoice();});
+speechButton.addEventListener('lostpointercapture',()=>{if(['recording','requesting'].includes(voiceRun?.phase))cancelVoice();});
 speechButton.addEventListener('click',event=>{
     if(voiceRun||voiceIgnoreClick||!voiceSendable()){voiceIgnoreClick=false;event.preventDefault();event.stopImmediatePropagation();}
 },true);
@@ -181,7 +181,7 @@ speechInput.addEventListener('input',syncVoiceButton);
 document.addEventListener('click',()=>queueMicrotask(syncVoiceButton));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&voiceRun){event.preventDefault();cancelVoice();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelVoice();});
-window.addEventListener('blur',()=>{if(voiceRun?.phase==='recording')cancelVoice();});
+window.addEventListener('blur',()=>{if(['recording','requesting'].includes(voiceRun?.phase))cancelVoice();});
 window.addEventListener('pagehide',cancelVoice);
 const beforeVoiceOpenSession=openSession;
 openSession=async function(session){cancelVoice();return beforeVoiceOpenSession(session);};
