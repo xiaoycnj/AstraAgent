@@ -77,6 +77,7 @@ function cancelVoice(){
     const run=voiceRun;
     voiceRun=null;voiceDraft=null;voiceInsert.hidden=true;voiceMessage('');
     if(run){
+        voiceIgnoreClick=true;
         run.cancelled=true;run.controller?.abort();
         if(run.recorder?.state==='recording')run.recorder.stop();
         stopVoiceTracks(run);
@@ -89,7 +90,7 @@ async function beginVoice(pointerId=null){
     if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toast('当前环境不支持录音，请使用支持麦克风的浏览器或桌面运行时');return;}
     voiceDraft=null;voiceInsert.hidden=true;
     const run={session:state.session?.id||null,initial:speechInput.value,phase:'requesting',pointerId,chunks:[],bytes:0,cancelled:false};
-    voiceRun=run;voiceMessage('正在请求麦克风权限…');syncVoiceButton();
+    voiceRun=run;voiceIgnoreClick=true;voiceMessage('正在请求麦克风权限…');syncVoiceButton();
     try{
         run.stream=await navigator.mediaDevices.getUserMedia({audio:true});
         if(run.cancelled||voiceRun!==run){stopVoiceTracks(run);return;}
