@@ -1,5 +1,3 @@
-runtimes\node\node_modules\npm\node_modules\ip-address\LICENSE
-
 Copyright (C) 2011 by Beau Gunderson
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

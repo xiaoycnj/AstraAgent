@@ -23,15 +23,16 @@ voicePanel.insertBefore(sttForm,voiceForm);
 let sttSettings={};
 function drawSTTSettings(){
     for(const key of ['base_url','model','language'])sttFields[key].value=sttSettings[key]||'';
-    sttFields.api_key.value='';sttClear.checked=false;
+    sttPrivate.checked=!!sttSettings.allow_private_network;sttFields.api_key.value='';sttClear.checked=false;
     sttHint.textContent=uiText(sttSettings.has_key?'密钥已保存，留空保留':'本地服务可不填写密钥');
 }
+const sttPrivate=elem('input');sttPrivate.type='checkbox';sttPrivate.setAttribute('role','switch');const sttPrivateLabel=elem('label','switch-pill');sttPrivateLabel.append(elem('span','','允许 STT HTTPS 私有网络接口'),sttPrivate);sttForm.append(sttPrivateLabel);
 async function loadSTTSettings(){sttSettings=await api('/api/stt/settings');drawSTTSettings();}
 sttForm.onsubmit=safely(async event=>{
     event.preventDefault();sttSave.disabled=true;
     try{
         const body=Object.fromEntries(Object.entries(sttFields).map(([key,input])=>[key,input.value.trim()]));
-        sttSettings=await api('/api/stt/settings','PUT',{...body,clear_key:sttClear.checked});
+        sttSettings=await api('/api/stt/settings','PUT',{...body,clear_key:sttClear.checked,allow_private_network:sttPrivate.checked});
         drawSTTSettings();toast('STT 配置已保存');
     }finally{sttSave.disabled=false;}
 });

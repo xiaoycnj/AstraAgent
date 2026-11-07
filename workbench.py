@@ -1,20 +1,22 @@
 """Text workspace and persistent native shell sessions. Native shells are not sandboxes."""
+import security_core
 import atexit
 import base64,hashlib,json,os,queue,secrets,shutil,subprocess,threading,time
 from pathlib import Path
 
 TERMINALS={};LOCK=threading.Lock()
 def file_path(data,name,root=None):
+    security_core.relative_path(name)
     root=Path(root).resolve() if root else (data/'files').resolve();root.mkdir(parents=True,exist_ok=True)
     if not isinstance(name,str) or not name or len(name)>240 or ':' in name or Path(name).is_absolute():raise ValueError('请使用工作区相对文件路径')
     path=(root/name).resolve()
     if path==root or not path.is_relative_to(root):raise ValueError('文件路径超出工作区')
-    return path
+    return security_core.protect_private(path)
 
 def files(data,root=None):
     project_mode=bool(root);root=Path(root) if root else data/'files';root.mkdir(exist_ok=True);result=[]
     for folder,dirs,names in os.walk(root,followlinks=False):
-        dirs[:]=[d for d in dirs if not (Path(folder)/d).is_symlink() and not getattr(Path(folder)/d,'is_junction',lambda:False)() and (not project_mode or d not in ('.git','node_modules','.venv','venv','__pycache__','.cache','dist','build'))]
+        dirs[:]=[d for d in dirs if not security_core.private_path(Path(folder)/d) and not (Path(folder)/d).is_symlink() and not getattr(Path(folder)/d,'is_junction',lambda:False)() and (not project_mode or d not in ('.git','node_modules','.venv','venv','__pycache__','.cache','dist','build'))]
         for name in names:
             p=Path(folder)/name
             if p.is_symlink():continue

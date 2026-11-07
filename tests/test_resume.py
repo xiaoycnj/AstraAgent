@@ -32,7 +32,7 @@ class Resume(unittest.TestCase):
         self.ai=ThreadingHTTPServer(('127.0.0.1',0),StreamingAI);self.app=backend.LocalServer(('127.0.0.1',0),backend.Handler)
         for server in (self.ai,self.app):threading.Thread(target=server.serve_forever,daemon=True).start()
         self.base='http://127.0.0.1:'+str(self.app.server_port)
-        with urlopen(self.base+'/api/bootstrap') as response:self.token=json.load(response)['token']
+        with urlopen(Request(self.base+'/api/bootstrap',headers={'X-App-Token':backend.TOKEN})) as response:self.token=json.load(response)['token']
         self.call('/api/settings','PUT',{'base_url':'http://127.0.0.1:'+str(self.ai.server_port)+'/v1','model':'mock','timeout':10})
         self.sid=self.call('/api/sessions','POST',{'title':'resume'})['id']
     def tearDown(self):

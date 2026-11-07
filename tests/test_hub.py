@@ -29,10 +29,10 @@ class Hub(unittest.TestCase):
         catalog=extensions.catalog(backend.ROOT,self.data)
         self.assertEqual(len([p for p in catalog['plugins'] if p.get('builtin') and p['enabled']]),12)
         with patch.object(backend,'DATA',self.data):
-            config=backend.request_config({'allow_tools':True})
+            config=backend.request_config({'allow_tools':True,'access_policy':'trusted'})
             self.assertIn('dispatch_agents',config['tools']);self.assertEqual(config['memory_policy'],'auto')
             extensions.toggle_plugin(backend.ROOT,self.data,'agent-dispatch',False)
-            config=backend.request_config({'allow_tools':True});self.assertNotIn('dispatch_agents',config['tools'])
+            config=backend.request_config({'allow_tools':True,'access_policy':'trusted'});self.assertNotIn('dispatch_agents',config['tools'])
             backend.capability_tool('load_plugin',{'id':'agent-dispatch'},config,lambda event:None)
             self.assertIn('dispatch_agents',config['tools'])
             self.assertEqual(backend.request_config({'allow_tools':False})['tools'],[])

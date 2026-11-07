@@ -64,6 +64,10 @@ function drawUsage(){
 const previousUsageSettingsTab=selectSettingsTab;selectSettingsTab=function(name){previousUsageSettingsTab(name);if(name==='profile')loadUsage();};
 setInterval(()=>{if(!$('#settings').hidden&&!$('[data-panel=profile]').hidden)loadUsage();},15000);
 const usageRequestLabel=elem('label','switch-pill');const usageRequest=elem('input');usageRequest.type='checkbox';usageRequest.setAttribute('role','switch');usageRequest.id='request-stream-usage';usageRequestLabel.append(elem('span','','请求流式 Token 用量'),usageRequest);$('[data-panel=connection]').append(usageRequestLabel,elem('p','hint','接口支持 stream_options.include_usage 时可开启。不返回用量的调用会单独计数。'));
+const privateNetworkLabel=elem('label','switch-pill'),privateNetworkToggle=elem('input');privateNetworkToggle.type='checkbox';privateNetworkToggle.setAttribute('role','switch');privateNetworkLabel.append(elem('span','','允许 HTTPS 私有网络接口（信任此服务商）'),privateNetworkToggle);usageRequest.parentElement.after(privateNetworkLabel);
+const previousPrivateConfigForm=configForm;configForm=function(){return {...previousPrivateConfigForm(),allow_private_network:privateNetworkToggle.checked}};
+const previousPrivateProviderEdit=$('#provider-edit').onchange;$('#provider-edit').onchange=function(...args){const value=previousPrivateProviderEdit?.apply(this,args);privateNetworkToggle.checked=!!providerRows.find(row=>row.id===this.value)?.allow_private_network;return value};
+const previousPrivateUpdateSettings=updateSettings;updateSettings=function(){previousPrivateUpdateSettings();privateNetworkToggle.checked=!!state.settings.allow_private_network};
 const previousUsageConfigForm=configForm;configForm=function(){return {...previousUsageConfigForm(),request_usage:usageRequest.checked};};
 const previousUsageProviderEdit=$('#provider-edit').onchange;$('#provider-edit').onchange=function(...args){const value=previousUsageProviderEdit?.apply(this,args);usageRequest.checked=!!providerRows.find(row=>row.id===this.value)?.request_usage;return value;};
 const previousUsageUpdateSettings=updateSettings;updateSettings=function(){previousUsageUpdateSettings();usageRequest.checked=!!state.settings.request_usage;};

@@ -1,4 +1,5 @@
 """Registered project roots, content-addressed checkpoints and verification evidence."""
+import security_core
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import difflib
@@ -120,6 +121,8 @@ def idle(key):
 
 
 def target(root, relative):
+    root=Path(root).resolve()
+    security_core.relative_path(relative)
     if not isinstance(relative, str) or not relative or len(relative) > 500 or ':' in relative:
         raise ValueError('文件路径无效')
     path = Path(relative)
@@ -135,7 +138,7 @@ def target(root, relative):
     resolved = current.resolve()
     if resolved == root or not resolved.is_relative_to(root):
         raise ValueError('路径超出项目目录')
-    return resolved
+    return security_core.protect_private(resolved)
 
 
 def instructions(project):

@@ -2,7 +2,50 @@
 import base64,hashlib,io,json,re,secrets,subprocess,sys,zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
+import threading
+import os
 MAX_FILE=5*1024*1024
+PARSERS=threading.BoundedSemaphore(2)
+
+
+def parser_limits():
+    """Bound parser CPU/memory. This does not isolate filesystem or network access."""
+    if os.name!='nt':
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS,(384*1024*1024,384*1024*1024))
+        resource.setrlimit(resource.RLIMIT_CPU,(10,10))
+        return None
+    import ctypes
+    from ctypes import wintypes
+    class Basic(ctypes.Structure):
+        _fields_=[('process_time',ctypes.c_longlong),('job_time',ctypes.c_longlong),
+                  ('flags',wintypes.DWORD),('minimum',ctypes.c_size_t),('maximum',ctypes.c_size_t),
+                  ('processes',wintypes.DWORD),('affinity',ctypes.c_size_t),
+                  ('priority',wintypes.DWORD),('scheduling',wintypes.DWORD)]
+    class IO(ctypes.Structure):
+        _fields_=[(name,ctypes.c_ulonglong) for name in ('reads','writes','other','read_bytes','write_bytes','other_bytes')]
+    class Extended(ctypes.Structure):
+        _fields_=[('basic',Basic),('io',IO),('process_memory',ctypes.c_size_t),
+                  ('job_memory',ctypes.c_size_t),('peak_process',ctypes.c_size_t),('peak_job',ctypes.c_size_t)]
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+    kernel.CreateJobObjectW.argtypes=[ctypes.c_void_p,wintypes.LPCWSTR]
+    kernel.CreateJobObjectW.restype=wintypes.HANDLE
+    kernel.SetInformationJobObject.argtypes=[wintypes.HANDLE,ctypes.c_int,ctypes.c_void_p,wintypes.DWORD]
+    kernel.AssignProcessToJobObject.argtypes=[wintypes.HANDLE,wintypes.HANDLE]
+    job=kernel.CreateJobObjectW(None,None)
+    if not job:raise ctypes.WinError(ctypes.get_last_error())
+    limits=Extended();limits.basic.flags=0x102;limits.basic.process_time=100_000_000
+    limits.process_memory=384*1024*1024
+    if not kernel.SetInformationJobObject(job,9,ctypes.byref(limits),ctypes.sizeof(limits)) or not kernel.AssignProcessToJobObject(job,wintypes.HANDLE(-1)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return job  # Retain until process exit. No filesystem/network isolation is claimed.
+
+
+def run_parser(path,name):
+    if not PARSERS.acquire(blocking=False):raise ValueError('附件解析器忙，请稍后重试')
+    try:
+        return subprocess.run([sys.executable,'-I','-S',str(Path(__file__).resolve()),'--extract',str(path),name],capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    finally:PARSERS.release()
 
 def initialize(db):
     db.execute('CREATE TABLE IF NOT EXISTS session_outputs(session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,attachment_id TEXT NOT NULL,message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,PRIMARY KEY(session_id,attachment_id),UNIQUE(session_id,message_id))')
@@ -81,6 +124,12 @@ def extract(raw,name):
         kind='text';mime='text/plain'
     elif suffix=='.docx':
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            entries=archive.infolist()
+            if len(entries)>500 or sum(item.file_size for item in entries)>20_000_000:
+                raise ValueError('Word 压缩包条目或解压体积超过限制')
+            if any(item.file_size>max(1,item.compress_size)*200 for item in entries):
+                raise ValueError('Word 压缩比超过安全限制')
+            if len({item.filename for item in entries})!=len(entries):raise ValueError('Word 压缩包包含重复条目')
             info=archive.getinfo('word/document.xml')
             if info.file_size>3000000:raise ValueError('Word 文本内容过大')
             doc=ET.fromstring(archive.read(info));content='\n'.join(''.join(e.itertext()) for e in doc.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'))
@@ -112,7 +161,7 @@ def upload(data,body):
             if not valid:raise ValueError('图片文件头无效')
             info={'kind':'image','mime':{'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'}[suffix]}
         else:
-            result=subprocess.run([sys.executable,'-I','-S',str(Path(__file__).resolve()),'--extract',str(path),name],capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            result=run_parser(path,name)
             parsed=json.loads(result.stdout.decode('utf-8'))
             if 'error' in parsed:raise ValueError(parsed['error'])
             info=parsed
@@ -137,5 +186,7 @@ def assemble(data,content,ids):
     return parts
 if __name__=='__main__':
     sys.stdout.reconfigure(encoding='utf-8')
-    try:print(json.dumps(extract(Path(sys.argv[2]).read_bytes(),sys.argv[3]),ensure_ascii=False))
+    try:
+        parser_job=parser_limits()
+        print(json.dumps(extract(Path(sys.argv[2]).read_bytes(),sys.argv[3]),ensure_ascii=False))
     except Exception as error:print(json.dumps({'error':str(error)[:300]},ensure_ascii=False))

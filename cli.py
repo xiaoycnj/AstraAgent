@@ -12,6 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import uuid
 
+import security_core
 import runtime_paths
 import task_control
 
@@ -48,6 +49,7 @@ class Client:
             try:
                 health = self.call('/api/health')
                 if health.get('app') == 'astra-agent' and health.get('workspace_id') == runtime_paths.workspace_id(self.data):
+                    self.token = security_core.capability(self.data)
                     self.token = self.call('/api/bootstrap')['token']
                     return
             except (OSError, URLError, ValueError):
@@ -66,6 +68,7 @@ class Client:
             match = re.search(r'http://127\.0\.0\.1:\d+', path.read_text(encoding='utf-8', errors='replace'))
             if match:
                 self.base = match[0]
+                self.token = security_core.capability(self.data)
                 self.token = self.call('/api/bootstrap')['token']
                 return
             time.sleep(.1)
@@ -84,7 +87,7 @@ def print_json(value):
 
 def doctor():
     release = runtime_paths.release_info(ROOT)
-    result = {'app': 'AstraAgent', 'version': '2.7.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
+    result = {'app': 'AstraAgent', 'version': '2.9.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
               'portable_python': (ROOT / 'runtimes/python/python.exe').is_file(),
               'webview2': bool(runtime_paths.webview_runtime(ROOT))}
     node = ROOT / 'runtimes/node/node.exe'

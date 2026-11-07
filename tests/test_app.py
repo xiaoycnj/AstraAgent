@@ -45,7 +45,7 @@ class Integration(unittest.TestCase):
         for server in (self.app,self.mock): server.shutdown(); server.server_close()
         self.temp.cleanup()
     def call(self,path,method='GET',data=None,headers=None):
-        h={'Content-Type':'application/json','X-App-Token':getattr(self,'token','')}; h.update(headers or {})
+        h={'Content-Type':'application/json','X-App-Token':getattr(self,'token',backend.TOKEN)}; h.update(headers or {})
         request=Request(self.base+path,method=method,headers=h,data=None if data is None else json.dumps(data).encode())
         try:
             with urlopen(request,timeout=5) as r: return r.status,json.load(r)

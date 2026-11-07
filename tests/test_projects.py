@@ -115,7 +115,7 @@ class ProjectWorkflow(unittest.TestCase):
                 return {'choices': [{'message': {'content': 'Updated and verified.'}}]}
             return {'choices': [{'message': {'tool_calls': [{'id': str(count), 'function': {'name': name, 'arguments': json.dumps(args)}}]}}]}
 
-        with patch.object(backend, 'stream_upstream', side_effect=model):
+        with patch.object(backend, 'stream_upstream', side_effect=model), patch.object(backend,'approve_tool',return_value=True) as approval:
             result = backend.completion(config, [{'role': 'user', 'content': 'Set value to two and verify.'}], lambda event: None)
         self.assertEqual(result, 'Updated and verified.')
         self.assertEqual(file.read_text(), 'VALUE = 2\n')
@@ -163,7 +163,7 @@ class ProjectWorkflow(unittest.TestCase):
         app = backend.LocalServer(('127.0.0.1', 0), backend.Handler)
         threading.Thread(target=app.serve_forever, daemon=True).start()
         base = 'http://127.0.0.1:' + str(app.server_port)
-        with urlopen(base + '/api/bootstrap') as response:
+        with urlopen(Request(base + '/api/bootstrap',headers={'X-App-Token':backend.TOKEN})) as response:
             token = json.load(response)['token']
         def call(path, method='GET', body=None):
             request = Request(base + path, method=method, headers={'Content-Type':'application/json','X-App-Token':token}, data=json.dumps(body).encode() if body is not None else None)
@@ -184,7 +184,7 @@ class ProjectWorkflow(unittest.TestCase):
         try:
             session = json.loads(call('/api/sessions', 'POST', {'title':'Project'}))
             call('/api/settings', 'PUT', {'base_url':'http://127.0.0.1:9/v1','model':'mock'})
-            with patch.object(backend, 'stream_upstream', side_effect=model):
+            with patch.object(backend, 'stream_upstream', side_effect=model), patch.object(backend,'approve_tool',return_value=True) as approval:
                 raw = call('/api/sessions/' + session['id'] + '/chat', 'POST', {'request_id':'project-workflow-http','content':'Set value to two','stream':True,'project_id':self.key,'allow_tools':True,'access_policy':'full','auto_memory':False})
             events = [json.loads(line[5:]) for line in raw.splitlines() if line.startswith('data:')]
             self.assertEqual(events[-1]['type'], 'done')
@@ -223,7 +223,7 @@ class ProjectWorkflow(unittest.TestCase):
         for server in (ai, app):
             threading.Thread(target=server.serve_forever, daemon=True).start()
         base = 'http://127.0.0.1:' + str(app.server_port)
-        with urlopen(base + '/api/bootstrap') as response:
+        with urlopen(Request(base + '/api/bootstrap',headers={'X-App-Token':backend.TOKEN})) as response:
             token = json.load(response)['token']
         def request(path, body=None, method='POST'):
             return Request(base + path, method=method, headers={'Content-Type':'application/json','X-App-Token':token}, data=json.dumps(body).encode() if body is not None else None)

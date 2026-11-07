@@ -1,4 +1,10 @@
-runtimes\node\node_modules\npm\node_modules\lru-cache\LICENSE.md
+All packages under `src/` are licensed according to the terms in
+their respective `LICENSE` or `LICENSE.md` files.
+
+The remainder of this project is licensed under the Blue Oak
+Model License, as follows:
+
+-----
 
 # Blue Oak Model License
 

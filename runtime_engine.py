@@ -1,13 +1,14 @@
 """Execution policy, compacted session context and reversible procedural learning."""
 import hashlib
+import workspace_tools
 import json
 from pathlib import Path
 import threading
 import time
 
 LOCK=threading.RLock()
-DEFAULTS={'access_policy':'trusted','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True}
-READ_TOOLS={'get_project','project_diff','project_verify','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions'}
+DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True}
+READ_TOOLS={'get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions'}
 
 def settings(data):
     path=data/'runtime.json'
@@ -35,6 +36,18 @@ def authorize(name,args,c,emit,approve):
     policy=c.get('access_policy')
     if policy is None:return True
     if policy=='deny':return False
+    needs_confirmation=False
+    if name in workspace_tools.NAMES|{'read_file','write_file','list_files','read_csv','inspect_json'}:
+        permission=c.get('file_permission','all')
+        if permission=='none':return False
+        needs_confirmation=permission=='ask' or (permission=='read' and name in workspace_tools.WRITES|{'write_file'})
+    if name=='execute_command':
+        permission=c.get('command_permission','all')
+        if permission=='none':return False
+        needs_confirmation=permission=='ask'
+    if needs_confirmation:return bool(emit and approve(name,args,emit))
+    if c.get('_untrusted_context') and name not in READ_TOOLS:
+        return bool(emit and approve(name,args,emit))
     if policy=='full':return True
     trusted=name in READ_TOOLS
     if name=='execute_command':trusted=args.get('argv') in c.get('trusted_commands',[])

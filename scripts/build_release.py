@@ -4,15 +4,16 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '2.7.0'
-ROOT_FILES = '''agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
-extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
+VERSION = '2.9.0'
+ROOT_FILES = '''updater.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
+security_core.py security_audit.py security_net.py security_server.py extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
 task_control.py usage_meter.py ui_locale.py watchdog.py workbench.py workspace_tools.py
 start.bat 启动.bat astra.bat CLI.bat python.bat node.bat README.md CHANGELOG.md
-requirements-desktop.txt LICENSE'''.split()
+requirements-desktop.txt LICENSE SECURITY.md'''.split()
 SKILLS = ('engineer', 'general', 'planner', 'study', 'writer')
 PLUGINS = '''agent-dispatch code-review data-lab decision-log goals long-memory notebook
 research-browser skill-creator task-board workflow-studio world-tree writing-kit writing-studio'''.split()
@@ -21,9 +22,19 @@ LITE_LICENSES = {'bottle', 'cffi', 'clr_loader', 'proxy_tools', 'pycparser', 'py
                  'CodeMirror', 'KaTeX fonts', 'LobeHub model icons', 'Microsoft WebView2 SDK'}
 
 
+def validate_public_paths(root,files):
+    private_roots={'data','work','output','outputs','.git'}
+    private_names={'.env','session-capability.dpapi','settings.json','providers.json','tts.json','stt.json'}
+    for path in files:
+        relative=path.relative_to(root)
+        if relative.parts[0].lower() in private_roots or path.name.lower() in private_names or path.suffix.lower()=='.dpapi':
+            raise ValueError('Private data cannot be packaged: '+relative.as_posix())
+
+
 def source_files(root, edition):
     files = [root / name for name in ROOT_FILES]
-    files += [root / 'scripts/build_release.py']
+    files += [root / 'scripts' / name for name in ('build_release.py','check_dependencies.py','harden_node_runtime.py')]
+    files += [root / 'security/npm-runtime-lock.json',root / 'docs/UI-DESIGN.md']
     files += [root / 'i18n' / name for name in ('README.md', 'en.json', 'zh-CN.json')]
     files += [root / name / 'README.md' for name in ('memory', 'skills', 'plugins')]
     files += [root / 'skills' / name / 'SKILL.md' for name in SKILLS]
@@ -61,6 +72,7 @@ def build(root, output, edition):
         if not path.resolve().is_relative_to((root / 'licenses').resolve()) or not path.is_file():
             raise ValueError('Missing or external license: ' + name)
         files.append(path)
+    validate_public_paths(root,files)
     notes = '# Third-party notices\n\n'
     notes += 'AstraAgent original code is MIT licensed. See LICENSE. Third-party components retain their original copyright and license terms.\n\n'
     notes += 'This list describes components shipped in the ' + edition + ' edition. Original texts are in licenses/ and Settings / About.\n\n'
@@ -92,6 +104,17 @@ Both editions share app features. User data, API keys, memories and custom plugi
     generated = {'release.json': json.dumps(release, ensure_ascii=False, indent=2) + '\n',
                  'licenses/manifest.json': json.dumps({'components': components}, ensure_ascii=False, indent=2) + '\n',
                  'THIRD_PARTY_NOTICES.md': notes, 'RELEASE.md': instructions}
+    sbom={'bomFormat':'CycloneDX','specVersion':'1.6','serialNumber':'urn:uuid:'+str(uuid.uuid4()),
+          'version':1,'metadata':{'component':{'type':'application','name':'AstraAgent','version':VERSION}},
+          'components':[{'type':'library','name':item['name'],'version':item['version'],
+                         'bom-ref':item['name']+'@'+item['version'],
+                         'properties':[{'name':'astra:license-file','value':item['file']}]} for item in components]}
+    generated['sbom.cdx.json']=json.dumps(sbom,ensure_ascii=False,indent=2)+'\n'
+    inventory={}
+    for path in files:
+        with path.open('rb') as stream:inventory[path.relative_to(root).as_posix()]=hashlib.file_digest(stream,'sha256').hexdigest()
+    inventory.update({name:hashlib.sha256(content.encode('utf-8')).hexdigest() for name,content in generated.items()})
+    generated['file-integrity.json']=json.dumps(inventory,ensure_ascii=False,indent=2)+'\n'
     output.mkdir(parents=True, exist_ok=True)
     destination = output / f'AstraAgent-V{VERSION}-{edition}-win-x64.zip'
     temporary = destination.with_suffix('.building.zip')

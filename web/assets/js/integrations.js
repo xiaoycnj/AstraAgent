@@ -52,7 +52,7 @@ licenseDialog.append(licenseHead,noticesGroup);document.body.append(licenseDialo
 const aboutPanel=$('[data-panel=about]');aboutPanel.append(actionButton('点击查看开源声明',()=>licenseDialog.showModal(),'secondary'));
 licenseDialog.addEventListener('keydown',event=>{if(event.key==='Escape')event.stopPropagation();});
 licenseDialog.addEventListener('click',event=>{if(event.target===licenseDialog){const rect=licenseDialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)licenseDialog.close();}});
-const acknowledgements=elem('section','settings-group acknowledgements');acknowledgements.append(elem('h3','','鸣谢'),elem('p','','作者：cnxiaoy'),elem('p','','贡献者：Codex（OpenAI-GPT-6.1 Sol及GPT-6 Astra），朱峰智能体维权群的群友'));aboutPanel.append(acknowledgements);
+const acknowledgements=elem('section','settings-group acknowledgements');acknowledgements.append(elem('h3','','鸣谢'),elem('p','','作者：cnxiaoy'),elem('p','','贡献者：Codex（OpenAI-GPT-6.1 Sol及GPT-6 Astra）'));aboutPanel.append(acknowledgements);
 
 // OAuth starts only after a user click. The loopback callback owns all token exchange.
 const oauthGroup=elem('section','settings-group oauth-group');oauthGroup.id='openai-oauth';oauthGroup.append(elem('h3','','OpenAI · ChatGPT OAuth'),elem('p','hint','填写为 AstraAgent 注册的 client ID 和回调地址。登录后在对话中选择 OpenAI · ChatGPT OAuth，并获取或填写账户可用模型。'));
@@ -68,3 +68,5 @@ $('[data-panel=connection]').append(oauthGroup);let oauthConnected=false;
 async function refreshOAuthStatus(){const value=await api('/api/openai-oauth/status');oauthStatus.textContent=value.error||(value.pending?'等待浏览器授权':value.connected?'已连接 · '+(value.email||'ChatGPT'):'尚未登录');oauthCancel.hidden=!value.pending;oauthLogout.hidden=!value.connected;if(value.connected&&!oauthConnected){oauthLink.hidden=true;await loadProviders();}oauthConnected=value.connected;}
 setInterval(()=>{if(!$('#settings').hidden&&!$('[data-panel=connection]').hidden)refreshOAuthStatus().catch(e=>oauthStatus.textContent=e.message);},2500);
 refreshOAuthStatus().catch(e=>oauthStatus.textContent=e.message);
+
+acknowledgements.append(elem('h4','','群友'),elem('p','','星环引力执政官 · notBot · 猪骨社区 · 与兼 · 晨曦Aurora · 何意豬'));

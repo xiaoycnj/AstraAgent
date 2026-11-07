@@ -3,6 +3,9 @@ import atexit
 import hashlib
 import json
 import runtime_paths
+import security_core
+import shutil
+import secrets
 import os
 import queue
 import re
@@ -13,6 +16,66 @@ from pathlib import Path
 from contextlib import nullcontext
 
 CLIENTS={};LOCK=threading.RLock()
+
+
+def resolved_argv(config):
+    argv=runtime_paths.command_argv(Path(__file__).resolve().parent,[config['command'],*config['args']])
+    executable=shutil.which(argv[0])
+    if not executable:raise ValueError('MCP 可执行文件不存在')
+    return [str(Path(executable).resolve()),*argv[1:]]
+
+
+def fingerprint(config):
+    argv=resolved_argv(config)
+    paths=[Path(argv[0])]
+    # Pin file arguments as well, so changing a Python/Node server script invalidates trust.
+    paths.extend(Path(arg).resolve() for arg in argv[1:] if Path(arg).is_file())
+    files=[]
+    for path in paths:
+        digest=hashlib.sha256()
+        with path.open('rb') as stream:
+            for block in iter(lambda:stream.read(1024*1024),b''):digest.update(block)
+        files.append({'path':str(path),'sha256':digest.hexdigest()})
+    return security_core.digest({'argv':argv,'files':files})
+
+
+def trust(data, config, confirmed):
+    current=fingerprint(config)
+    if not isinstance(confirmed,str) or not secrets.compare_digest(current,confirmed):
+        raise ValueError('MCP 命令或文件已变化，请重新确认完整命令')
+    path=data/'mcp-trust.dpapi'
+    with LOCK:
+        trusted=json.loads(security_core.protect(path.read_bytes(),False)) if path.exists() else {}
+        trusted[config['id']]=current
+        security_core.atomic_write(path,security_core.protect(json.dumps(trusted).encode(),True))
+
+
+def require_trust(data, config):
+    path=data/'mcp-trust.dpapi'
+    trusted=json.loads(security_core.protect(path.read_bytes(),False)) if path.exists() else {}
+    if trusted.get(config['id'])!=fingerprint(config):
+        stop(str(data.resolve())+':'+config['id'])
+        raise ValueError('MCP 命令尚未信任或已变化，请在设置中确认连接')
+
+
+def public_configs(data):
+    rows=[]
+    for item in configs(data):
+        row=dict(item)
+        try:
+            row['fingerprint']=fingerprint(row)
+            row['resolved_command']=resolved_argv(row)
+        except (ValueError,OSError):row['fingerprint']=''
+        rows.append(row)
+    return rows
+
+
+def protected_tools(data, config):
+    require_trust(data,config)
+    path=data/'mcp-tools.dpapi'
+    cached=json.loads(security_core.protect(path.read_bytes(),False)) if path.exists() else {}
+    entry=cached.get(config['id'],{})
+    return entry.get('tools',[]) if entry.get('fingerprint')==fingerprint(config) else []
 
 def configs(data):
     path=data/'mcp.json'
@@ -40,9 +103,9 @@ def _save(data,body):
 
 class Client:
     def __init__(self,config):
-        argv=runtime_paths.command_argv(Path(__file__).resolve().parent,[config['command'],*config['args']])
-        self.process=subprocess.Popen(argv,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
-        self.messages=queue.Queue(maxsize=1000);self.lock=threading.Lock();self.sequence=0
+        argv=resolved_argv(config)
+        self.process=subprocess.Popen(argv,cwd=Path(__file__).resolve().parent,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        self.messages=queue.Queue(maxsize=16);self.lock=threading.Lock();self.sequence=0
         threading.Thread(target=self.read,daemon=True).start()
         try:
             result=self.rpc('initialize',{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'AstraAgent','version':'2.0'}})
@@ -94,14 +157,16 @@ def stop(key):
 def client(data,config):
     key=str(data.resolve())+':'+config['id']
     with LOCK:
+        require_trust(data,config)
         existing=CLIENTS.get(key)
         if existing and existing.process.poll() is None:return existing
         CLIENTS[key]=Client(config)
         return CLIENTS[key]
 
-def discover(data,key):
+def discover(data,key,confirmed=None):
     rows=configs(data);config=next((row for row in rows if row['id']==key),None)
     if not config or not config['enabled']:raise ValueError('MCP 服务未启用')
+    if confirmed is not None:trust(data,config,confirmed)
     connection=client(data,config);tools=[];cursor=None
     for _ in range(20):
         result=connection.rpc('tools/list',{'cursor':cursor} if cursor else {})
@@ -121,15 +186,27 @@ def discover(data,key):
                 if row['command']!=config['command'] or row['args']!=config['args']:raise ValueError('MCP 配置已变化，请重新连接')
                 row['tools']=tools
         path=data/'mcp.json';tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(current,ensure_ascii=False,indent=2),encoding='utf-8');tmp.replace(path)
+        path=data/'mcp-tools.dpapi'
+        cached=json.loads(security_core.protect(path.read_bytes(),False)) if path.exists() else {}
+        cached[key]={'fingerprint':fingerprint(config),'tools':tools}
+        security_core.atomic_write(path,security_core.protect(json.dumps(cached).encode(),True))
     return {'tools':tools,'count':len(tools)}
 
 def definitions(data):
-    return [{'type':'function','function':{'name':tool['alias'],'description':'[MCP '+row['name']+'] '+tool['description'],'parameters':tool['schema']}} for row in configs(data) if row['enabled'] for tool in row.get('tools',[])]
+    tools=[]
+    for row in configs(data):
+        if not row['enabled']:continue
+        try:cached=protected_tools(data,row)
+        except (ValueError,OSError):continue
+        tools.extend({'type':'function','function':{'name':tool['alias'],'description':'[MCP] '+tool['description'],'parameters':tool['schema']}} for tool in cached)
+    return tools
 
 def call(data,name,args,token=None):
     for row in configs(data):
         if not row['enabled']:continue
-        for tool in row.get('tools',[]):
+        try:cached=protected_tools(data,row)
+        except (ValueError,OSError):continue
+        for tool in cached:
             if tool['alias']==name:
                 connection=client(data,row)
                 with token.resource(connection.close) if token else nullcontext():

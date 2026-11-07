@@ -1,4 +1,5 @@
 """Preinstalled capability adapters and persistent agent hub."""
+import security_core
 import hashlib
 import io
 import os
@@ -84,6 +85,7 @@ def record(data,kind,args):
         title=field(args,'title',200,existing['title'] if existing else '')
         if not title:raise ValueError('标题不能为空')
         content=field(args,'content',12000,existing['content'] if existing else '')
+        if kind=='tree':security_core.reject_secrets(title+'\n'+content)
         parent=field(args,'parent',80,existing['parent'] if existing else '')
         status=field(args,'status',30,existing['status'] if existing else 'todo')
         if status not in ('todo','active','blocked','done','archived'):raise ValueError('状态无效')
@@ -218,7 +220,13 @@ def snapshot(data):
 def tree_context(data):
     with database(data) as db:
         rows=db.execute("SELECT id,title,content FROM records WHERE kind='tree' AND status!='archived' ORDER BY updated DESC,id LIMIT 40").fetchall()
-    return '\n'.join(row['title']+': '+row['content'] for row in sorted(rows,key=lambda row:row['id']))[:10000]
+    safe=[]
+    for row in sorted(rows,key=lambda row:row['id']):
+        content=row['title']+': '+row['content']
+        try:security_core.reject_secrets(content)
+        except ValueError:continue
+        safe.append(content)
+    return '\n'.join(safe)[:10000]
 
 def execute(root,data,name,args,config,emit,delegate):
     try:

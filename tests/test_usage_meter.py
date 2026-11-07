@@ -53,13 +53,13 @@ class UsageMeter(unittest.TestCase):
             previous=backend.DATA;backend.DATA=Path(folder);opener=Opener()
             try:
                 config={'model':'mock','base_url':'http://127.0.0.1/v1','api_key':'','timeout':10,'request_usage':True}
-                with patch.object(backend,'build_opener',return_value=opener):
+                with patch.object(backend.security_net,'opener',return_value=opener):
                     result=backend.stream_upstream(config,{'model':'mock','messages':[]},lambda e:None)
                 self.assertEqual(result['choices'][0]['message']['content'],'Hello')
                 self.assertTrue(opener.payload['stream_options']['include_usage'])
                 self.assertEqual(meter.activity(backend.DATA,'2026-11-06')['totals']['total'],12)
                 config['request_usage']=False
-                with patch.object(backend,'build_opener',return_value=opener):backend.stream_upstream(config,{'model':'mock','messages':[]},lambda e:None)
+                with patch.object(backend.security_net,'opener',return_value=opener):backend.stream_upstream(config,{'model':'mock','messages':[]},lambda e:None)
                 self.assertNotIn('stream_options',opener.payload)
                 self.assertEqual(meter.activity(backend.DATA,'2026-11-06')['totals']['calls'],2)
             finally:backend.DATA=previous

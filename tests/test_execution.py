@@ -82,7 +82,7 @@ for line in sys.stdin:
  print(json.dumps({'jsonrpc':'2.0','id':m['id'],'result':result}),flush=True)
 ''',encoding='utf-8')
         mcp_client.save(self.data,{'id':'test','command':sys.executable,'args':['-u',str(script)],'enabled':True})
-        found=mcp_client.discover(self.data,'test');self.assertEqual(found['count'],1)
+        found=mcp_client.discover(self.data,'test',mcp_client.fingerprint(mcp_client.configs(self.data)[0]));self.assertEqual(found['count'],1)
         alias=mcp_client.definitions(self.data)[0]['function']['name']
         self.assertEqual(mcp_client.call(self.data,alias,{'text':'real rpc'})['content'][0]['text'],'real rpc')
         mcp_client.save(self.data,{'id':'test','delete':True});self.assertEqual(mcp_client.definitions(self.data),[])

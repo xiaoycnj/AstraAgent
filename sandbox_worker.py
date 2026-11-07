@@ -1,6 +1,8 @@
 """Finite-command worker. Never imports user code, invokes a shell or opens network connections."""
 import csv,hashlib,json,shutil,sys
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+import security_core
 COMMANDS=['pwd','ls','cat','write','mkdir','cp','rm','grep','sha256','json','csv']
 def execute(root,argv):
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True)
@@ -8,10 +10,11 @@ def execute(root,argv):
     command,*args=argv
     if command not in COMMANDS:raise ValueError('受控工作区不支持此命令；可用：'+', '.join(COMMANDS))
     def target(value='.'):
+        security_core.relative_path(value)
         if ':' in value or Path(value).is_absolute():raise ValueError('必须使用工作区相对路径')
         p=(root/value).resolve()
         if not p.is_relative_to(root):raise ValueError('路径超出工作区')
-        return p
+        return security_core.protect_private(p)
     def read(value):
         p=target(value)
         if p.stat().st_size>100000:raise ValueError('最多读取 100 KB')

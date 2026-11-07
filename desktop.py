@@ -1,4 +1,5 @@
 """Native WebView2 host with a compact, ready-gated startup window."""
+import security_core
 import argparse
 import ctypes
 import hashlib
@@ -78,6 +79,8 @@ def main():
         shell.SetCurrentProcessExplicitAppUserModelID.argtypes = [ctypes.c_wchar_p]
         shell.SetCurrentProcessExplicitAppUserModelID('cnxiaoy.AstraAgent.Desktop')
 
+    import updater
+    cleanup_timer=threading.Timer(20,lambda:updater.cleanup(ROOT));cleanup_timer.daemon=True;cleanup_timer.start()
     import webview
     bundled_webview = runtime_paths.prepare_webview_runtime(ROOT,data)
     if bundled_webview:
@@ -163,14 +166,14 @@ def main():
                         set_status('正在载入你的工作空间')
                         if main_window is None:
                             main_window = webview.create_window(
-                                'AstraAgent', url=value['url'], js_api=bridge,
+                                'AstraAgent', url=security_core.launch_url(value['url'],data), js_api=bridge,
                                 width=1320, height=900, min_size=(820, 600), hidden=True,
                                 background_color='#14171e',
                             )
                             main_window.events.loaded += workspace_loaded
                             main_window.events.closed += shutdown
                         else:
-                            main_window.load_url(value['url'])
+                            main_window.load_url(security_core.launch_url(value['url'],data))
                         return
                 except (OSError, ValueError, KeyError):
                     pass
@@ -180,6 +183,17 @@ def main():
             connecting.release()
 
     class Bridge:
+        def check_update(self):
+            import updater
+            return updater.latest(ROOT)
+
+        def install_update(self):
+            import updater
+            if (ROOT/'.git').exists():raise ValueError('源码工作区请通过 Git 更新')
+            updater.launch(data,os.getpid())
+            shutdown()
+            return True
+
         def retry(self):
             threading.Thread(target=connect, daemon=True).start()
             return True
@@ -198,7 +212,7 @@ def main():
             from urllib.parse import quote
             value = json.loads(state_file.read_text(encoding='utf-8'))
             webview.create_window(
-                'AstraAgent', url=value['url'] + '/?session=' + quote(str(session)),
+                'AstraAgent', url=security_core.launch_url(value['url'] + '/?session=' + quote(str(session)),data),
                 js_api=self, width=1180, height=820, min_size=(820, 600),
             )
             return True

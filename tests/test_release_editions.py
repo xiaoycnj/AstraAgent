@@ -16,6 +16,11 @@ spec.loader.exec_module(release)
 
 
 class ReleaseEditions(unittest.TestCase):
+    def test_private_data_rejected_vendor_output_docs_allowed(self):
+        release.validate_public_paths(ROOT,[ROOT/'runtimes/node/node_modules/npm/docs/output/commands/npm-access.html'])
+        for name in ('data/settings.json','web/assets/secret.dpapi','work/archive.zip','web/assets/providers.json'):
+            with self.assertRaises(ValueError):release.validate_public_paths(ROOT,[ROOT/name])
+
     def test_lite_contents_and_launcher(self):
         with tempfile.TemporaryDirectory(prefix='astra-lite-test-') as directory:
             output = Path(directory)

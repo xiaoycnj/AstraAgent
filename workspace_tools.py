@@ -1,4 +1,5 @@
 """Bounded, permission-gated local workspace tools. No shell or network."""
+import security_core
 import fnmatch
 import hashlib
 import os
@@ -24,6 +25,8 @@ NAMES = {s[0] for s in SPECS}
 DEFINITIONS = [{'type':'function','function':{'name':n,'description':d,'parameters':{'type':'object','properties':p,'required':r,'additionalProperties':False}}} for n,d,p,r in SPECS]
 
 def target(root, value, allow_root=False):
+    root=Path(root).resolve()
+    security_core.relative_path(value)
     if not isinstance(value,str) or not value.strip() or len(value)>240 or ':' in value or '\x00' in value:
         raise ValueError('路径无效')
     path = Path(value)
@@ -34,7 +37,7 @@ def target(root, value, allow_root=False):
         if current.is_symlink() or getattr(current,'is_junction',lambda:False)(): raise ValueError('不跟随链接或联接目录')
     resolved = current.resolve()
     if not resolved.is_relative_to(root) or (resolved==root and not allow_root): raise ValueError('路径超出工作区')
-    return resolved
+    return security_core.protect_private(resolved)
 
 def read(path):
     if not path.is_file(): raise ValueError('文件不存在')
@@ -48,7 +51,7 @@ def entries(root, directory, status, project_mode=False):
         status['visited']+=1
         if status['visited']>2000 or time.monotonic()>deadline:
             status['truncated']=True; return
-        dirs[:] = sorted(d for d in dirs if (not project_mode or d not in ('.git','node_modules','.venv','venv','__pycache__','.cache','dist','build')) and not (Path(parent)/d).is_symlink() and not getattr(Path(parent)/d,'is_junction',lambda:False)())
+        dirs[:] = sorted(d for d in dirs if not security_core.private_path(Path(parent)/d) and (not project_mode or d not in ('.git','node_modules','.venv','venv','__pycache__','.cache','dist','build')) and not (Path(parent)/d).is_symlink() and not getattr(Path(parent)/d,'is_junction',lambda:False)())
         for name in sorted(files):
             status['visited']+=1
             if status['visited']>2000 or time.monotonic()>deadline:
@@ -126,6 +129,6 @@ def execute(data, name, args, root=None):
 def invoke(data,name,args,config,emit,approve):
     permission=config.get('file_permission','none')
     if not emit or permission not in ('ask','read','all'): return {'error':'文件访问未授权'}
-    if (permission=='ask' or (name in WRITES and permission!='all')) and not approve(name,args,emit):
+    if config.get('_authorized_tool')!=name and (permission=='ask' or (name in WRITES and permission!='all')) and not approve(name,args,emit):
         return {'error':'用户拒绝或授权已过期'}
     return execute(data,name,args,config.get('project_root'))
