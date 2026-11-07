@@ -7,8 +7,8 @@ if(!$Python){
     if(Get-Command py -ErrorAction SilentlyContinue){$Python=(& py -3 -c 'import sys;print(sys.executable)').Trim()}
     elseif(Get-Command python -ErrorAction SilentlyContinue){$Python=(& python -c 'import sys;print(sys.executable)').Trim()}
 }
-if(!$Python -or !(Test-Path -LiteralPath $Python)){throw 'Install standard Python 3.10+ from python.org, then rerun this script.'}
-& $Python -c 'import sys;assert sys.version_info >= (3,10), "Python 3.10+ required";import venv'
+if(!$Python -or !(Test-Path -LiteralPath $Python)){throw 'Install standard Python 3.12+ from python.org, then rerun this script.'}
+& $Python -c 'import sys;assert sys.version_info >= (3,12), "Python 3.12+ required";import venv'
 if($LASTEXITCODE -ne 0){throw 'A standard Python with venv support is required.'}
 if(!(Test-Path -LiteralPath (Join-Path $sttEnvironment 'Scripts\python.exe'))){
     & $Python -m venv $sttEnvironment

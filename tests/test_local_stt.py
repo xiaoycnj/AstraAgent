@@ -84,6 +84,17 @@ class Service(unittest.TestCase):
 
 
 class Parameters(unittest.TestCase):
+    def test_portable_model_directory_is_selected_server_side(self):
+        with tempfile.TemporaryDirectory() as folder:
+            model=Path(folder)/'base';model.mkdir();(model/'model.bin').write_bytes(b'model')
+            engine=local_stt.Engine('base',cache=Path(folder))
+            self.assertEqual(engine.model_id,'base');self.assertEqual(engine.source,str(model))
+    def test_cli_prefers_dlc_runtime_over_machine_venv(self):
+        import cli
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);portable=root/'.local-stt/runtime/python.exe';portable.parent.mkdir(parents=True);portable.write_bytes(b'')
+            with patch.object(cli,'ROOT',root),patch.object(cli.subprocess,'call',return_value=0) as launch:
+                self.assertEqual(cli.main(['stt']),0);self.assertEqual(launch.call_args.args[0][0],str(portable))
     def test_cli_uses_isolated_runtime_without_starting_app_backend(self):
         import cli
         with tempfile.TemporaryDirectory() as folder:

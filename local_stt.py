@@ -75,6 +75,8 @@ def decode_audio(raw, max_seconds):
 class Engine:
     def __init__(self, model='base', cache=None, threads=4, language=None, offline=True, max_seconds=120):
         self.source=model;self.model_id=Path(model).name if Path(model).is_dir() else model
+        portable=Path(cache)/model if cache and model in ('tiny','base','small','medium','large-v3') else None
+        if portable and (portable/'model.bin').is_file():self.source=str(portable)
         self.cache=cache;self.threads=threads;self.language=language;self.offline=offline;self.max_seconds=max_seconds;self.model=None
     def load(self):
         if self.model is None:

@@ -6,3 +6,6 @@
 *.png binary
 *.woff binary
 *.woff2 binary
+
+# Preserve upstream license/copyright formatting without treating it as code style.
+licenses/optional-stt/native/** -whitespace

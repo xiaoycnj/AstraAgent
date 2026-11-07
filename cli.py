@@ -87,7 +87,7 @@ def print_json(value):
 
 def doctor():
     release = runtime_paths.release_info(ROOT)
-    result = {'app': 'AstraAgent', 'version': '3.4.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
+    result = {'app': 'AstraAgent', 'version': '3.4.1', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
               'portable_python': (ROOT / 'runtimes/python/python.exe').is_file(),
               'webview2': bool(runtime_paths.webview_runtime(ROOT))}
     node = ROOT / 'runtimes/node/node.exe'
@@ -198,7 +198,8 @@ def main(argv=None):
     if args.command == 'doctor':
         return doctor()
     if args.command=='stt':
-        executable=ROOT/'.local-stt/venv/Scripts/python.exe' if os.name=='nt' else ROOT/'.local-stt/venv/bin/python'
+        executable=ROOT/'.local-stt/runtime/python.exe'
+        if not executable.is_file():executable=ROOT/'.local-stt/venv/Scripts/python.exe' if os.name=='nt' else ROOT/'.local-stt/venv/bin/python'
         if not executable.is_file():
             print('Install optional speech support with scripts/install_local_stt.ps1 first.',file=sys.stderr);return 1
         arguments=[str(executable),str(ROOT/'local_stt.py'),'--model',args.model,'--port',str(args.port),'--threads',str(args.threads)]

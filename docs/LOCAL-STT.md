@@ -2,9 +2,21 @@
 
 可选的独立服务，基于 faster-whisper / CTranslate2 的 CPU INT8 推理。模型加载完成后，识别不依赖远程 API。默认只监听 `127.0.0.1:8790`，不会随桌面或 watchdog 自动启动。
 
-## 安装一次
+## 直接下载 DLC（推荐）
 
-需要标准 Python 3.10+（带 venv 与 pip），Windows 可从 python.org 安装并启用 Python launcher。AstraAgent 默认发行包中的环境不安装语音依赖；模型和独立环境也不会放进 Standard/Lite 压缩包。
+在 GitHub Release 下载 `AstraAgent-STT-DLC-base-v1.0.0-win-x64.zip`，解压到 AstraAgent 安装目录，保持压缩包中的 `.local-stt` 目录结构。此包自带独立 CPython、CPU 依赖、模型与许可证，不依赖本机安装 Python，也不需要首次联网安装。
+
+AstraAgent 3.4.1+ 的 `AstraAgent.CLI.exe stt` 和常规启动脚本优先使用 DLC 运行时；旧版本或单独使用时，可在解压目录运行 `powershell -File .local-stt/start-stt.ps1`。不要将 ZIP 当成完整 AstraAgent 更新包安装，它是可选语音附件。两种主发行版都可使用。
+
+独立语音服务不需要系统 Python；Lite 主应用自身的 Python 环境要求保持不变，DLC 不把 Lite 自动变成 Standard。
+
+同名 `.sha256` 文件用于校验下载；包内 `.local-stt/file-integrity.json` 包含每个发行文件的 SHA-256。DLC 不包含作者的虚拟环境路径、录音、会话、API 密钥或个人模型缓存，仅包含固定的 base 模型快照。完整更新不会随包删除现有 DLC。
+
+Python 服务源码仍为 MIT；随 PyAV 分发的原生媒体 DLL 保留 LGPL/GPL 等各自条款，不能把整个 DLC 视为 MIT。相应许可证、原始头文件版权声明、固定版本源码下载地址和上游构建/补丁引用位于 `licenses/optional-stt/native` 并汇总到关于页。允许按其许可修改、替换接口兼容的库；启动不会强制检查签名或阻止替换。
+
+## 从源码安装一次
+
+需要标准 Python 3.12+（带 venv 与 pip），Windows 可从 python.org 安装并启用 Python launcher。AstraAgent 默认发行包中的环境不安装语音依赖；模型和独立环境也不会放进 Standard/Lite 压缩包。
 
 在项目根目录执行：
 

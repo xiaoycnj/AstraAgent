@@ -1,7 +1,8 @@
 param([string]$Model='base', [int]$Port=8790, [int]$Threads=4, [string]$Language='zh')
 $ErrorActionPreference='Stop'
 $sttRoot=Split-Path $PSScriptRoot -Parent
-$sttPython=Join-Path $sttRoot '.local-stt\venv\Scripts\python.exe'
+$sttPython=Join-Path $sttRoot '.local-stt\runtime\python.exe'
+if(!(Test-Path -LiteralPath $sttPython)){$sttPython=Join-Path $sttRoot '.local-stt\venv\Scripts\python.exe'}
 if(!(Test-Path -LiteralPath $sttPython)){throw 'Run scripts/install_local_stt.ps1 first.'}
 $env:HF_HUB_DISABLE_TELEMETRY='1'
 $sttArguments=@((Join-Path $sttRoot 'local_stt.py'),'--model',$Model,'--port',$Port,'--threads',$Threads)

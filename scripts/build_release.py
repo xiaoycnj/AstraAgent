@@ -7,7 +7,7 @@ import zipfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '3.4.0'
+VERSION = '3.4.1'
 ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe updater.py local_stt.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
 security_core.py security_audit.py security_net.py security_server.py extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
@@ -33,8 +33,8 @@ def validate_public_paths(root,files):
 
 def source_files(root, edition):
     files = [root / name for name in ROOT_FILES]
-    files += [root / 'scripts' / name for name in ('build_release.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py','install_local_stt.ps1','start_local_stt.ps1','stt_notices.py')]
-    files += [root/'licenses/optional-stt'/name for name in ('ctranslate2.txt','flatbuffers.txt','tokenizers.txt','whisper-model.txt')]
+    files += [root / 'scripts' / name for name in ('build_release.py','build_stt_dlc.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py','install_local_stt.ps1','start_local_stt.ps1','stt_notices.py')]
+    files += [path for path in (root/'licenses/optional-stt').rglob('*') if path.is_file()]
     files += [root/'docs/LOCAL-STT.md']
     files += [root / 'security/npm-runtime-lock.json',root / 'docs/UI-DESIGN.md',root/'docs/MODULES.md',root/'docs/AUDIT-2026-11-07.md',root/'docs/EXECUTION-RECOVERY.md',root/'native/Launcher.cs',root/'scripts/build_launcher.ps1']
     files += [root / 'i18n' / name for name in ('README.md', 'en.json', 'zh-CN.json')]

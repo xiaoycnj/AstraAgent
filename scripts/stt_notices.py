@@ -26,6 +26,11 @@ def export(output):
                      'url':next((url for url in urls if url.startswith('https://')),''),'optional':True})
     model_license=fallback/'whisper-model.txt'
     if model_license.is_file():rows.append({'name':'OpenAI Whisper model','version':'user-selected','license':'MIT','text':model_license.read_text(encoding='utf-8'),'url':'https://github.com/openai/whisper','optional':True})
+    native=fallback/'native'
+    if native.is_dir():
+        texts=[path.name+'\n\n'+path.read_text(encoding='utf-8') for path in sorted(native.iterdir()) if path.is_file()]
+        rows.append({'name':'PyAV native media libraries','version':'FFmpeg 9.0.2 / vendor 9.0.2-1','license':'LGPL/GPL and component licenses; see native notices',
+                     'text':'\n\n'.join(texts),'url':'https://github.com/PyAV-Org/pyav-ffmpeg/tree/9.0.2-1','optional':True})
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps({'components':sorted(rows,key=lambda r:r['name'].lower())},ensure_ascii=False,indent=2),encoding='utf-8')
 

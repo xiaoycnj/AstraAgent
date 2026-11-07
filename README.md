@@ -55,7 +55,7 @@ API Key 由使用者提供。应用支持可配置的 OpenAI OAuth 接入，使�
 
 ## 可选本地语音输入
 
-提供 CPU INT8 的本地 STT 服务。安装独立语音环境并下载模型后，运行 `AstraAgent.CLI.exe stt`，在语音设置使用本地服务预设即可。模型和推理依赖不增加默认发行包体积，详见[本地 STT 安装与使用](docs/LOCAL-STT.md)。
+提供 CPU INT8 的本地 STT 服务。可从 Releases 选下离线语音 DLC，解压后免安装运行；也可自行安装独立语音环境并下载模型。运行 `AstraAgent.CLI.exe stt`，在语音设置使用本地服务预设即可。模型和推理依赖不增加默认发行包体积，详见[本地 STT 安装与使用](docs/LOCAL-STT.md)。
 
 ## 中断后继续工作
 
