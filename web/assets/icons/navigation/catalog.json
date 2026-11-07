@@ -1,0 +1,22 @@
+{
+  "states": [
+    "outline",
+    "active"
+  ],
+  "icons": [
+    "home",
+    "images",
+    "schedule",
+    "library",
+    "plugins",
+    "more",
+    "review",
+    "panel",
+    "search",
+    "settings",
+    "profile",
+    "canvas",
+    "plus",
+    "theme"
+  ]
+}

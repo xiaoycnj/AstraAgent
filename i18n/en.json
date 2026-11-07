@@ -1043,6 +1043,24 @@
     "暂无记录": "No records yet",
     "启用模块 图片生成": "Enable image generation module",
     "启用模块 基础计算": "Enable core utilities module",
-    "启用模块 项目与文件": "Enable project and file module"
+    "启用模块 项目与文件": "Enable project and file module",
+    "主页": "Home",
+    "生图": "Images",
+    "定时任务": "Scheduled tasks",
+    "资料库": "Library",
+    "插件管理": "Plugins",
+    "显示/隐藏会话栏": "Toggle conversations",
+    "显示/隐藏会话栏 · Ctrl+Shift+S": "Toggle conversations · Ctrl+Shift+S",
+    "搜索与筛选": "Search and filter",
+    "长期笔记": "Notes",
+    "项目文件": "Project files",
+    "开始创作": "Create an image",
+    "配置生图服务商": "Configure image provider",
+    "当前提供任务看板；定时触发执行尚未接入，不会在后台自动运行。": "Task board is available. Scheduled execution is not connected; tasks will not run automatically.",
+    "当前会话的图片作品。可在对话中调用生图插件，结果自动保存在这里。": "Images in this conversation. Use the image plugin in chat to save generated images here.",
+    "当前会话的来源与输出。项目文件和长期笔记可从下方打开。": "Sources and outputs in this conversation. Open project files and notes below.",
+    "还没有图片，先从一个想法开始。": "No images yet. Start with an idea.",
+    "当前会话暂无附件。": "No attachments in this conversation.",
+    "正在读取当前会话…": "Loading conversation…"
   }
 }
