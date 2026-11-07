@@ -5,7 +5,7 @@ const railButtons=new Map();let railActive='home';
 $('#new-item').classList.remove('primary');
 function railIcon(name){const span=elem('span','rail-glyph');for(const state of ['outline','active']){const img=elem('img','glyph-'+state);img.src='/assets/icons/navigation/'+name+'-'+state+'.svg';img.alt='';img.width=22;img.height=22;span.append(img)}return span}
 function selectRail(name){railActive=name;for(const [id,b] of railButtons){b.classList.toggle('active',id===name);if(id===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')}}
-function makeRailButton(id,label,action,target=railTop){const b=actionButton('',async()=>{await action();selectRail(id)},'rail-button');b.id='nav-'+id;b.setAttribute('aria-label',label);b.title=label;b.append(railIcon(id),elem('span','rail-tooltip',label));target.append(b);railButtons.set(id,b);return b}
+function makeRailButton(id,label,action,target=railTop){const b=actionButton('',async()=>{selectRail(id);await action()},'rail-button');b.id='nav-'+id;b.setAttribute('aria-label',label);b.title=label;b.append(railIcon(id),elem('span','rail-tooltip',label));target.append(b);railButtons.set(id,b);return b}
 async function railHome(){if(!$('#settings').hidden&&!closeSettingsPage())return;if(state.mode!=='chat')await switchMode('chat');$('#chat-input').focus({preventScroll:true})}
 makeRailButton('home','主页',railHome);
 makeRailButton('images','生图',()=>openRailCollection('images'));
@@ -27,7 +27,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeRailMenu();if(
 
 const sidebarToggle=actionButton('',()=>setConversationPane(document.body.classList.contains('conversation-collapsed')),'sidebar-toggle');sidebarToggle.id='sidebar-toggle';sidebarToggle.title='显示/隐藏会话栏 · Ctrl+Shift+S';sidebarToggle.setAttribute('aria-label','显示/隐藏会话栏');sidebarToggle.setAttribute('aria-controls','conversation-sidebar');sidebarToggle.append(railIcon('panel'));appMenu.prepend(sidebarToggle);
 $('.sidebar').id='conversation-sidebar';
-function setConversationPane(open,save=true){document.body.classList.toggle('conversation-collapsed',!open);$('.sidebar').classList.remove('open');$('.sidebar').inert=!open;sidebarToggle.setAttribute('aria-expanded',String(open));if(save)try{localStorage.setItem('astra-conversation-pane',String(open))}catch{}if(state.mode==='canvas')setTimeout(()=>{renderNodes()},220)}
+function setConversationPane(open,save=true){if(!open&&$('.sidebar').contains(document.activeElement))sidebarToggle.focus({preventScroll:true});document.body.classList.toggle('conversation-collapsed',!open);$('.sidebar').classList.remove('open');$('.sidebar').inert=!open;sidebarToggle.setAttribute('aria-expanded',String(open));if(save)try{localStorage.setItem('astra-conversation-pane',String(open))}catch{}if(state.mode==='canvas')setTimeout(()=>{renderNodes()},220)}
 let savedConversationPane;try{savedConversationPane=localStorage.getItem('astra-conversation-pane')}catch{}
 setConversationPane(innerWidth>760&&savedConversationPane!=='false',false);
 $('#open-side').onclick=()=>setConversationPane(true);$('#close-side').onclick=()=>setConversationPane(false);
