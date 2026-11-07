@@ -18,6 +18,17 @@ class Attachments(unittest.TestCase):
   item=self.upload('test.docx',b.getvalue());self.assertIn('Word attachment',attachments.assemble(self.data,'x',[item['id']]))
   with self.assertRaises(ValueError):self.upload('fake.jpg',b'bad image')
   with self.assertRaises(ValueError):self.upload('large.txt',b'a'*(attachments.MAX_FILE+1))
+ def test_library_metadata_and_outputs(self):
+  import sqlite3
+  db=sqlite3.connect(':memory:');attachments.initialize(db)
+  item=self.upload('notes.txt',b'private extracted content')
+  db.execute('INSERT INTO session_outputs(session_id,attachment_id) VALUES (?,?)',('session',item['id']))
+  result=attachments.library(db,self.data)
+  self.assertEqual(len(result['items']),1)
+  self.assertTrue(result['items'][0]['output'])
+  self.assertNotIn('text',result['items'][0])
+  self.assertNotIn('private extracted content',json.dumps(result))
+  db.close()
  def test_pdf(self):
   sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'vendor_python'))
   from pypdf import PdfWriter

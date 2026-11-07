@@ -7,8 +7,8 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
 [assembly: System.Reflection.AssemblyTitle("AstraAgent")]
-[assembly: System.Reflection.AssemblyVersion("3.0.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.0.1.0")]
+[assembly: System.Reflection.AssemblyVersion("3.1.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("3.1.0.0")]
 class Launcher {
  [DllImport("kernel32.dll")] static extern bool AttachConsole(uint process);
  [DllImport("kernel32.dll")] static extern bool AllocConsole();

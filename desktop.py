@@ -82,6 +82,7 @@ def main():
     import updater
     cleanup_timer=threading.Timer(20,lambda:updater.cleanup(ROOT));cleanup_timer.daemon=True;cleanup_timer.start()
     import webview
+    webview.settings['DRAG_REGION_DIRECT_TARGET_ONLY'] = True
     bundled_webview = runtime_paths.prepare_webview_runtime(ROOT,data)
     if bundled_webview:
         webview.settings['WEBVIEW2_RUNTIME_PATH'] = str(bundled_webview)
@@ -135,6 +136,12 @@ def main():
             extra = webview.create_window('AstraAgent · second window', url=url, width=900, height=650)
 
             def second_loaded():
+                before_maximize = native_details(main_window)
+                bridge.window_control('maximize')
+                maximized_details = native_details(main_window)
+                bridge.window_control('maximize')
+                bridge.window_control('minimize')
+                main_window.restore()
                 (data / 'desktop-smoke.json').write_text(json.dumps({
                     'loaded': True, 'url': url, 'policy_controls': controls,
                     'native_windows': len(webview.windows), 'splash': splash_metrics,
@@ -147,6 +154,10 @@ def main():
                     'language_control': main_window.evaluate_js("!!document.getElementById('ui-language')"),
                     'audio_capture_api': main_window.evaluate_js("typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof MediaRecorder === 'function'"),
                     'main_icon_loaded': native_details(main_window)['icon_loaded'],
+                    'main_frameless': before_maximize['frameless'],
+                    'window_controls': main_window.evaluate_js("document.querySelectorAll('.window-controls:not([hidden]) button').length"),
+                    'maximize_expanded': maximized_details['width'] > before_maximize['width'],
+                    'compact_composer_height': main_window.evaluate_js("document.getElementById('chat-form').getBoundingClientRect().height"),
                     'icon': str(ICON),
                 }), encoding='utf-8')
                 threading.Timer(2, main_window.destroy).start()
@@ -169,8 +180,9 @@ def main():
                             main_window = webview.create_window(
                                 'AstraAgent', url=security_core.launch_url(value['url'],data), js_api=bridge,
                                 width=1320, height=900, min_size=(820, 600), hidden=True,
-                                background_color='#14171e',
+                                background_color='#14171e', frameless=True, easy_drag=False,
                             )
+                            bridge._window = main_window
                             main_window.events.loaded += workspace_loaded
                             main_window.events.closed += shutdown
                         else:
@@ -184,6 +196,26 @@ def main():
             connecting.release()
 
     class Bridge:
+        def __init__(self):
+            self._window = None
+            self._maximized = False
+
+        def window_control(self, action):
+            if action not in ('minimize','maximize','close'):raise ValueError('窗口操作无效')
+            owner = self._window
+            if owner is None:return {'ready':False}
+            if action == 'minimize':owner.minimize()
+            elif action == 'close':owner.destroy()
+            else:
+                if os.name == 'nt':
+                    user=ctypes.WinDLL('user32')
+                    user.IsZoomed.argtypes=[ctypes.c_void_p]
+                    self._maximized=bool(user.IsZoomed(int(owner.native.Handle.ToInt64())))
+                self._maximized = not self._maximized
+                if self._maximized:owner.maximize()
+                else:owner.restore()
+            return {'ready':True,'maximized':self._maximized}
+
         def check_update(self):
             import updater
             return updater.latest(ROOT)
@@ -205,16 +237,18 @@ def main():
             return True
 
         def choose_project(self):
-            owner = main_window or splash
+            owner = self._window or main_window or splash
             selected = owner.create_file_dialog(webview.FileDialog.FOLDER)
             return selected[0] if selected else None
 
         def new_window(self, session=''):
             from urllib.parse import quote
             value = json.loads(state_file.read_text(encoding='utf-8'))
-            webview.create_window(
+            child_bridge = Bridge()
+            child_bridge._window = webview.create_window(
                 'AstraAgent', url=security_core.launch_url(value['url'] + '/?session=' + quote(str(session)),data),
-                js_api=self, width=1180, height=820, min_size=(820, 600),
+                js_api=child_bridge, width=1180, height=820, min_size=(820, 600),
+                frameless=True, easy_drag=False,
             )
             return True
 

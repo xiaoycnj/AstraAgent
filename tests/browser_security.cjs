@@ -54,22 +54,35 @@ async function main() {
     await page.keyboard.press('Control+Shift+S');
     await page.waitForTimeout(280);
     assert.equal(await page.locator('#sidebar-toggle').getAttribute('aria-expanded'),'true');
+    await page.locator('#chat-input').fill('保留这条未发送草稿');
     await page.locator('#nav-images').click();
-    await page.locator('.rail-collection[open]').waitFor();
+    await page.waitForFunction(()=>appPage==='images'&&!destination.hidden);
+    assert.equal(await page.locator('.studio-body').isVisible(),false);
+    assert.equal(await page.locator('dialog[open]').count(),0);
     assert.equal(await page.locator('#nav-images').getAttribute('aria-current'),'page');
-    await page.locator('.rail-collection header button').click();
     await page.locator('#nav-library').click();
-    await page.locator('.rail-collection[open]').waitFor();
-    await page.locator('.rail-collection header button').click();
+    await page.waitForFunction(()=>appPage==='library');
+    await page.locator('#history-back').click();
+    await page.waitForFunction(()=>appPage==='images');
+    await page.locator('#history-forward').click();
+    await page.waitForFunction(()=>appPage==='library');
     await page.locator('#nav-schedule').click();
-    await page.locator('.hub-dialog[open]').waitFor();
-    await page.locator('.hub-header button').click();
+    await page.waitForFunction(()=>appPage==='schedule');
+    await page.locator('.destination-body .hub-section-heading').waitFor();
+    assert.equal(await page.locator('.destination-body .hub-body').isVisible(),true);
+    assert.equal(await page.locator('dialog[open]').count(),0);
+    await page.locator('#nav-home').click();
+    assert.equal(await page.locator('#chat-input').inputValue(),'保留这条未发送草稿');
+    await page.locator('#chat-input').fill('');
+    await page.locator('#chat-input').dispatchEvent('input');
+    assert.ok((await page.locator('#chat-form').boundingBox()).height<125);
+    assert.ok((await page.locator('#messages').boundingBox()).height>700);
     await page.locator('#nav-more').click();
     assert.equal(await page.locator('.rail-menu').isVisible(),true);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.rail-menu').isVisible(),false);
     await page.locator('#nav-review').click();
-    assert.equal(await page.locator('.workbench-drawer').isVisible(),true);
+    await page.locator('.workbench-drawer').waitFor();
     await page.evaluate(()=>closeWorkbench());
     await page.locator('#nav-home').click();
     const navIcons=await page.locator('.app-rail img').evaluateAll(async imgs=>{await Promise.all(imgs.map(img=>img.decode()));return imgs.every(img=>img.naturalWidth>0)});
@@ -139,6 +152,17 @@ async function main() {
     await page.waitForFunction(()=>document.querySelector('.generated-image-dialog img')?.naturalWidth===1);
     await page.locator('.generated-image-dialog button').click();
 
+    await page.locator('#nav-library').click();
+    await page.waitForFunction(()=>appPage==='library'&&libraryAssets.some(item=>item.name==='fixture.png'));
+    await page.locator('.asset-card').first().waitFor();
+    assert.equal(await page.locator('.studio-body').isVisible(),false);
+    assert.equal(await page.locator('dialog[open]').count(),0);
+    await page.screenshot({path:path.join(root,'work/library-page.png')});
+    await page.reload();
+    await page.waitForFunction(()=>appPage==='library'&&!!document.querySelector('.asset-card'));
+    await page.locator('#nav-home').click();
+    await page.evaluate(()=>applyTheme('dark'));
+    await page.screenshot({path:path.join(root,'work/compact-dark.png')});
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);
@@ -152,4 +176,4 @@ async function main() {
     fs.rmSync(folder, {recursive: true, force: true});
   }
 }
-main().catch(error => {console.error(error.message); process.exitCode = 1;});
+main().catch(error => {console.error(error.stack); process.exitCode = 1;});

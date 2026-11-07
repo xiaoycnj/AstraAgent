@@ -111,6 +111,26 @@ def meta(data,key):
     except OSError:raise ValueError('附件不存在，请重新上传') from None
 
 def public(item):return {k:v for k,v in item.items() if k not in ('text',)}
+
+def library(db,data):
+    """List bounded public attachment metadata, without extracted document text."""
+    import heapq
+    root=data/'attachments'
+    if not root.exists():return {'items':[]}
+    outputs={row[0] for row in db.execute('SELECT DISTINCT attachment_id FROM session_outputs')}
+    candidates=[]
+    for folder in root.iterdir():
+        if not re.fullmatch('[a-f0-9]{32}',folder.name):continue
+        try:
+            safe=location(data,folder.name)
+            if safe.is_symlink() or not (safe/'meta.json').is_file():continue
+            candidates.append(((safe/'meta.json').stat().st_mtime,folder.name))
+        except (ValueError,OSError):continue
+    rows=[]
+    for modified,key in heapq.nlargest(1000,candidates):
+        try:rows.append({**public(meta(data,key)),'output':key in outputs,'modified':modified})
+        except (ValueError,OSError):continue
+    return {'items':rows,'limit':1000,'truncated':len(candidates)>1000}
 def extract(raw,name):
     suffix=Path(name).suffix.lower()
     if suffix in TEXT_EXT:
