@@ -158,6 +158,35 @@ async function main() {
     assert.equal(await page.locator('.studio-body').isVisible(),false);
     assert.equal(await page.locator('dialog[open]').count(),0);
     await page.screenshot({path:path.join(root,'work/library-page.png')});
+    await page.locator('#nav-plugins').click();
+    await page.locator('#settings:not([hidden])').waitFor();
+    assert.equal(await page.locator('#destination-page').isVisible(),false,'settings must replace library');
+    assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),true,'background content must be inert');
+    await page.evaluate(()=>applyTheme('dark'));
+    await page.waitForTimeout(500);
+    await page.screenshot({path:path.join(root,'work/settings-exclusive.png')});
+    await page.getByRole('button',{name:'返回对话',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#settings').hidden);
+    assert.equal(await page.locator('#destination-page').isVisible(),true);
+    assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),false);
+    for(const origin of ['images','schedule','home']){
+      await page.locator('#nav-'+origin).click();
+      await page.waitForFunction(name=>appPage===name,origin);
+      // The File menu retains its original showSettings callback.
+      const fileMenu=page.locator('.desktop-menubar .app-menu').first();
+      await fileMenu.locator('summary').click();
+      await fileMenu.getByRole('button',{name:'设置',exact:true}).click();
+      assert.equal(await page.locator('#destination-page').isVisible(),false);
+      assert.equal(await page.locator('.studio-body').isVisible(),false);
+      assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),true);
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(()=>document.querySelector('#settings').hidden);
+      assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),false);
+      assert.equal(await page.evaluate(()=>appPage),origin);
+      assert.equal(await page.locator('#destination-page').isVisible(),origin!=='home');
+    }
+    await page.locator('#nav-library').click();
+
     await page.reload();
     await page.waitForFunction(()=>appPage==='library'&&!!document.querySelector('.asset-card'));
     await page.locator('#nav-home').click();

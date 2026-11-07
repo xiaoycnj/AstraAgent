@@ -53,7 +53,20 @@ const beforePageSession=openSession;openSession=async function(session){await be
 const beforePageNewSession=newSession;newSession=async function(...args){if(appPage!=='home')await navigatePage('home');return beforePageNewSession(...args)};
 const beforePageSwitch=switchMode;switchMode=async function(mode){if(appPage!=='home'&&!await navigatePage('home'))return;return beforePageSwitch(mode)};
 const beforePageShowSettings=showSettings;showSettings=function(){beforePageShowSettings();closeRailMenu()};
-const beforePageCloseSettings=closeSettingsPage;closeSettingsPage=function(){const result=beforePageCloseSettings();if($('#settings').hidden){$('.studio-body').hidden=appPage!=='home';$('.topbar').hidden=appPage!=='home';destination.hidden=appPage==='home';selectRail(appPage==='home'?'home':appPage)}return result};
+function syncWorkspaceVisibility(){
+ const settingsOpen=!$('#settings').hidden;
+ $('.studio-body').hidden=settingsOpen||appPage!=='home';
+ $('.topbar').hidden=settingsOpen||appPage!=='home';
+ destination.hidden=settingsOpen||appPage==='home';
+ $('#app>main').inert=settingsOpen;
+ if(!settingsOpen)selectRail(appPage==='home'?'home':appPage);
+}
+// Hook the page owner, so older menu callbacks that captured showSettings also synchronize.
+const beforePageOpenSettings=openSettingsPage;openSettingsPage=function(){beforePageOpenSettings();syncWorkspaceVisibility()};
+const beforePageCloseSettings=closeSettingsPage;closeSettingsPage=function(){const result=beforePageCloseSettings();syncWorkspaceVisibility();return result};
+$('#settings-close').onclick=()=>closeSettingsPage();
+// Covers legacy callbacks that captured a previous closeSettingsPage function.
+new MutationObserver(syncWorkspaceVisibility).observe($('#settings'),{attributes:true,attributeFilter:['hidden']});
 const beforePageHubOpen=hubOpen.onclick;hubOpen.onclick=function(...args){hubDialog.append(hubBody);return beforePageHubOpen.apply(this,args)};
 attachmentPicker.addEventListener('change',()=>{if(appPage!=='library')return;let attempts=0;const refresh=()=>{if(appPage!=='library')return;if(uploadBusy&&attempts++<100){setTimeout(refresh,200);return}loadAssetPage(appPage,pageTicket)};setTimeout(refresh,200)});
 const beforePageImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforePageImageEvent(sid,event);if(['images','library'].includes(appPage)&&event.type==='image_generated')loadAssetPage(appPage,pageTicket)};
