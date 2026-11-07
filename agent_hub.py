@@ -214,9 +214,14 @@ def open_page(data,url):
         db.execute('DELETE FROM pages WHERE id NOT IN (SELECT id FROM pages ORDER BY rowid DESC LIMIT 50)')
     return {'page_id':key,**page}
 
-def snapshot(data):
+def snapshot(data,summary=False,limit=100,offset=0):
     with database(data) as db:
-        return {'records':[dict(row) for row in db.execute('SELECT * FROM records ORDER BY updated DESC,rowid DESC LIMIT 1000')], 'jobs':[dict(row) for row in db.execute('SELECT * FROM jobs ORDER BY rowid DESC LIMIT 50')], 'pages':[dict(row) for row in db.execute('SELECT id,url,title,created FROM pages ORDER BY rowid DESC LIMIT 50')]}
+        if not summary:return {'records':[dict(row) for row in db.execute('SELECT * FROM records ORDER BY updated DESC,rowid DESC LIMIT 1000')], 'jobs':[dict(row) for row in db.execute('SELECT * FROM jobs ORDER BY rowid DESC LIMIT 50')], 'pages':[dict(row) for row in db.execute('SELECT id,url,title,created FROM pages ORDER BY rowid DESC LIMIT 50')]}
+        if type(limit) is not int or not 1<=limit<=100 or type(offset) is not int or offset<0:raise ValueError('任务分页范围无效')
+        records=[dict(row) for row in db.execute('SELECT id,kind,parent,title,status,substr(content,1,240) AS content,length(content)>240 AS truncated,updated FROM records ORDER BY updated DESC,rowid DESC LIMIT ? OFFSET ?',(limit,offset))]
+        jobs=[dict(row) for row in db.execute('SELECT id,name,session_id,status,model,substr(task,1,500) AS task,substr(result,1,500) AS result,created FROM jobs ORDER BY rowid DESC LIMIT 50')]
+        total=db.execute('SELECT COUNT(*) FROM records').fetchone()[0]
+        return {'records':records,'jobs':jobs,'pages':[dict(row) for row in db.execute('SELECT id,url,title,created FROM pages ORDER BY rowid DESC LIMIT 50')],'total':total,'next_offset':offset+len(records) if offset+len(records)<total else None}
 
 def tree_context(data):
     with database(data) as db:

@@ -39,6 +39,7 @@ class Execution(unittest.TestCase):
         result=agent_environment.command(self.root,self.data,{'argv':[sys.executable,'-c','print("full-policy-ok")']},config,None,lambda *args:self.fail('full policy prompted'))
         self.assertIn('full-policy-ok',result['output'])
     def test_model_full_policy_executes_without_prompt(self):
+        runtime_engine.save_settings(self.data,{'access_policy':'full'})
         config=backend.request_config({'allow_tools':True,'access_policy':'full','auto_memory':False})
         config['model']='mock'
         steps=[]
@@ -48,6 +49,7 @@ class Execution(unittest.TestCase):
                 return {'choices':[{'message':{'content':'执行成功'}}]}
             return {'choices':[{'message':{'content':None,'tool_calls':[{'id':'host','function':{'name':'execute_command','arguments':json.dumps({'argv':[sys.executable,'-c','print("model-command-ok")']})}}]}}]}
         with patch.object(backend,'stream_upstream',side_effect=fake),patch.object(backend,'approve_tool',side_effect=AssertionError('Unexpected full-policy prompt')):
+            backend.capability_tool('load_tools',{'names':['execute_command']},config,None)
             result=backend.completion(config,[{'role':'user','content':'执行命令'}],steps.append)
         self.assertEqual(result,'执行成功')
         self.assertEqual([event['type'] for event in steps],['tool_start','tool'])

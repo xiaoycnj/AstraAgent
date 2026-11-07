@@ -14,6 +14,7 @@ from openai_oauth import protect
 
 LOCK = threading.RLock()
 PRIVATE_ROOTS = set()
+DIRECTORY_STATUS={}
 SECRET_PATTERN = re.compile(
     r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|'
     r'\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|'
@@ -70,6 +71,51 @@ def atomic_write(path, raw):
     finally:
         temporary.unlink(missing_ok=True)
 
+
+def _windows_user_sid():
+    executable=Path(os.environ['SystemRoot'])/'System32'/'whoami.exe'
+    result=subprocess.run([str(executable),'/user','/fo','csv','/nh'],capture_output=True,check=True,timeout=10,creationflags=subprocess.CREATE_NO_WINDOW)
+    match=re.search(rb'"(S-1-\d+(?:-\d+)+)"',result.stdout)
+    if not match:raise ValueError('无法取得当前 Windows 用户 SID')
+    return match[1].decode('ascii')
+
+def private_existing_acl(path):
+    if os.name!='nt':return path.stat().st_mode&0o077==0
+    from ctypes import wintypes
+    advapi=ctypes.WinDLL('advapi32',use_last_error=True)
+    get=advapi.GetFileSecurityW;get.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,ctypes.c_void_p,wintypes.DWORD,ctypes.POINTER(wintypes.DWORD)]
+    size=wintypes.DWORD();get(str(path),4,None,0,ctypes.byref(size))
+    if not size.value:return False
+    buffer=ctypes.create_string_buffer(size.value)
+    if not get(str(path),4,buffer,size.value,ctypes.byref(size)):return False
+    string=wintypes.LPWSTR();convert=advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW
+    convert.argtypes=[ctypes.c_void_p,wintypes.DWORD,wintypes.DWORD,ctypes.POINTER(wintypes.LPWSTR),ctypes.c_void_p]
+    if not convert(buffer,1,4,ctypes.byref(string),None):return False
+    try:sddl=string.value
+    finally:
+        kernel=ctypes.WinDLL('kernel32');kernel.LocalFree.argtypes=[ctypes.c_void_p];kernel.LocalFree(string)
+    if not sddl or not sddl.startswith('D:') or 'NO_ACCESS_CONTROL' in sddl:return False
+    sid=_windows_user_sid()
+    trusted={sid,'SY','BA','S-1-5-18','S-1-5-32-544'}
+    if sid.endswith('-500'):trusted.add('LA') # SDDL local Administrator alias.
+    if sid.endswith('-501'):trusted.add('LG') # Alias only when it is this exact user.
+    for raw in re.findall(r'\(([^()]*)\)',sddl):
+        fields=raw.split(';')
+        if fields[0]=='D':continue
+        if len(fields)!=6 or fields[0]!='A' or fields[5] not in trusted:return False
+    return True
+
+def prepare_directory(path):
+    try:restrict_directory(path);status={'mode':'private-acl','warning':''}
+    except (OSError,ValueError,subprocess.SubprocessError) as error:
+        try:verified=private_existing_acl(path)
+        except (OSError,ValueError,subprocess.SubprocessError):verified=False
+        if verified:
+            status={'mode':'verified-existing-acl','warning':'未能重设目录权限，已验证现有 ACL 仅允许当前用户、SYSTEM 与管理员访问。'}
+            print('Data directory warning: '+status['warning'],flush=True)
+        else:raise PermissionError('数据目录无法设置或验证私有权限。请使用当前用户的本地 NTFS 目录作为 --data-dir；不会静默降低凭据与会话保护。') from error
+    DIRECTORY_STATUS[str(path.resolve())]=status
+    return status
 
 def restrict_directory(path):
     """Replace the directory DACL with inheritable current-user and SYSTEM access."""

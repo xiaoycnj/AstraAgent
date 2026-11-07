@@ -142,12 +142,14 @@ def target(root, relative):
 
 
 def instructions(project):
-    parts = [project['instructions']]
+    return '\n\n'.join(part for part in (project['instructions'], repository_instructions(project)) if part)
+
+def repository_instructions(project):
     root = Path(project['path'])
     file = root / 'AGENTS.md'
     if file.is_file() and file.resolve().is_relative_to(root) and file.stat().st_size <= 50000:
-        parts.append('项目根目录 AGENTS.md：\n' + file.read_text(encoding='utf-8')[:12000])
-    return '\n\n'.join(part for part in parts if part)
+        return file.read_text(encoding='utf-8')[:12000]
+    return ''
 
 
 def scan(data, project, store=False, token=None):
@@ -164,22 +166,22 @@ def scan(data, project, store=False, token=None):
             if token:
                 token.check()
             path = Path(parent) / name
-            if path.is_symlink() or not path.is_file():
+            before_stat = path.stat(follow_symlinks=False)
+            if not stat.S_ISREG(before_stat.st_mode):
                 continue
-            if len(manifest) >= MAX_FILES or path.stat().st_size > MAX_FILE_BYTES:
+            if len(manifest) >= MAX_FILES or before_stat.st_size > MAX_FILE_BYTES:
                 raise ValueError('项目超过快照限制（10000 文件，单文件 10 MB）')
-            before_stat = path.stat()
             with path.open('rb') as source:
-                raw = source.read(MAX_FILE_BYTES + 1)
-            after_stat = path.stat()
-            if (before_stat.st_mtime_ns, before_stat.st_size) != (after_stat.st_mtime_ns, after_stat.st_size):
+                raw = source.read(before_stat.st_size + 1)
+            after_stat = path.stat(follow_symlinks=False)
+            if (before_stat.st_mtime_ns,before_stat.st_ctime_ns,before_stat.st_ino,before_stat.st_size) != (after_stat.st_mtime_ns,after_stat.st_ctime_ns,after_stat.st_ino,after_stat.st_size):
                 raise ValueError('文件在快照时发生变化，请重试')
             total += len(raw)
             if len(raw) > MAX_FILE_BYTES or total > MAX_PROJECT_BYTES:
                 raise ValueError('项目快照超过 100 MB 限制')
             digest = hashlib.sha256(raw).hexdigest()
             relative = path.relative_to(root).as_posix()
-            manifest[relative] = {'sha256': digest, 'size': len(raw), 'mode': stat.S_IMODE(path.stat().st_mode)}
+            manifest[relative] = {'sha256': digest, 'size': len(raw), 'mode': stat.S_IMODE(before_stat.st_mode)}
             if store and not (blobs / digest).exists():
                 temporary = blobs / (digest + '.' + secrets.token_hex(6))
                 temporary.write_bytes(raw)
@@ -221,10 +223,10 @@ def history(data, key):
     return {'checkpoints': points, 'verifications': checks, 'rollbacks': operations}
 
 
-def diff(data, key, identifier, token=None):
+def diff(data, key, identifier, token=None, current=None):
     project = get(data, key)
     baseline = load_checkpoint(data, key, identifier)['manifest']
-    current = scan(data, project, token=token)
+    if current is None:current = scan(data, project, token=token)
     changes = []
     root = Path(project['path'])
     for relative in sorted(set(baseline) | set(current)):
@@ -234,6 +236,8 @@ def diff(data, key, identifier, token=None):
             continue
         raw_before = (data / 'project-history/blobs' / before['sha256']).read_bytes() if before else b''
         raw_after = target(root, relative).read_bytes() if after else b''
+        if after and hashlib.sha256(raw_after).hexdigest()!=after['sha256']:
+            raise ValueError('文件在生成差异时发生变化，请重新验证')
         text = ''
         binary = b'\x00' in raw_before + raw_after
         if not binary and len(raw_before) + len(raw_after) <= 1_000_000:
@@ -309,7 +313,7 @@ def rollback(data, key, identifier, expected_revision):
         release(key, owner)
 
 
-def verify(data, key, checks, runner, run_id='', token=None):
+def verify(data, key, checks, runner, run_id='', token=None, capture=None):
     results = []
     for check in checks:
         if token:
@@ -319,6 +323,7 @@ def verify(data, key, checks, runner, run_id='', token=None):
     if token:
         token.check()
     current = scan(data, get(data, key), token=token)
+    if capture is not None:capture.update(current)
     verdict = 'unverified' if not results else 'passed' if all(result.get('exit_code') == 0 and not result.get('error') for result in results) else 'failed'
     identifier = uuid.uuid4().hex
     with database(data) as db:

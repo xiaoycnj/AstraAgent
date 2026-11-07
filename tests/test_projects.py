@@ -31,6 +31,7 @@ class ProjectWorkflow(unittest.TestCase):
         folder.mkdir(parents=True)
         (folder / 'SKILL.md').write_text('# General\nHelp')
         backend.initialize()
+        backend.runtime_engine.save_settings(self.data,{'access_policy':'full'})
         self.record = projects.save(self.data, {'name': 'Example', 'path': str(self.project)})
         self.key = self.record['id']
 
@@ -92,7 +93,9 @@ class ProjectWorkflow(unittest.TestCase):
         projects.save(self.data, {**self.record, 'checks': [check], 'instructions': 'Saved instruction'})
         config = backend.request_config({'project_id': self.key, 'allow_tools': True, 'access_policy': 'full', 'auto_memory': False})
         config['model'] = 'mock'
-        self.assertIn('Keep the module readable.', config['system_prompt'])
+        self.assertNotIn('Keep the module readable.', config['system_prompt'])
+        self.assertIn('Keep the module readable.',config['_repository_context'])
+        backend.capability_tool('load_tools',{'names':['read_file','write_file','project_verify']},config,None)
         self.assertIn('Saved instruction', config['system_prompt'])
         point = projects.checkpoint(self.data, self.key, 'before')
         count = 0
@@ -185,7 +188,7 @@ class ProjectWorkflow(unittest.TestCase):
             session = json.loads(call('/api/sessions', 'POST', {'title':'Project'}))
             call('/api/settings', 'PUT', {'base_url':'http://127.0.0.1:9/v1','model':'mock'})
             with patch.object(backend, 'stream_upstream', side_effect=model), patch.object(backend,'approve_tool',return_value=True) as approval:
-                raw = call('/api/sessions/' + session['id'] + '/chat', 'POST', {'request_id':'project-workflow-http','content':'Set value to two','stream':True,'project_id':self.key,'allow_tools':True,'access_policy':'full','auto_memory':False})
+                raw = call('/api/sessions/' + session['id'] + '/chat', 'POST', {'request_id':'project-workflow-http','content':'Set value to two','stream':True,'project_id':self.key,'tools':['read_file','write_file'],'allow_tools':True,'access_policy':'full','auto_memory':False})
             events = [json.loads(line[5:]) for line in raw.splitlines() if line.startswith('data:')]
             self.assertEqual(events[-1]['type'], 'done')
             self.assertEqual(events[-1]['verdict'], 'passed')

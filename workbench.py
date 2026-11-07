@@ -5,6 +5,13 @@ import base64,hashlib,json,os,queue,secrets,shutil,subprocess,threading,time
 from pathlib import Path
 
 TERMINALS={};LOCK=threading.Lock()
+FILE_CACHE={};FILE_CACHE_LOCK=threading.Lock()
+EXCLUDED={'.git','node_modules','.venv','venv','__pycache__','.cache','dist','build'}
+
+def invalidate_files(root=None):
+    with FILE_CACHE_LOCK:
+        if root is None:FILE_CACHE.clear()
+        else:FILE_CACHE.pop(str(Path(root).resolve()),None)
 def file_path(data,name,root=None):
     security_core.relative_path(name)
     root=Path(root).resolve() if root else (data/'files').resolve();root.mkdir(parents=True,exist_ok=True)
@@ -13,16 +20,25 @@ def file_path(data,name,root=None):
     if path==root or not path.is_relative_to(root):raise ValueError('文件路径超出工作区')
     return security_core.protect_private(path)
 
-def files(data,root=None):
+def files(data,root=None,offset=0,limit=500):
     project_mode=bool(root);root=Path(root) if root else data/'files';root.mkdir(exist_ok=True);result=[]
+    if type(offset) is not int or not 0<=offset<=10000 or type(limit) is not int or not 1<=limit<=500:raise ValueError('文件分页范围无效')
+    cache_key=str(root.resolve());stamp=root.stat().st_mtime_ns
+    with FILE_CACHE_LOCK:
+        saved=FILE_CACHE.get(cache_key)
+        if saved and saved[0]==stamp and time.monotonic()-saved[1]<1:return [dict(item) for item in saved[2][offset:offset+limit]]
     for folder,dirs,names in os.walk(root,followlinks=False):
-        dirs[:]=[d for d in dirs if not security_core.private_path(Path(folder)/d) and not (Path(folder)/d).is_symlink() and not getattr(Path(folder)/d,'is_junction',lambda:False)() and (not project_mode or d not in ('.git','node_modules','.venv','venv','__pycache__','.cache','dist','build'))]
+        dirs[:]=[d for d in dirs if (not project_mode or d not in EXCLUDED) and not security_core.private_path(Path(folder)/d) and not (Path(folder)/d).is_symlink() and not getattr(Path(folder)/d,'is_junction',lambda:False)()]
         for name in names:
             p=Path(folder)/name
             if p.is_symlink():continue
             result.append({'path':str(p.relative_to(root)).replace('\\','/'),'size':p.stat().st_size})
-            if len(result)>=500:return result
-    return result
+            if len(result)>=10000:break
+        if len(result)>=10000:break
+    with FILE_CACHE_LOCK:
+        if len(FILE_CACHE)>=8:FILE_CACHE.pop(next(iter(FILE_CACHE)))
+        FILE_CACHE[cache_key]=(stamp,time.monotonic(),result)
+    return [dict(item) for item in result[offset:offset+limit]]
 
 def read_file(data,name,root=None):
     p=file_path(data,name,root)
@@ -34,6 +50,7 @@ def write_file(data,name,content,revision,root=None):
     existing=hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
     if existing!=revision:raise FileExistsError('文件已在其他地方修改，请重新打开或另存为')
     p.parent.mkdir(parents=True,exist_ok=True);temp=p.with_suffix(p.suffix+'.'+secrets.token_hex(6)+'.tmp');temp.write_bytes(content.encode('utf-8'));temp.replace(p)
+    invalidate_files(root or data/'files')
     return read_file(data,name,root)
 
 def available_shells():
@@ -80,7 +97,7 @@ class Terminal:
                 if size>128000:self.close();return {'output':''.join(output)+'\n输出达到 128 KB，终端已停止。','alive':False}
                 output.append(text)
             self.close();return {'output':''.join(output)+'\n命令超过 30 秒，终端已停止。','alive':False}
-        finally:self.lock.release()
+        finally:invalidate_files();self.lock.release()
 
 def start_terminal(data,name,acknowledged,root=None):
     if acknowledged is not True:raise ValueError('请先确认本机 Shell 权限')

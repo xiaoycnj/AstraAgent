@@ -21,8 +21,8 @@ runtimeOptions = function () {
 };
 const previousProjectApi = api;
 api = function (path, method = 'GET', data) {
-    if (selectedProjectId && path === '/api/workspace/files') {
-        path += '?project_id=' + encodeURIComponent(selectedProjectId);
+    if (selectedProjectId && (path === '/api/workspace/files' || path.startsWith('/api/workspace/files?'))) {
+        const url=new URL(path,location.origin);url.searchParams.set('project_id',selectedProjectId);path=url.pathname+url.search;
     }
     if (['/api/workspace/file', '/api/terminal'].includes(path)) {
         data = {...data, project_id: selectedProjectId};

@@ -7,8 +7,8 @@ import threading
 import time
 
 LOCK=threading.RLock()
-DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True}
-READ_TOOLS={'get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions'}
+DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True,'terminal_enabled':False}
+READ_TOOLS={'get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
 
 def settings(data):
     path=data/'runtime.json'
@@ -24,7 +24,7 @@ def _save_settings(data,body):
     if value['access_policy'] not in ('deny','ask','trusted','full'):raise ValueError('权限档位无效')
     for key,low,high in [('context_chars',12000,200000),('tool_rounds',4,80),('tool_calls',8,400)]:
         if type(value[key]) is not int or not low<=value[key]<=high:raise ValueError(key+' 超出范围')
-    for key in ('auto_compact','skill_learning'):
+    for key in ('auto_compact','skill_learning','terminal_enabled'):
         if type(value[key]) is not bool:raise ValueError('开关格式无效')
     commands=value['trusted_commands']
     if not isinstance(commands,list) or len(commands)>80 or any(not isinstance(command,list) or not command or len(command)>30 or any(not isinstance(arg,str) or len(arg)>1000 for arg in command) for command in commands):raise ValueError('信任命令需为完整 argv 数组列表')

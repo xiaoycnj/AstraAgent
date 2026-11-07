@@ -35,6 +35,7 @@ class Integration(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         backend.DATA=Path(self.temp.name); backend.initialize()
+        backend.local_account.save_profile(backend.DATA,{'use_memory':False})
         MockAI.calls=[]; MockAI.fail=False; MockAI.delay=False; MockAI.started.clear()
         self.mock=ThreadingHTTPServer(('127.0.0.1',0),MockAI)
         self.app=ThreadingHTTPServer(('127.0.0.1',0),backend.Handler)

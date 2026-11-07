@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def isolated_app(folder):
     folder.mkdir()
-    for name in ['security_core.py','security_audit.py','security_net.py','security_server.py','cli.py','backend.py','server.py','watchdog.py','extensions.py','local_account.py',
+    for name in ['tool_provenance.py','native_frame.py','security_core.py','security_audit.py','security_net.py','security_server.py','cli.py','backend.py','server.py','watchdog.py','extensions.py','local_account.py',
                  'agent_environment.py','workbench.py','attachments.py','workspace_tools.py','agent_hub.py',
                  'stream_journal.py','runtime_engine.py','mcp_client.py','storage_manager.py',
                  'project_workspace.py','task_control.py','usage_meter.py','runtime_paths.py','ui_locale.py','openai_oauth.py','openai_responses.py']:

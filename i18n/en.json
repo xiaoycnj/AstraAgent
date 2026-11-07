@@ -1076,6 +1076,15 @@
     "最小化": "Minimize",
     "最大化或还原": "Maximize or restore",
     "关闭窗口": "Close window",
-    "窗口控制": "Window controls"
+    "窗口控制": "Window controls",
+    "允许本机终端": "Allow native terminal",
+    "本机终端可运行当前用户权限下的任意命令，不受轻量沙箱隔离。确认启用？": "The native terminal can run commands with your OS account permissions outside the lightweight sandbox. Enable it?",
+    "加载更多文件": "Load more files",
+    "正在加载任务…": "Loading tasks…",
+    "请先在常规设置中启用本机终端权限": "Enable native terminal access in General settings first",
+    "终端权限已关闭": "Terminal access has been disabled",
+    "任务分页无效": "Invalid task pagination",
+    "文件分页范围无效": "Invalid file pagination range",
+    "来源状态无法持久化，已停止工具执行": "Could not persist source trust state. Tool execution stopped."
   }
 }

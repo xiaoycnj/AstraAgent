@@ -17,7 +17,8 @@ async function refreshHub(){hubData=await api('/api/hub');renderHub()}
 hubOpen.onclick=safely(async()=>{hubDialog.showModal();await refreshHub()});
 function hubAction(label,action){const button=elem('button','secondary',label);button.type='button';button.onclick=safely(action);return button}
 async function saveHubRecord(body){await api('/api/hub/record','POST',body);await refreshHub()}
-function editHubRecord(kind,item=null,parent=''){
+async function editHubRecord(kind,item=null,parent=''){
+    if(item?.truncated){try{item=await api('/api/hub/record/'+item.id)}catch(error){toast(error.message);return}}
     hubBody.replaceChildren();const form=elem('form','hub-editor');
     const title=elem('input');title.placeholder='标题';title.required=true;title.maxLength=200;title.value=item?.title||'';title.setAttribute('aria-label','记录标题');
     const content=elem('textarea');content.placeholder='内容、验收条件或事实依据';content.rows=8;content.maxLength=12000;content.value=item?.content||'';content.setAttribute('aria-label','记录内容');
@@ -69,6 +70,7 @@ function renderHub(){
     if(hubView==='task'){
         const board=elem('div','hub-kanban');for(const status of ['todo','active','blocked','done']){const column=elem('section','hub-kanban-column');column.append(elem('h3','',hubStatus[status]));for(const item of rows.filter(record=>record.status===status))column.append(hubCard(item));board.append(column)}hubBody.append(board);
     }else{const grid=elem('div','hub-grid');for(const item of rows)grid.append(hubCard(item));hubBody.append(grid)}
+    if(hubData.next_offset!==null&&hubData.next_offset!==undefined)hubBody.append(hubAction('加载更多',async()=>{const next=await api('/api/hub?offset='+hubData.next_offset);hubData={...next,records:[...hubData.records,...next.records]};renderHub()}));
     if(!rows.length)hubBody.append(elem('p','hub-empty','从一条'+hubKinds[hubView]+'开始。'));
 }
 function renderReaderBrowser(){

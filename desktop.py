@@ -12,6 +12,7 @@ import threading
 import time
 import runtime_paths
 import ui_locale
+import native_frame
 
 ROOT = Path(__file__).resolve().parent
 runtime_paths.configure_environment(ROOT)
@@ -52,7 +53,7 @@ def native_details(window, rounded=False):
     return {
         'width': width,
         'height': height,
-        'frameless': not bool(user.GetWindowLongW(handle, -16) & 0x00C00000),
+        'frameless': not bool(user.GetWindowLongW(handle, -16) & 0x00C00000) or bool(getattr(window,'_native_frame',None)),
         'rounded_region': region_type,
         'icon_loaded': bool(user.SendMessageW(handle, 0x007F, 1, 0)),
     }
@@ -123,6 +124,7 @@ def main():
             return
         if not (main_window.get_current_url() or '').startswith('http://127.0.0.1:'):
             return
+        native_frame.install(main_window)
         controls = main_window.evaluate_js("document.querySelectorAll('.policy-option').length")
         while time.monotonic() - shown_at < 1.2 and not closing.is_set():
             time.sleep(.05)
@@ -130,6 +132,7 @@ def main():
             return
         transitioning.set()
         main_window.show()
+        main_window.evaluate_js("window.reportWindowChrome?.()")
         splash.destroy()
         if args.smoke:
             url = main_window.get_current_url()
@@ -139,9 +142,12 @@ def main():
                 before_maximize = native_details(main_window)
                 bridge.window_control('maximize')
                 maximized_details = native_details(main_window)
+                work_area_details = native_frame.metrics(main_window)
                 bridge.window_control('maximize')
                 bridge.window_control('minimize')
                 main_window.restore()
+                main_window.evaluate_js("window.reportWindowChrome?.()")
+                time.sleep(.2)
                 (data / 'desktop-smoke.json').write_text(json.dumps({
                     'loaded': True, 'url': url, 'policy_controls': controls,
                     'native_windows': len(webview.windows), 'splash': splash_metrics,
@@ -157,6 +163,8 @@ def main():
                     'main_frameless': before_maximize['frameless'],
                     'window_controls': main_window.evaluate_js("document.querySelectorAll('.window-controls:not([hidden]) button').length"),
                     'maximize_expanded': maximized_details['width'] > before_maximize['width'],
+                    'native_frame': work_area_details,
+                    'maximize_hit_test': native_frame.maximize_hit_test(main_window),
                     'compact_composer_height': main_window.evaluate_js("document.getElementById('chat-form').getBoundingClientRect().height"),
                     'icon': str(ICON),
                 }), encoding='utf-8')
@@ -179,7 +187,7 @@ def main():
                         if main_window is None:
                             main_window = webview.create_window(
                                 'AstraAgent', url=security_core.launch_url(value['url'],data), js_api=bridge,
-                                width=1320, height=900, min_size=(820, 600), hidden=True,
+                                width=1320, height=900, min_size=(480, 480), hidden=True,
                                 background_color='#14171e', frameless=True, easy_drag=False,
                             )
                             bridge._window = main_window
@@ -199,6 +207,17 @@ def main():
         def __init__(self):
             self._window = None
             self._maximized = False
+
+        def window_chrome(self, body):
+            import math
+            rect=body.get('maximize') if isinstance(body,dict) else None
+            if not isinstance(rect,list) or len(rect)!=4 or any(type(n) not in (int,float) or not math.isfinite(n) or not 0<=n<=20000 for n in rect):raise ValueError('窗口区域无效')
+            hook=getattr(self._window,'_native_frame',None)
+            if hook:hook.maximize_rect=rect
+            return {'ready':bool(hook)}
+
+        def window_drag(self):
+            return native_frame.begin_drag(self._window)
 
         def window_control(self, action):
             if action not in ('minimize','maximize','close'):raise ValueError('窗口操作无效')
@@ -247,9 +266,10 @@ def main():
             child_bridge = Bridge()
             child_bridge._window = webview.create_window(
                 'AstraAgent', url=security_core.launch_url(value['url'] + '/?session=' + quote(str(session)),data),
-                js_api=child_bridge, width=1180, height=820, min_size=(820, 600),
+                js_api=child_bridge, width=1180, height=820, min_size=(480, 480),
                 frameless=True, easy_drag=False,
             )
+            child_bridge._window.events.loaded += lambda:native_frame.install(child_bridge._window)
             return True
 
     bridge = Bridge()

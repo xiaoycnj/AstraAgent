@@ -87,7 +87,7 @@ def print_json(value):
 
 def doctor():
     release = runtime_paths.release_info(ROOT)
-    result = {'app': 'AstraAgent', 'version': '3.1.1', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
+    result = {'app': 'AstraAgent', 'version': '3.2.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
               'portable_python': (ROOT / 'runtimes/python/python.exe').is_file(),
               'webview2': bool(runtime_paths.webview_runtime(ROOT))}
     node = ROOT / 'runtimes/node/node.exe'
@@ -217,6 +217,7 @@ def main(argv=None):
             return 0
         if args.command is None:
             args = parser.parse_args(['--data-dir', str(args.data_dir), 'chat'])
+        if args.permission in ('trusted','full'):client.call('/api/runtime','PUT',{'access_policy':args.permission})
         options = {'access_policy': args.permission,'file_permission':args.files,'command_permission':args.commands,'command_mode':args.command_mode}
         for key in ('model', 'provider'):
             if getattr(args, key): options[key] = getattr(args, key)

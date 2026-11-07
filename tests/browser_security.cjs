@@ -66,10 +66,16 @@ async function main() {
     await page.waitForFunction(()=>appPage==='images');
     await page.locator('#history-forward').click();
     await page.waitForFunction(()=>appPage==='library');
+    await page.evaluate(()=>api('/api/hub/record','POST',{kind:'task',action:'create',title:'Long record fixture',content:'L'.repeat(1000)}));
     await page.locator('#nav-schedule').click();
     await page.waitForFunction(()=>appPage==='schedule');
     await page.locator('.destination-body .hub-section-heading').waitFor();
     assert.equal(await page.locator('.destination-body .hub-body').isVisible(),true);
+    await page.locator('.destination-body .hub-card').filter({hasText:'Long record fixture'}).getByRole('button',{name:'编辑',exact:true}).click();
+    await page.locator('.hub-editor textarea').waitFor();
+    assert.equal((await page.locator('.hub-editor textarea').inputValue()).length,1000);
+    await page.locator('.hub-editor').getByRole('button',{name:'取消',exact:true}).click();
+
     assert.equal(await page.locator('dialog[open]').count(),0);
     await page.locator('#nav-home').click();
     assert.equal(await page.locator('#chat-input').inputValue(),'保留这条未发送草稿');
@@ -100,6 +106,20 @@ async function main() {
       renderMessages();
     });
     await page.screenshot({path:path.join(root,'work/dialogue-desktop.png')});
+    const streamReuse=await page.evaluate(async()=>{
+      const previous=state.messages;const original=markdown;let parses=0;
+      markdown=function(...args){parses++;return original(...args)};
+      const frame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      try{
+        state.messages=Array.from({length:100},(_,i)=>({id:9000+i,role:i%2?'assistant':'user',content:'Stable history '+i}));
+        const draft={role:'assistant',content:'first',streaming:true};state.messages.push(draft);renderMessages();await frame();
+        const first=document.querySelector('#messages>.message'),before=parses;
+        for(let i=0;i<8;i++){draft.content+=' token';renderMessages();await frame()}
+        return {retained:first===document.querySelector('#messages>.message'),extraParses:parses-before};
+      }finally{markdown=original;state.messages=previous;renderMessages();await frame()}
+    });
+    assert.equal(streamReuse.retained,true);assert.equal(streamReuse.extraParses,0);
+
     await page.evaluate(()=>applyTheme('dark'));
     await page.setViewportSize({width:390,height:844});
     assert.equal(await page.locator('#nav-home').isVisible(),true);
