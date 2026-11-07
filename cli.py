@@ -87,7 +87,7 @@ def print_json(value):
 
 def doctor():
     release = runtime_paths.release_info(ROOT)
-    result = {'app': 'AstraAgent', 'version': '3.3.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
+    result = {'app': 'AstraAgent', 'version': '3.4.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
               'portable_python': (ROOT / 'runtimes/python/python.exe').is_file(),
               'webview2': bool(runtime_paths.webview_runtime(ROOT))}
     node = ROOT / 'runtimes/node/node.exe'
@@ -174,6 +174,10 @@ def main(argv=None):
     serve.add_argument('--port', type=int, default=8787)
     serve.add_argument('--open', action='store_true')
     commands.add_parser('desktop', help='Open the native desktop app')
+    stt=commands.add_parser('stt',help='Run the optional CPU speech service without starting the app backend')
+    stt.add_argument('--model',default='base');stt.add_argument('--port',type=int,default=8790)
+    stt.add_argument('--threads',type=int,default=4);stt.add_argument('--language',default='zh')
+    stt.add_argument('--download-model',action='store_true')
     commands.add_parser('sessions', help='List local chat sessions')
     config = commands.add_parser('config', help='Save an OpenAI-compatible API configuration')
     config.add_argument('--base-url', required=True)
@@ -193,6 +197,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == 'doctor':
         return doctor()
+    if args.command=='stt':
+        executable=ROOT/'.local-stt/venv/Scripts/python.exe' if os.name=='nt' else ROOT/'.local-stt/venv/bin/python'
+        if not executable.is_file():
+            print('Install optional speech support with scripts/install_local_stt.ps1 first.',file=sys.stderr);return 1
+        arguments=[str(executable),str(ROOT/'local_stt.py'),'--model',args.model,'--port',str(args.port),'--threads',str(args.threads)]
+        if args.language:arguments.extend(['--language',args.language])
+        if args.download_model:arguments.append('--download-only')
+        return subprocess.call(arguments,cwd=ROOT)
     if args.command in ('serve', 'desktop'):
         file = 'server.py' if args.command == 'serve' else 'desktop.py'
         arguments = [sys.executable, str(ROOT / file), '--data-dir', str(args.data_dir.resolve())]

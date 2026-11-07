@@ -17,6 +17,11 @@ const sttHint=elem('p','hint');
 const sttSave=elem('button','primary','保存 STT 配置');
 sttSave.type='submit';
 sttForm.append(sttClearLabel,sttHint,sttSave);
+const localSTTPreset=actionButton('使用本地 CPU 语音服务',()=>{
+    sttFields.base_url.value='http://127.0.0.1:8790/v1';sttFields.model.value='base';sttFields.language.value='zh';
+    sttFields.api_key.value='';sttClear.checked=false;
+    sttHint.textContent=uiText('本地服务预设已填入。先运行本地 STT 启动脚本，再保存配置；已有密钥需手动清除。');
+},'secondary');localSTTPreset.id='stt-local-preset';sttForm.insertBefore(localSTTPreset,sttClearLabel);
 voicePanel.querySelector('.dialog-intro').textContent='配置语音输入与朗读服务。录音用于转写，朗读使用所选消息。';
 voiceForm.prepend(elem('h3','','语音朗读 TTS'));
 voicePanel.insertBefore(sttForm,voiceForm);

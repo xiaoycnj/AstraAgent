@@ -208,14 +208,15 @@ async function loadNotices() {
     }
     for (const component of result.components) {
         const details = elem('details', 'license-entry');
-        const summary = elem('summary', '', component.name + ' ' + component.version + ' · ' + component.license);
+        const summary = elem('summary', '', component.name + ' ' + component.version + ' · ' + component.license + (component.optional?' · Local STT':''));
         summary.dataset.i18nIgnore = '';
         const text = elem('pre', 'notices-license', component.text);
         const link = elem('a', '', '项目主页');
-        link.href = component.url;
+        const hasProjectUrl=/^https?:\/\//i.test(component.url||'');
+        if(hasProjectUrl)link.href = component.url;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        details.append(summary, link, text);
+        details.append(summary);if(hasProjectUrl)details.append(link);details.append(text);
         noticesList.append(details);
     }
 }

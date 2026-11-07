@@ -212,6 +212,14 @@ async function main() {
     await page.locator('#nav-home').click();
     await page.evaluate(()=>applyTheme('dark'));
     await page.screenshot({path:path.join(root,'work/compact-dark.png')});
+    await page.evaluate(()=>{showSettings();selectSettingsTab('voice');});
+    await page.locator('#stt-local-preset').click();
+    assert.equal(await page.locator('#stt-base_url').inputValue(),'http://127.0.0.1:8790/v1');
+    assert.equal(await page.locator('#stt-model').inputValue(),'base');
+    assert.equal(await page.locator('#stt-language').inputValue(),'zh');
+    assert.equal(await page.locator('#stt-clear-key').isChecked(),false);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=>document.querySelector('#settings').hidden);
     const recoverySession=await page.evaluate(()=>api('/api/sessions','POST',{title:'Recovery fixture'}));
     execFileSync(python,['-c',`
 import contextlib,json,sqlite3,sys

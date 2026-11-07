@@ -7,13 +7,13 @@ import zipfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '3.3.0'
-ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe updater.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
+VERSION = '3.4.0'
+ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe updater.py local_stt.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
 security_core.py security_audit.py security_net.py security_server.py extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
 task_control.py usage_meter.py ui_locale.py watchdog.py workbench.py workspace_tools.py
 start.bat 启动.bat astra.bat CLI.bat python.bat node.bat README.md CHANGELOG.md
-requirements-desktop.txt LICENSE SECURITY.md'''.split()
+requirements-desktop.txt requirements-stt.txt LICENSE SECURITY.md'''.split()
 SKILLS = ('engineer', 'general', 'planner', 'study', 'writer')
 PLUGINS = '''agent-dispatch code-review data-lab decision-log goals long-memory notebook
 image-generation research-browser skill-creator task-board workflow-studio world-tree writing-kit writing-studio'''.split()
@@ -23,7 +23,7 @@ LITE_LICENSES = {'bottle', 'cffi', 'clr_loader', 'proxy_tools', 'pycparser', 'py
 
 
 def validate_public_paths(root,files):
-    private_roots={'data','work','output','outputs','.git'}
+    private_roots={'data','work','output','outputs','.git','.local-stt'}
     private_names={'.env','session-capability.dpapi','settings.json','providers.json','tts.json','stt.json'}
     for path in files:
         relative=path.relative_to(root)
@@ -33,7 +33,9 @@ def validate_public_paths(root,files):
 
 def source_files(root, edition):
     files = [root / name for name in ROOT_FILES]
-    files += [root / 'scripts' / name for name in ('build_release.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py')]
+    files += [root / 'scripts' / name for name in ('build_release.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py','install_local_stt.ps1','start_local_stt.ps1','stt_notices.py')]
+    files += [root/'licenses/optional-stt'/name for name in ('ctranslate2.txt','flatbuffers.txt','tokenizers.txt','whisper-model.txt')]
+    files += [root/'docs/LOCAL-STT.md']
     files += [root / 'security/npm-runtime-lock.json',root / 'docs/UI-DESIGN.md',root/'docs/MODULES.md',root/'docs/AUDIT-2026-11-07.md',root/'docs/EXECUTION-RECOVERY.md',root/'native/Launcher.cs',root/'scripts/build_launcher.ps1']
     files += [root / 'i18n' / name for name in ('README.md', 'en.json', 'zh-CN.json')]
     files += [root / name / 'README.md' for name in ('memory', 'skills', 'plugins')]

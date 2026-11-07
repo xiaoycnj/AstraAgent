@@ -1,0 +1,2 @@
+# Optional, isolated environment. No effect on Standard/Lite default dependencies.
+faster-whisper==1.2.1

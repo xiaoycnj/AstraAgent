@@ -1,5 +1,6 @@
 # Local state and secrets
 /data/
+/.local-stt/
 /memory/*
 !/memory/README.md
 .env

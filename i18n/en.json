@@ -1109,6 +1109,8 @@
     "项目路径已变化，请另开任务": "The project path has changed. Start another task.",
     "没有可恢复的执行检查点": "No recoverable execution checkpoint",
     "该任务当前不可恢复": "This task cannot be resumed now",
-    "有结果不确定的步骤，请先核对并处置": "Check and resolve steps with unknown outcomes first"
+    "有结果不确定的步骤，请先核对并处置": "Check and resolve steps with unknown outcomes first",
+    "使用本地 CPU 语音服务": "Use local CPU speech service",
+    "本地服务预设已填入。先运行本地 STT 启动脚本，再保存配置；已有密钥需手动清除。": "Local preset filled. Start the local STT service, then save. Clear any previously saved key explicitly."
   }
 }

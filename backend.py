@@ -1009,6 +1009,12 @@ class Handler(BaseHTTPRequestHandler):
         if pathname == '/api/notices' and self.command == 'GET':
             manifest = ROOT / 'licenses/manifest.json'
             notices = json.loads(manifest.read_text(encoding='utf-8')) if manifest.exists() else {'components':[]}
+            optional_notices=ROOT/'.local-stt/notices.json'
+            if optional_notices.is_file() and optional_notices.stat().st_size<=4_000_000:
+                try:
+                    extra=json.loads(optional_notices.read_text(encoding='utf-8')).get('components',[])
+                    notices['components'].extend(item for item in extra[:100] if isinstance(item,dict) and all(isinstance(item.get(k),str) for k in ('name','version','license','text')))
+                except (ValueError,OSError,AttributeError,TypeError):pass
             project_license = ROOT / 'LICENSE'
             project = {'name':'AstraAgent','license':'MIT','copyright':'Copyright (c) 2026 cnxiaoy',
                        'text':project_license.read_text(encoding='utf-8') if project_license.is_file() else ''}
@@ -1187,7 +1193,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.3.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.4.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1633,7 +1639,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.3.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.4.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')
