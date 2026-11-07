@@ -1025,6 +1025,24 @@
     "组织材料，打磨一份可以交付的内容。": "Organize your material into a finished piece.",
     "拆解一个任务": "Plan a task",
     "明确步骤，按实际执行结果继续推进。": "Define steps and continue from verified results.",
-    "任务进行中": "Task in progress"
+    "任务进行中": "Task in progress",
+    "任务与产物": "Tasks and artifacts",
+    "当前会话执行": "Conversation runs",
+    "工作空间进度": "Workspace progress",
+    "交付物": "Deliverables",
+    "功能模块": "Feature modules",
+    "管理功能模块": "Manage modules",
+    "基础计算": "Core utilities",
+    "项目与文件": "Project and files",
+    "图片生成": "Image generation",
+    "服务商类型": "Provider type",
+    "聊天模型 · chat_api": "Chat models · chat_api",
+    "图片生成 · image_api": "Image generation · image_api",
+    "图片接口使用 /images/generations，生成结果保存至当前会话。": "Images use /images/generations. Results are saved to the conversation.",
+    "图片已生成并保存到会话产物": "Image generated and saved to conversation outputs",
+    "暂无记录": "No records yet",
+    "启用模块 图片生成": "Enable image generation module",
+    "启用模块 基础计算": "Enable core utilities module",
+    "启用模块 项目与文件": "Enable project and file module"
   }
 }

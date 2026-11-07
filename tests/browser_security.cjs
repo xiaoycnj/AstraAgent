@@ -82,6 +82,23 @@ async function main() {
     await page.getByRole('button', {name: '关闭', exact: true}).last().click();
     await page.evaluate(() => selectSettingsTab('connection'));
     await page.getByText('允许 HTTPS 私有网络接口（信任此服务商）', {exact: true}).waitFor();
+    await page.evaluate(async()=>{
+      await api('/api/providers','POST',{name:'Image fixture',type:'image_api',base_url:'http://127.0.0.1:9/v1',model:'gpt-image-1',models:[{id:'gpt-image-1',name:'Image'}]});
+      await loadProviders();
+      const provider=providerRows.find(row=>row.name==='Image fixture');
+      expandProvider(provider.id,null,'edit');
+    });
+    assert.equal(await page.locator('#provider-type').inputValue(),'image_api');
+    assert.equal(await page.locator('#provider-select option').evaluateAll(options=>options.some(option=>option.textContent==='Image fixture')),false);
+    await page.evaluate(()=>providerDialog.close());
+    const imageItem=await page.evaluate(async()=>await api('/api/attachments','POST',{name:'fixture.png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN2kAAAAASUVORK5CYII='}));
+    const imageRendered=await page.evaluate(item=>{const block=markdown('![result](/api/attachments/'+item.id+'/content)');return !!block.querySelector('img')},imageItem);
+    assert.equal(imageRendered,true);
+    await page.evaluate(item=>previewGeneratedImage(item),imageItem);
+    await page.locator('.generated-image-dialog img').waitFor();
+    await page.waitForFunction(()=>document.querySelector('.generated-image-dialog img')?.naturalWidth===1);
+    await page.locator('.generated-image-dialog button').click();
+
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);

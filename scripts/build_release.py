@@ -7,8 +7,8 @@ import zipfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '2.9.0'
-ROOT_FILES = '''updater.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
+VERSION = '3.0.0'
+ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe updater.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
 security_core.py security_audit.py security_net.py security_server.py extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
 task_control.py usage_meter.py ui_locale.py watchdog.py workbench.py workspace_tools.py
@@ -16,7 +16,7 @@ start.bat 启动.bat astra.bat CLI.bat python.bat node.bat README.md CHANGELOG.m
 requirements-desktop.txt LICENSE SECURITY.md'''.split()
 SKILLS = ('engineer', 'general', 'planner', 'study', 'writer')
 PLUGINS = '''agent-dispatch code-review data-lab decision-log goals long-memory notebook
-research-browser skill-creator task-board workflow-studio world-tree writing-kit writing-studio'''.split()
+image-generation research-browser skill-creator task-board workflow-studio world-tree writing-kit writing-studio'''.split()
 LITE_LICENSES = {'bottle', 'cffi', 'clr_loader', 'proxy_tools', 'pycparser', 'pythonnet',
                  'pywebview', 'typing_extensions', 'pypdf', 'Marked', 'DOMPurify', 'KaTeX',
                  'CodeMirror', 'KaTeX fonts', 'LobeHub model icons', 'Microsoft WebView2 SDK'}
@@ -34,12 +34,12 @@ def validate_public_paths(root,files):
 def source_files(root, edition):
     files = [root / name for name in ROOT_FILES]
     files += [root / 'scripts' / name for name in ('build_release.py','check_dependencies.py','harden_node_runtime.py')]
-    files += [root / 'security/npm-runtime-lock.json',root / 'docs/UI-DESIGN.md']
+    files += [root / 'security/npm-runtime-lock.json',root / 'docs/UI-DESIGN.md',root/'docs/MODULES.md',root/'native/Launcher.cs',root/'scripts/build_launcher.ps1']
     files += [root / 'i18n' / name for name in ('README.md', 'en.json', 'zh-CN.json')]
     files += [root / name / 'README.md' for name in ('memory', 'skills', 'plugins')]
     files += [root / 'skills' / name / 'SKILL.md' for name in SKILLS]
     files += [root / 'plugins' / name / 'manifest.json' for name in PLUGINS]
-    folders = ['web', 'vendor_desktop', 'vendor_python']
+    folders = ['modules', 'web', 'vendor_desktop', 'vendor_python']
     if edition == 'standard':
         folders.append('runtimes')
         for name in ('runtimes/python/python.exe', 'runtimes/node/node.exe', 'runtimes/manifest.json'):

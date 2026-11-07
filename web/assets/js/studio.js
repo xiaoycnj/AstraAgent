@@ -1,6 +1,6 @@
 let providerRows=[];
 function runtimeOptions(){return {provider:$('#provider-select').value,model:$('#runtime-model').value.trim(),reasoning:$('#reasoning-select').value,skill:$('#skill-select').value||'general',tools:$$('.tool-picks input:checked').map(x=>x.value)}}
-async function loadProviders(){providerRows=await api('/api/providers');for(const id of ['provider-select','provider-edit']){const select=$('#'+id),value=select.value;select.replaceChildren(new Option(id==='provider-select'?'默认接口':'新建配置',''),...providerRows.map(p=>new Option(p.name,p.id)));if(providerRows.some(p=>p.id===value))select.value=value}}
+async function loadProviders(){providerRows=await api('/api/providers');for(const id of ['provider-select','provider-edit']){const select=$('#'+id),value=select.value;select.replaceChildren(new Option(id==='provider-select'?'默认接口':'新建配置',''),...providerRows.filter(p=>id!=='provider-select'||p.type!=='image_api').map(p=>new Option(p.name,p.id)));if(providerRows.some(p=>p.id===value))select.value=value}}
 function selectProvider(){const c=providerRows.find(x=>x.id===$('#provider-select').value)||state.settings;$('#runtime-model').value=c.model||'';saveRuntime()}
 function saveRuntime(){try{localStorage.setItem('astra-runtime',JSON.stringify(runtimeOptions()))}catch(e){}}
 $('#provider-select').onchange=selectProvider;$('#runtime-model').onchange=saveRuntime;$('#reasoning-select').onchange=saveRuntime;

@@ -87,7 +87,7 @@ def print_json(value):
 
 def doctor():
     release = runtime_paths.release_info(ROOT)
-    result = {'app': 'AstraAgent', 'version': '2.9.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
+    result = {'app': 'AstraAgent', 'version': '3.0.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
               'portable_python': (ROOT / 'runtimes/python/python.exe').is_file(),
               'webview2': bool(runtime_paths.webview_runtime(ROOT))}
     node = ROOT / 'runtimes/node/node.exe'
@@ -186,6 +186,9 @@ def main(argv=None):
     prompt.add_argument('--model')
     prompt.add_argument('--provider')
     prompt.add_argument('--permission', choices=['deny', 'ask', 'trusted', 'full'], default='ask')
+    prompt.add_argument('--files',choices=['none','ask','read','all'],default='ask',help='File access for agent tools')
+    prompt.add_argument('--commands',choices=['none','ask','all'],default='ask',help='Command execution permission')
+    prompt.add_argument('--command-mode',choices=['sandbox','host'],default='sandbox')
     prompt.add_argument('--json', action='store_true', help='Emit JSON events. Approval requests are denied when non-interactive.')
     args = parser.parse_args(argv)
     if args.command == 'doctor':
@@ -214,7 +217,7 @@ def main(argv=None):
             return 0
         if args.command is None:
             args = parser.parse_args(['--data-dir', str(args.data_dir), 'chat'])
-        options = {'access_policy': args.permission}
+        options = {'access_policy': args.permission,'file_permission':args.files,'command_permission':args.commands,'command_mode':args.command_mode}
         for key in ('model', 'provider'):
             if getattr(args, key): options[key] = getattr(args, key)
         project = project_for(client, args.project)

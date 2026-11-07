@@ -38,7 +38,7 @@ def addresses(host, port, allow_private=False):
     return clean
 
 
-def opener(*handlers, allow_private=False):
+def opener(*handlers, allow_private=False, allow_query=False):
     class PinnedHTTP(http.client.HTTPConnection):
         def connect(self):
             self.sock = connect(self.host, self.port, self.timeout, loopback_only=True)
@@ -69,12 +69,16 @@ def opener(*handlers, allow_private=False):
 
     class HTTP(HTTPHandler):
         def http_open(self, request):
-            validate_url(request.full_url)
+            from urllib.parse import urlunsplit
+            parts=urlsplit(request.full_url)
+            validate_url(urlunsplit(parts._replace(query='')) if allow_query else request.full_url)
             return self.do_open(PinnedHTTP, request)
 
     class HTTPS(HTTPSHandler):
         def https_open(self, request):
-            validate_url(request.full_url)
+            from urllib.parse import urlunsplit
+            parts=urlsplit(request.full_url)
+            validate_url(urlunsplit(parts._replace(query='')) if allow_query else request.full_url)
             return self.do_open(PinnedHTTPS, request, context=self._context)
 
     return build_opener(ProxyHandler({}), HTTP(), HTTPS(), *handlers)

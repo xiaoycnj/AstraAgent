@@ -29,7 +29,7 @@ AstraAgent 是一个由你配置模型服务的个人智能体工作空间。对
 ## 三步开始
 
 1. 从 Releases 下载并**完整解压**到可写目录。
-2. 双击 `start.bat` 或 `启动.bat`，等待启动画面进入工作空间。
+2. 双击 `AstraAgent.exe`，等待启动画面进入工作空间。
 3. 在设置中添加服务商，填写 Base URL、API Key 和模型 ID，测试后保存。
 
 远程接口使用 HTTPS，例如 `https://api.example.com/v1`。本机服务支持 `http://127.0.0.1:端口/v1`。兼容 Chat Completions，模型列表通过 `/models` 获取，也可手动维护名称和 ID。测试连接会发起真实请求，可能产生服务商费用。
@@ -53,6 +53,16 @@ API Key 由使用者提供。应用支持可配置的 OpenAI OAuth 接入，使�
 
 多人格审查使用当前配置的模型并行生成多个视角，再进行汇总，会产生多次模型调用。MCP 和宿主命令以当前用户身份运行，具体边界见安全说明。
 
+## 图片生成与功能模块
+
+在服务商管理中选择 **图片生成 · image_api**，填写兼容 OpenAI 的 Base URL、图片模型与密钥。聊天接口使用 `chat_api`，图片接口不会出现在聊天模型选择表中。
+
+启用 Tools 与内置「图片生成」插件后，可以在对话里让智能体调用 `generate_image`。调用遵守当前权限策略，可能产生服务商费用。支持 `/images/generations` 的 base64 图片或合规图片 URL 响应，单次生成一张，图片通过现有附件限制校验，保存为当前会话产物，可以在右侧预览和下载。异步作业轮询等厂商专有协议需要另行适配。
+
+设置的「功能模块」可以独立控制基础计算、项目文件与生图适配器，关闭后会阻止对应的新工具调用。模块结构和接入约定见 [模块开发说明](docs/MODULES.md)。任务、MCP、记忆与终端继续由已有独立域模块负责。
+
+右侧工作栏显示当前会话的执行记录、工作空间任务、子智能体与交付物。状态来自本地执行事件和存储记录，窄窗口下可以按需打开。
+
 ## 权限由你决定
 
 提供全部拒绝、每次询问、信任命令自动批准与完全访问。新安装默认每次询问，文件和命令的子权限也会生效。外部资料触发的后续高风险操作需要批准。
@@ -64,8 +74,17 @@ API 密钥以当前 Windows 用户的 DPAPI 加密。会话、资料和执行记
 ## 桌面与终端
 
 ```powershell
-# 桌面
-start.bat
+# 桌面，无附带控制台窗口
+AstraAgent.exe
+
+# 交互式命令行
+AstraAgent.CLI.exe
+
+# 同一启动器进入 CLI
+AstraAgent.exe --cli
+
+# 绑定项目并逐次确认宿主命令
+AstraAgent.CLI.exe chat --project C:\Projects\example --files ask --commands ask --command-mode host
 
 # 终端入口及帮助
 CLI.bat --help
@@ -73,6 +92,8 @@ CLI.bat --help
 # 浏览器模式，自行指定端口
 python.bat server.py --port 8788 --open
 ```
+
+GUI 启动器使用 Windows 图形子系统，CLI 启动器使用控制台子系统。标准版优先使用内置 Python，Lite 使用本机 CPython 3.14。启动异常写入 `data/logs/launcher.log`。启动器当前未签名。
 
 默认本地端口为 `8787`。桌面启动器管理后台与 watchdog，主面板退出后关闭它所管理的服务。通过应用菜单可以新建会话、打开项目、进入设置和检查更新。
 

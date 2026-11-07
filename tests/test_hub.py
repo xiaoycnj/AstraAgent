@@ -27,7 +27,7 @@ class Hub(unittest.TestCase):
         self.assertEqual(agent_hub.record(self.data,'task',{'action':'list'})['records'][0]['parent'],'')
     def test_builtin_registry_and_plugin_gates(self):
         catalog=extensions.catalog(backend.ROOT,self.data)
-        self.assertEqual(len([p for p in catalog['plugins'] if p.get('builtin') and p['enabled']]),12)
+        self.assertEqual(len([p for p in catalog['plugins'] if p.get('builtin') and p['enabled']]),13)
         with patch.object(backend,'DATA',self.data):
             config=backend.request_config({'allow_tools':True,'access_policy':'trusted'})
             self.assertIn('dispatch_agents',config['tools']);self.assertEqual(config['memory_policy'],'auto')

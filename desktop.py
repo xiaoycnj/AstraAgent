@@ -142,6 +142,7 @@ def main():
                     'glass_surfaces': main_window.evaluate_js("document.querySelectorAll('.glass-surface').length"),
                     'glass_variants': main_window.evaluate_js("document.querySelectorAll('button[data-glass-variant]').length"),
                     'python_executable': sys.executable,
+                    'console_window': bool(ctypes.windll.kernel32.GetConsoleWindow()) if os.name=='nt' else None,
                     'webview_runtime': str(bundled_webview) if bundled_webview else 'system',
                     'language_control': main_window.evaluate_js("!!document.getElementById('ui-language')"),
                     'audio_capture_api': main_window.evaluate_js("typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof MediaRecorder === 'function'"),

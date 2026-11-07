@@ -28,6 +28,7 @@ def isolated_app(folder):
                  'stream_journal.py','runtime_engine.py','mcp_client.py','storage_manager.py',
                  'project_workspace.py','task_control.py','usage_meter.py','runtime_paths.py','ui_locale.py','openai_oauth.py','openai_responses.py']:
         shutil.copyfile(ROOT / name, folder / name)
+    shutil.copytree(ROOT/'modules',folder/'modules',ignore=shutil.ignore_patterns('__pycache__'))
     skill = folder / 'skills/general'
     skill.mkdir(parents=True)
     (skill / 'SKILL.md').write_text('# General\nBe helpful.', encoding='utf-8')
