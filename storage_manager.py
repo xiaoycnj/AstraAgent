@@ -36,9 +36,10 @@ def usage(root,data,database):
 def cleanup(data,database,action):
     if action!='completed_streams':raise ValueError('清理操作无效')
     with database() as db:
-        count=db.execute("SELECT COUNT(*) FROM stream_requests WHERE status!='running'").fetchone()[0]
-        db.execute("DELETE FROM stream_events WHERE request_id IN (SELECT id FROM stream_requests WHERE status!='running')")
-        db.execute("DELETE FROM stream_requests WHERE status!='running'")
+        eligible="SELECT id FROM stream_requests r WHERE status!='running' AND NOT EXISTS(SELECT 1 FROM executions e WHERE e.request_id=r.id AND e.status!='complete')"
+        count=db.execute('SELECT COUNT(*) FROM ('+eligible+')').fetchone()[0]
+        db.execute('DELETE FROM stream_events WHERE request_id IN ('+eligible+')')
+        db.execute('DELETE FROM stream_requests WHERE id IN ('+eligible+')')
     with database() as db:db.execute('VACUUM')
     CACHE.pop(str(data.resolve()),None)
     return {'ok':True,'requests':count}

@@ -212,11 +212,43 @@ async function main() {
     await page.locator('#nav-home').click();
     await page.evaluate(()=>applyTheme('dark'));
     await page.screenshot({path:path.join(root,'work/compact-dark.png')});
+    const recoverySession=await page.evaluate(()=>api('/api/sessions','POST',{title:'Recovery fixture'}));
+    execFileSync(python,['-c',`
+import contextlib,json,sqlite3,sys
+from pathlib import Path
+import execution_state
+data=Path(sys.argv[1]);sid=sys.argv[2];key='ui-recovery-fixture';db=sqlite3.connect(data/'workspace.sqlite3');db.row_factory=sqlite3.Row
+db.execute("INSERT INTO runs(id,session_id,status,events) VALUES('ui-recovery-run',?,'interrupted','[]')",(sid,))
+db.execute("INSERT INTO stream_requests(id,session_id,hash,run_id,status,input) VALUES(?,?,'hash','ui-recovery-run','interrupted',?)",(key,sid,json.dumps({'content':'Recover task','attachments':[]})))
+execution_state.create(db,key,sid,{'model':'fixture','allow_tools':False},{'access_policy':'ask','model':'fixture'})
+db.commit()
+@contextlib.contextmanager
+def database():
+ yield db
+ db.commit()
+state=execution_state.State(database,key)
+state.initial({'model':'fixture','messages':[{'role':'user','content':'Recover task'}],'stream':False})
+state.begin('model:0','model','fixture',{'model':'fixture'})
+state.done('model:0',{'choices':[{'message':{'content':'Recovered from checkpoint'}}]})
+state.begin('final-memory','memory','memory',{});state.phase('final-memory','executing');state.pause('restart')
+state.close();db.close()
+`,data,recoverySession.id],{cwd:root,windowsHide:true});
+    await page.evaluate(session=>openSession(session),recoverySession);
+    await page.locator('.execution-recovery:not([hidden])').waitFor();
+    assert.equal(await page.locator('[data-resume-execution]').isDisabled(),true);
+    await page.locator('.execution-recovery summary').click();
+    page.once('dialog',dialog=>dialog.accept());
+    await page.locator('.execution-recovery').getByRole('button',{name:'跳过此步骤',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('[data-resume-execution]')?.disabled);
+    await page.screenshot({path:path.join(root,'work/execution-recovery.png')});
+    await page.locator('[data-resume-execution]').click();
+    await page.waitForFunction(()=>state.messages.some(m=>m.content==='Recovered from checkpoint'));
+    assert.equal(await page.locator('.execution-recovery').isVisible(),false);
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);
     await page.screenshot({path: path.join(root, 'work/security-settings.png')});
-    console.log(JSON.stringify({authenticated_boot: true, reload: true, math: true, code: true, audit_dialog: true, page_errors: errors, csp_violations: violations}));
+    console.log(JSON.stringify({authenticated_boot: true, reload: true, math: true, code: true, audit_dialog: true, execution_recovery:true, page_errors: errors, csp_violations: violations}));
   } finally {
     if (browser) await browser.close();
     server.kill();

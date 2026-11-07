@@ -1,8 +1,8 @@
 // Reconnect using durable server events. Replaying never starts another model request.
 const activeStreams=new Map();
 const streamKeys=new Map();
-async function consumeDurableStream(sid,key,payload,onDelta){
-    let cursor=0,finished=false,answer='',attempt=0,first=Boolean(payload);
+async function consumeDurableStream(sid,key,payload,onDelta,after=0){
+    let cursor=after,finished=false,answer='',attempt=0,first=Boolean(payload);
     while(!finished){
         let reader;
         try{
@@ -57,7 +57,7 @@ receiveStream=async function(sid,content,onDelta){
 async function recoverSessionStream(session){
     if(activeStreams.has(session.id)||state.session?.id!==session.id)return;
     const job=await api('/api/sessions/'+session.id+'/stream');
-    if(!job||['complete','cancelled'].includes(job.status)||activeStreams.has(session.id)||state.session?.id!==session.id)return;
+    if(!job||job.status!=='running'||activeStreams.has(session.id)||state.session?.id!==session.id)return;
     const input=JSON.parse(job.input);
     const user={role:'user',content:input.content,attachments:JSON.stringify(input.attachments)};
     const draft={role:'assistant',content:'',streaming:true};

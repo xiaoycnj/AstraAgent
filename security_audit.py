@@ -19,7 +19,7 @@ def flush_pending():
     with LOCK:
         for path in list(DIRTY):
             try:
-                with path.open('ab') as stream:stream.flush();os.fsync(stream.fileno())
+                with path.open('r+b') as stream:stream.flush();os.fsync(stream.fileno())
                 DIRTY.discard(path)
             except FileNotFoundError:DIRTY.discard(path)
             except OSError as error:FAILURES[path]=error;DIRTY.discard(path)

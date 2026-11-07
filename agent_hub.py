@@ -42,7 +42,7 @@ SPECS += [
  ('recall_memory','检索已保存的长期记忆，返回正文与 ID',{'query':STRING},['query']),
  ('browser_open','打开公网 HTTP(S) 网页并提取正文与链接，返回 page_id。支持 HTML 与纯文本，最多 1 MB。',{'url':STRING},['url']),
  ('browser_find','在已打开的网页中搜索字面文本，返回匹配段落',{'page_id':STRING,'query':STRING},['page_id','query']),
- ('dispatch_agents','并发派发 1–3 个独立子任务，使用当前模型。子任务只接收显式上下文，最多四轮工具调用，不再派发。结果自动保存成会话。',{'tasks':{'type':'array','minItems':1,'maxItems':3,'items':{'type':'object','properties':{'name':STRING,'task':STRING,'context':STRING},'required':['name','task'],'additionalProperties':False}}},['tasks']),
+ ('dispatch_agents','派发 1–6 个子任务，最多同时执行三个。id/depends_on 定义无环依赖；前序失败会阻塞后续。retries 仅对临时模型错误重试 0–2 次，不能自动重跑结果不确定的工具。子任务不能继续派发，使用当前模型与显式上下文。',{'tasks':{'type':'array','minItems':1,'maxItems':6,'items':{'type':'object','properties':{'id':STRING,'name':STRING,'task':STRING,'context':STRING,'depends_on':{'type':'array','items':STRING,'maxItems':6},'retries':{'type':'integer','minimum':0,'maximum':2}},'required':['name','task'],'additionalProperties':False}}},['tasks']),
  ('list_agent_jobs','查看最近子智能体任务、实际模型与状态',{},[])
 ]
 DEFINITIONS=[{'type':'function','function':{'name':n,'description':d,'parameters':{'type':'object','properties':p,'required':r,'additionalProperties':False}}} for n,d,p,r in SPECS]
