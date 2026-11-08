@@ -23,6 +23,7 @@ import tool_provenance
 import runtime_engine
 import mcp_client
 import storage_manager
+import dlc_manager
 import project_workspace
 import task_control
 import ui_locale
@@ -1149,6 +1150,20 @@ class Handler(BaseHTTPRequestHandler):
             if method=='PUT':
                 try:return self.reply(200,runtime_engine.save_settings(DATA,self.body()))
                 except ValueError as error:raise ApiError(400,str(error)) from None
+        if pathname in ('/api/dlc','/api/dlc/status','/api/dlc/install','/api/dlc/cancel'):
+            manager=dlc_manager.manager(ROOT)
+            try:
+                if pathname=='/api/dlc' and method=='GET':
+                    from urllib.parse import parse_qs
+                    tag=parse_qs(urlsplit(self.path).query).get('release',['latest'])[0]
+                    return self.reply(200,manager.catalog(tag))
+                if pathname=='/api/dlc/status' and method=='GET':return self.reply(200,manager.status())
+                if pathname=='/api/dlc/install' and method=='POST':
+                    body=self.body()
+                    return self.reply(202,manager.start(body.get('release','latest'),body.get('asset_id')))
+                if pathname=='/api/dlc/cancel' and method=='POST':return self.reply(200,manager.cancel())
+                raise ApiError(405,'DLC 请求方式无效')
+            except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
         if pathname=='/api/storage' and method=='GET':return self.reply(200,storage_manager.usage(ROOT,DATA,database))
         if pathname=='/api/storage/cleanup' and method=='POST':
             with SESSION_LOCK:

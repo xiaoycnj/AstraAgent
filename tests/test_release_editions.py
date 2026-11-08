@@ -18,7 +18,7 @@ spec.loader.exec_module(release)
 class ReleaseEditions(unittest.TestCase):
     def test_private_data_rejected_vendor_output_docs_allowed(self):
         release.validate_public_paths(ROOT,[ROOT/'runtimes/node/node_modules/npm/docs/output/commands/npm-access.html'])
-        for name in ('data/settings.json','web/assets/secret.dpapi','work/archive.zip','web/assets/providers.json'):
+        for name in ('data/settings.json','web/assets/secret.dpapi','work/archive.zip','dlcs/demo/model.bin','web/assets/providers.json'):
             with self.assertRaises(ValueError):release.validate_public_paths(ROOT,[ROOT/name])
 
     def test_lite_contents_and_launcher(self):
@@ -35,6 +35,8 @@ class ReleaseEditions(unittest.TestCase):
                 self.assertIn('AstraAgent/vendor_desktop/_cffi_backend.cp314-win_amd64.pyd', names)
                 self.assertIn('AstraAgent/web/assets/js/app.js', names)
                 self.assertIn('AstraAgent/CHANGELOG.md', names)
+                self.assertIn('AstraAgent/dlc_manager.py', names)
+                self.assertIn('AstraAgent/web/assets/js/features/dlc.js', names)
                 readme=archive.read('AstraAgent/README.md').decode('utf-8')
                 self.assertNotRegex(readme,r'(?m)^## V\d')
                 self.assertIn('Copyright (c) 2026 cnxiaoy', archive.read('AstraAgent/LICENSE').decode('utf-8'))

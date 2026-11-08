@@ -63,3 +63,7 @@ graphflow-out/
 
 !/plugins/image-generation/
 !/plugins/image-generation/manifest.json
+
+# Optional installed DLC and transactional downloads
+/dlcs/
+/.astra-dlc-*/

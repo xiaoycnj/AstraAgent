@@ -279,6 +279,36 @@ state.close();db.close()
     await page.locator('#window-maximize').click();
     await page.waitForFunction(()=>window.controlCalls.includes('maximize'));
     assert.equal(await page.evaluate(()=>window.dragCalls),1,'window buttons must not start dragging');
+    assert.equal((await context.request.get(url+'/api/dlc/status')).status(),200);
+    let dlcPhase='idle',dlcInstalledFixture=[];
+    await page.route('**/api/dlc**',async route=>{
+      const request=route.request(),pathname=new URL(request.url()).pathname;
+      if(pathname==='/api/dlc/install'){
+        assert.deepEqual(request.postDataJSON(),{release:'v3.4.1',asset_id:42});dlcPhase='downloading';
+        return route.fulfill({status:202,json:{phase:'resolving'}});
+      }
+      if(pathname==='/api/dlc/cancel'){dlcPhase='cancelled';return route.fulfill({json:{phase:dlcPhase}});}
+      if(pathname==='/api/dlc/status')return route.fulfill({json:{phase:dlcPhase,received:50,total:100,message:dlcPhase==='complete'?'DLC 安装完成':dlcPhase==='cancelled'?'已取消，未安装 DLC':'正在下载',installed:dlcInstalledFixture,result:dlcPhase==='complete'?{id:'demo-pack',backup:'dlcs/.backups/demo-old'}:null}});
+      return route.fulfill({json:{release:'v3.4.1',installed:[],assets:[{asset_id:42,name:'AstraAgent-demo-DLC-v1.0.0-win-x64.zip',size:100,available:true}]}});
+    });
+    await page.evaluate(()=>{showSettings();selectSettingsTab('about');});
+    await page.locator('#dlc-refresh').click();
+    await page.locator('[data-dlc-install]').click();
+    await page.locator('.app-dialog .primary').click();
+    await page.locator('.dlc-state[data-phase=downloading]').waitFor();
+    assert.equal(await page.locator('.dlc-state progress').getAttribute('value'),'0.5');
+    await page.locator('.dlc-state').getByRole('button',{name:'取消下载',exact:true}).click();
+    await page.locator('.dlc-state[data-phase=cancelled]').waitFor();
+    await page.locator('[data-dlc-install]').click();
+    await page.locator('.app-dialog .primary').click();
+    await page.locator('.dlc-state[data-phase=downloading]').waitFor();
+    dlcPhase='complete';dlcInstalledFixture=[{id:'demo-pack',version:'1.0.0',path:'dlcs/demo-pack'}];
+    await page.evaluate(()=>refreshDLCStatus());
+    await page.locator('.dlc-state[data-phase=complete]').waitFor();
+    assert.match(await page.locator('.dlc-installed').textContent(),/demo-pack/);
+    assert.match(await page.locator('.dlc-state').textContent(),/dlcs\/.backups\/demo-old/);
+    await page.locator('#dlc-manager').scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(root,'work/dlc-manager-desktop.png')});
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);

@@ -1111,6 +1111,27 @@
     "该任务当前不可恢复": "This task cannot be resumed now",
     "有结果不确定的步骤，请先核对并处置": "Check and resolve steps with unknown outcomes first",
     "使用本地 CPU 语音服务": "Use local CPU speech service",
-    "本地服务预设已填入。先运行本地 STT 启动脚本，再保存配置；已有密钥需手动清除。": "Local preset filled. Start the local STT service, then save. Clear any previously saved key explicitly."
+    "本地服务预设已填入。先运行本地 STT 启动脚本，再保存配置；已有密钥需手动清除。": "Local preset filled. Start the local STT service, then save. Clear any previously saved key explicitly.",
+    "可选 DLC": "Optional DLC",
+    "选择官方发行版本中的 DLC，按需下载。下载不关闭主面板；安装期间请勿退出应用。": "Choose DLC from an official release. The main panel stays open; keep the app running during installation.",
+    "DLC 发行版本": "DLC release version",
+    "获取 DLC": "Find DLC",
+    "取消下载": "Cancel download",
+    "DLC 下载进度": "DLC download progress",
+    "尚未安装 DLC": "No DLC installed",
+    "正在读取官方 DLC 目录…": "Loading the official DLC catalog…",
+    "此发行版本没有 DLC，请尝试其他版本。": "This release has no DLC. Try another version.",
+    "下载并安装": "Download and install",
+    "下载并安装所选 DLC？旧版本将保留备份，安装后不会自动运行。": "Download and install this DLC? The old version is backed up. Installation does not start it automatically.",
+    "下载本地语音 DLC": "Download local speech DLC",
+    "旧版备份：": "Previous version backup: ",
+    "本地语音 DLC 已就绪。运行 CLI stt 启动服务，在语音设置中填入本地预设。": "Local speech DLC is ready. Run CLI stt to start it, then select the local preset in Voice settings.",
+    "正在校验 DLC 文件": "Verifying DLC files",
+    "正在安装；请勿关闭应用": "Installing; keep the app open",
+    "DLC 安装完成": "DLC installed",
+    "正在读取发行目录": "Reading the release catalog",
+    "已取消，未安装 DLC": "Cancelled; DLC was not installed",
+    "正在取消…": "Cancelling…",
+    "安装前校验 SHA-256 · 独立安装": "SHA-256 checked before install · Separate installation"
   }
 }
