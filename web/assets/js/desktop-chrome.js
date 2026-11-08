@@ -16,7 +16,7 @@ async function checkAppUpdate(){
  const bridge=window.pywebview?.api;
  if(!bridge){toast('应用内安装需要使用桌面版。请在 GitHub Releases 下载发行包。');return}
  updateButton.disabled=true;
- try{const release=await bridge.check_update();if(!release.available){toast('当前已是最新版本');return}if(!release.can_install){toast('源码工作区请通过 Git 更新');return}if(confirm('发现 '+release.version+'。更新将关闭所有应用窗口，完成后重新启动。请先保存编辑内容。是否继续？')){
+ try{const release=await bridge.check_update();if(!release.available){toast('当前已是最新版本');return}if(!release.can_install){toast('源码工作区请通过 Git 更新');return}if(await appConfirm('发现 '+release.version+'。更新将关闭所有应用窗口，完成后重新启动。请先保存编辑内容。是否继续？')){
  if(state.pending.size)throw new Error('请先停止运行中的任务');
  await bridge.install_update();
  }}catch(error){toast(error.message||String(error))}finally{updateButton.disabled=false}

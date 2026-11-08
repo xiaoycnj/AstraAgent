@@ -47,7 +47,7 @@ async function refreshProjects() {
 }
 async function bindProject(identifier) {
     if (state.pending.has(state.session?.id)) throw new Error('请先停止当前任务');
-    if (!confirmEditorChange()) return false;
+    if (!await confirmEditorChange()) return false;
     if (!state.session) await previousProjectNewSession();
     if (state.session) {
         await api('/api/sessions/' + state.session.id, 'PATCH', {project_id: identifier});
@@ -73,7 +73,7 @@ function clearProjectEditor() {
 const previousProjectOpenSession = openSession;
 openSession = async function (session) {
     const projectId = session.project_id || '';
-    if (projectId !== selectedProjectId && !confirmEditorChange()) return;
+    if (projectId !== selectedProjectId && !await confirmEditorChange()) return;
     if (projectId !== selectedProjectId && terminalId) await stopShell();
     if (projectId !== selectedProjectId) {
         selectedProjectId = projectId;
@@ -84,7 +84,7 @@ openSession = async function (session) {
 };
 const previousProjectNewSession = newSession;
 newSession = async function () {
-    if (!confirmEditorChange()) return state.session;
+    if (!await confirmEditorChange()) return state.session;
     editorDirty = false;
     const identifier = selectedProjectId;
     const session = await previousProjectNewSession();
@@ -252,7 +252,7 @@ projectReviewActions.append(actionButton('刷新记录', refreshProjectReview, '
         await requireProject();
         const checks = currentProject().checks;
         if (!checks.length) {toast('请先在项目配置中添加验收命令'); return;}
-        if (!confirm('在项目目录执行以下命令？\n' + checks.map(check => JSON.stringify(check.argv)).join('\n'))) return;
+        if (!await appConfirm('在项目目录执行以下命令？\n' + checks.map(check => JSON.stringify(check.argv)).join('\n'))) return;
         projectEvidence.textContent = '正在运行验收命令…';
         try {
             const result = await api('/api/projects/' + selectedProjectId + '/verify', 'POST', runtimeOptions());
@@ -339,8 +339,8 @@ async function showProjectDiff() {
 async function rollbackProject() {
     const preview = previewedChanges;
     if (!preview || preview.project_id !== selectedProjectId) return;
-    if (!confirmEditorChange()) return;
-    if (!confirm('将这些文件恢复到所选检查点？新增文件将移除，回退前会保存保护检查点。\n共 ' + preview.changes.length + ' 个文件')) return;
+    if (!await confirmEditorChange()) return;
+    if (!await appConfirm('将这些文件恢复到所选检查点？新增文件将移除，回退前会保存保护检查点。\n共 ' + preview.changes.length + ' 个文件')) return;
     rollbackButton.disabled = true;
     try {
         await api('/api/projects/' + selectedProjectId + '/rollback', 'POST', {

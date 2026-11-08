@@ -6,7 +6,7 @@ $('#new-item').classList.remove('primary');
 function railIcon(name){const span=elem('span','rail-glyph');for(const state of ['outline','active']){const img=elem('img','glyph-'+state);img.src='/assets/icons/navigation/'+name+'-'+state+'.svg';img.alt='';img.width=22;img.height=22;span.append(img)}return span}
 function selectRail(name){railActive=name;for(const [id,b] of railButtons){b.classList.toggle('active',id===name);if(id===name)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')}}
 function makeRailButton(id,label,action,target=railTop){const b=actionButton('',async()=>{selectRail(id);await action()},'rail-button');b.id='nav-'+id;b.setAttribute('aria-label',label);b.title=label;b.append(railIcon(id),elem('span','rail-tooltip',label));target.append(b);railButtons.set(id,b);return b}
-async function railHome(){if(!$('#settings').hidden&&!closeSettingsPage())return;if(state.mode!=='chat')await switchMode('chat');$('#chat-input').focus({preventScroll:true})}
+async function railHome(){if(!$('#settings').hidden&&!await closeSettingsPage())return;if(state.mode!=='chat')await switchMode('chat');$('#chat-input').focus({preventScroll:true})}
 makeRailButton('home','主页',()=>railHome());
 makeRailButton('images','生图',()=>openRailCollection('images'));
 makeRailButton('schedule','定时任务',()=>navigatePage('schedule'));
@@ -38,4 +38,4 @@ const paneBackdrop=elem('button','pane-backdrop');paneBackdrop.setAttribute('ari
 const previousNavigationSession=openSession;openSession=async function(s){await previousNavigationSession(s);selectRail('home');if(innerWidth<=760)setConversationPane(false,false)};
 for(const dialog of [hubDialog,drawer]){if(dialog.tagName==='DIALOG')dialog.addEventListener('close',()=>selectRail('home'))}
 selectRail('home');document.body.classList.add('has-navigation-rail');
-const beforeNavigationSettingsClose=closeSettingsPage;closeSettingsPage=function(){const result=beforeNavigationSettingsClose();if($('#settings').hidden)selectRail('home');return result};
+const beforeNavigationSettingsClose=closeSettingsPage;closeSettingsPage=async function(){const result=await beforeNavigationSettingsClose();if($('#settings').hidden)selectRail('home');return result};

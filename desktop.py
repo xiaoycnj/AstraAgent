@@ -282,6 +282,7 @@ def main():
 
     def splash_shown():
         nonlocal shown_at
+        native_frame.center(splash)
         shown_at = time.monotonic()
         splash_metrics.update(native_details(splash, rounded=True))
 

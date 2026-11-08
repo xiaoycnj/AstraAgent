@@ -24,7 +24,7 @@ async function refreshExecutionRecovery(){
   if(step.status==='unknown')for(const [action,label] of [['skip','跳过此步骤'],['retry','明确重试']]){
    line.append(actionButton(label,async()=>{
     const message=action==='retry'?'该操作可能已经产生效果。请先核对文件、终端或外部服务；重试可能再次执行。确认重试？':'跳过后不会再次执行，也不会将其视为成功。确认已核对实际结果？';
-    if(!confirm(typeof uiText==='function'?uiText(message):message))return;
+    if(!await appConfirm(typeof uiText==='function'?uiText(message):message))return;
     await api(`/api/executions/${row.request_id}/resolve`,'POST',{step:step.step,action,acknowledged:true});await refreshExecutionRecovery();
    },'secondary'));
   }

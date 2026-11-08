@@ -3,6 +3,18 @@ import ctypes
 from ctypes import wintypes
 import os
 
+def center(window):
+    """Center in the cursor monitor's working area using native physical coordinates."""
+    if os.name!='nt':return
+    from System import Action
+    from System.Drawing import Point as DrawingPoint
+    from System.Windows.Forms import Cursor, Screen
+    form=window.native
+    def apply():
+        area=Screen.FromPoint(Cursor.Position).WorkingArea
+        form.Location=DrawingPoint(area.Left+max(0,(area.Width-form.Width)//2),area.Top+max(0,(area.Height-form.Height)//2))
+    form.Invoke(Action(apply))
+
 class Point(ctypes.Structure):
     _fields_=[('x',wintypes.LONG),('y',wintypes.LONG)]
 class MinMax(ctypes.Structure):

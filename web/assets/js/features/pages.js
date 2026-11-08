@@ -10,7 +10,7 @@ function routeUrl(page){const url=new URL(location.href);if(page==='home')url.se
 function rememberPage(page,replace=false){const method=replace?'replaceState':'pushState';if(location.pathname+location.search!==routeUrl(page)||!history.state?.astraPage)history[method]({astraPage:page},'',routeUrl(page));syncHistoryButtons()}
 async function navigatePage(page,{historyMode='push'}={}){
  if(!['home','images','library','schedule'].includes(page))page='home';
- if(!$('#settings').hidden&&!closeSettingsPage())return false;
+ if(!$('#settings').hidden&&!await closeSettingsPage())return false;
  if(state.mode==='canvas'&&!await flushBoard())return false;
  const ticket=++pageTicket;appPage=page;document.body.dataset.appPage=page;document.body.classList.toggle('in-destination',page!=='home');
  destination.hidden=page==='home';$('.studio-body').hidden=page!=='home';$('.topbar').hidden=page!=='home';
@@ -63,7 +63,7 @@ function syncWorkspaceVisibility(){
 }
 // Hook the page owner, so older menu callbacks that captured showSettings also synchronize.
 const beforePageOpenSettings=openSettingsPage;openSettingsPage=function(){beforePageOpenSettings();syncWorkspaceVisibility()};
-const beforePageCloseSettings=closeSettingsPage;closeSettingsPage=function(){const result=beforePageCloseSettings();syncWorkspaceVisibility();return result};
+const beforePageCloseSettings=closeSettingsPage;closeSettingsPage=async function(){const result=await beforePageCloseSettings();syncWorkspaceVisibility();return result};
 $('#settings-close').onclick=()=>closeSettingsPage();
 // Covers legacy callbacks that captured a previous closeSettingsPage function.
 new MutationObserver(syncWorkspaceVisibility).observe($('#settings'),{attributes:true,attributeFilter:['hidden']});

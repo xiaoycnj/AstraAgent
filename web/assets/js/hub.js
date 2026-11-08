@@ -36,7 +36,7 @@ function hubCard(item){
     if(item.kind==='goal')actions.append(hubAction('添加任务',async()=>editHubRecord('task',null,item.id)));
     if(item.kind==='tree')actions.append(hubAction('生长分支',async()=>editHubRecord('tree',null,item.id)));
     if(item.status!=='done'&&item.kind!=='tree')actions.append(hubAction('完成',async()=>saveHubRecord({kind:item.kind,id:item.id,action:'update',status:'done'})));
-    actions.append(hubAction('删除',async()=>{if(confirm('删除这条记录？'))await saveHubRecord({kind:item.kind,id:item.id,action:'delete'})}));card.append(actions);
+    actions.append(hubAction('删除',async()=>{if(await appConfirm('删除这条记录？'))await saveHubRecord({kind:item.kind,id:item.id,action:'delete'})}));card.append(actions);
     if(item.kind==='goal'){
         const tasks=hubData.records.filter(record=>record.kind==='task'&&record.parent===item.id);const completed=tasks.filter(task=>task.status==='done').length;
         card.append(elem('small','hint',`${completed} / ${tasks.length} 个关联任务完成`));

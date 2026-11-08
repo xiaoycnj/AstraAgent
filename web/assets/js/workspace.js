@@ -22,8 +22,8 @@ function showSessionMenu(item,x,y){
     const actions=[
         [item.archived?'取消归档':'归档','note',async()=>{await api('/api/sessions/'+item.id,'PATCH',{archived:!item.archived});await refreshList()}],
         ['创建分支','review',async()=>{const branch=await api('/api/sessions/'+item.id+'/branch','POST',{});await openSession(branch);await refreshList()}],
-        ['移动至项目组','canvas',async()=>{const name=prompt('项目组名称，留空移回未分组',item.project||'');if(name===null)return;await api('/api/sessions/'+item.id,'PATCH',{project:name.trim()});await refreshList()}],
-        ['删除','close',async()=>{if(!confirm('永久删除这个会话？'))return;await api('/api/sessions/'+item.id,'DELETE');if(state.session?.id===item.id){state.session=null;state.messages=[];renderMessages();updateHeader()}await refreshList()}]
+        ['移动至项目组','canvas',async()=>{const name=await appPrompt('项目组名称，留空移回未分组',item.project||'');if(name===null)return;await api('/api/sessions/'+item.id,'PATCH',{project:name.trim()});await refreshList()}],
+        ['删除','close',async()=>{if(!await appConfirm('永久删除这个会话？'))return;await api('/api/sessions/'+item.id,'DELETE');if(state.session?.id===item.id){state.session=null;state.messages=[];renderMessages();updateHeader()}await refreshList()}]
     ];
     for(const [label,icon,action] of actions){const button=elem('button',label==='删除'?'danger-text':'');button.type='button';button.setAttribute('role','menuitem');button.append(svgIcon(icon),elem('span','',label));button.onclick=safely(async()=>{closeSessionMenu();await action()});sessionMenu.append(button)}
     sessionMenu.hidden=false;
@@ -178,13 +178,13 @@ function renderArchives(){
             const row=elem('article','archive-row');
             const info=elem('div','archive-row-info');
             const open=actionButton(item.title,async()=>{
-                if(!closeSettingsPage())return;
+                if(!await closeSettingsPage())return;
                 await openSession(item);
             },'archive-title');
             const date=new Date(item.created.replace(' ','T')+'Z');
             info.append(open,elem('small','hint',Number.isNaN(date.getTime())?item.created:date.toLocaleString('zh-CN')));
             const remove=actionButton('删除',async()=>{
-                if(!confirm('永久删除这个归档会话？'))return;
+                if(!await appConfirm('永久删除这个归档会话？'))return;
                 await mutateArchive(item,'DELETE');
             },'danger-text');
             const restore=actionButton('取消归档',()=>mutateArchive(item,'PATCH',{archived:false}),'secondary');
@@ -204,7 +204,7 @@ async function mutateArchive(item,method,body){
     }
 }
 async function deleteAllArchives(){
-    if(!archivedSessions.length||!confirm('永久删除全部 '+archivedSessions.length+' 个归档会话？'))return;
+    if(!archivedSessions.length||!await appConfirm('永久删除全部 '+archivedSessions.length+' 个归档会话？'))return;
     deleteArchives.disabled=true;
     let failed=0;
     for(const item of archivedSessions){

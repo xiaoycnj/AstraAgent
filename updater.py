@@ -90,7 +90,7 @@ def install(package,target,progress=lambda text:None):
 def launch(data,parent):
     # Copy the interpreter and native GUI libraries out of the installation before replacing it.
     folder=Path(tempfile.mkdtemp(prefix='astra-updater-'))
-    for name in ('updater.py','security_core.py','openai_oauth.py','runtime_paths.py','watchdog.py'):
+    for name in ('updater.py','native_frame.py','security_core.py','openai_oauth.py','runtime_paths.py','watchdog.py'):
         shutil.copy2(ROOT/name,folder/name)
     shutil.copytree(ROOT/'vendor_desktop',folder/'vendor_desktop')
     if (ROOT/'runtimes/webview2').exists():shutil.copytree(ROOT/'runtimes/webview2',folder/'webview2')
@@ -149,10 +149,14 @@ def worker(target,data,parent):
             subprocess.Popen([str(target/'runtimes/python/pythonw.exe') if (target/'runtimes/python/pythonw.exe').exists() else sys.executable,str(target/'desktop.py'),'--data-dir',str(data)],cwd=target)
             window.destroy()
         except Exception as error:
-            failed.set();status('更新未完成，可关闭窗口后重新启动。'+str(error))
-            window.evaluate_js("document.getElementById('close').hidden=false")
+            failed.set()
+            message='更新未完成，可关闭窗口后重新启动。'
+            if getattr(error,'code',None)==403:message='更新服务暂时拒绝请求或已限流，请稍后重试。'
+            window.evaluate_js('setUpdateFailure('+json.dumps(message)+','+json.dumps(str(error)[:2000])+')')
     def status(text):window.evaluate_js('document.getElementById("status").textContent='+json.dumps(text))
     window=webview.create_window('AstraAgent · Update',url=str(ROOT/'update.html'),width=560,height=350,frameless=True,easy_drag=True,resizable=False,js_api=Bridge())
+    import native_frame
+    window.events.shown += lambda:native_frame.center(window)
     webview.start(execute)
 
 if __name__=='__main__':
