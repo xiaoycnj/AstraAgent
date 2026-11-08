@@ -267,6 +267,18 @@ state.close();db.close()
     assert.equal(await page.evaluate(()=>editorDirty),true);
     await page.evaluate(()=>{editorDirty=false;});
     assert.deepEqual(nativeDialogs,[]);
+    await page.evaluate(()=>{
+      window.dragCalls=0;window.controlCalls=[];
+      window.pywebview={api:{window_chrome:async body=>{window.chromeRegions=body;return {ready:true};},window_drag:async()=>{window.dragCalls++;},window_control:async action=>{window.controlCalls.push(action);return {};}}};
+      dispatchEvent(new Event('pywebviewready'));
+    });
+    await page.waitForFunction(()=>nativeChromeReady&&window.chromeRegions?.drag?.[0]?.[2]>0);
+    const dragBox=await page.locator('.titlebar-drag').boundingBox();
+    await page.mouse.click(dragBox.x+dragBox.width/2,dragBox.y+dragBox.height/2);
+    await page.waitForFunction(()=>window.dragCalls===1);
+    await page.locator('#window-maximize').click();
+    await page.waitForFunction(()=>window.controlCalls.includes('maximize'));
+    assert.equal(await page.evaluate(()=>window.dragCalls),1,'window buttons must not start dragging');
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);

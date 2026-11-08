@@ -213,7 +213,9 @@ def main():
             rect=body.get('maximize') if isinstance(body,dict) else None
             if not isinstance(rect,list) or len(rect)!=4 or any(type(n) not in (int,float) or not math.isfinite(n) or not 0<=n<=20000 for n in rect):raise ValueError('窗口区域无效')
             hook=getattr(self._window,'_native_frame',None)
-            if hook:hook.maximize_rect=rect
+            drag=body.get('drag',[])
+            if not isinstance(drag,list) or len(drag)>16 or any(not isinstance(r,list) or len(r)!=4 or any(type(n) not in (int,float) or not math.isfinite(n) or not 0<=n<=20000 for n in r) for r in drag):raise ValueError('拖动区域无效')
+            if hook:hook.maximize_rect=rect;hook.drag_rects=drag
             return {'ready':bool(hook)}
 
         def window_drag(self):
@@ -269,7 +271,10 @@ def main():
                 js_api=child_bridge, width=1180, height=820, min_size=(480, 480),
                 frameless=True, easy_drag=False,
             )
-            child_bridge._window.events.loaded += lambda:native_frame.install(child_bridge._window)
+            def child_loaded():
+                native_frame.install(child_bridge._window)
+                child_bridge._window.evaluate_js('window.reportWindowChrome?.()')
+            child_bridge._window.events.loaded += child_loaded
             return True
 
     bridge = Bridge()

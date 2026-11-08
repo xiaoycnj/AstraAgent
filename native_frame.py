@@ -64,10 +64,20 @@ def maximize_hit_test(window):
 
 def begin_drag(window):
     if os.name!='nt' or not getattr(window,'_native_frame',None):return False
-    user=api();handle=int(window.native.Handle.ToInt64())
-    user.SendMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM];user.SendMessageW.restype=ctypes.c_ssize_t
-    user.ReleaseCapture();user.SendMessageW(handle,0xA1,2,0) # Native caption drag enables Aero Snap.
+    from System import Action
+    user=api();form=window.native;handle=int(form.Handle.ToInt64())
+    user.GetCursorPos.argtypes=[ctypes.POINTER(Point)]
+    user.DefWindowProcW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM];user.DefWindowProcW.restype=ctypes.c_ssize_t
+    def drag():
+        # WebView bridge calls run on workers; capture belongs to the UI thread.
+        point=Point()
+        if not user.GetCursorPos(ctypes.byref(point)):return
+        user.ReleaseCapture()
+        # WinForms suppresses SC_MOVE for FormBorderStyle.None; use the OS handler.
+        user.DefWindowProcW(handle,0x112,0xF012,((point.y&0xffff)<<16)|(point.x&0xffff))
+    form.Invoke(Action(drag))
     return True
+
 
 def install(window):
     if os.name!='nt' or getattr(window,'_native_frame',None):return
@@ -82,7 +92,7 @@ def install(window):
     user.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
     class Frame:
         def __init__(self):
-            self.maximize_rect=None;self.calculations=0
+            self.maximize_rect=None;self.drag_rects=[];self.calculations=0
             self.callback=Callback(self.dispatch);self.identifier=id(self)
         def dispatch(self,hwnd,code,wparam,lparam,identifier,reference):
             try:
@@ -109,7 +119,9 @@ def install(window):
                         hit=13 if top and left else 14 if top and right else 16 if bottom and left else 17 if bottom and right else 10 if left else 11 if right else 12 if top else 15 if bottom else 0
                         if hit:return hit
                     rect=self.maximize_rect
-                    return 9 if rect and rect[0]<=x<rect[2] and rect[1]<=y<rect[3] else 1
+                    if rect and rect[0]<=x<rect[2] and rect[1]<=y<rect[3]:return 9
+                    if any(r[0]<=x<r[2] and r[1]<=y<r[3] for r in self.drag_rects):return 2
+                    return 1
                 if code==0xA1 and wparam==9:return 0
                 if code==0xA2 and wparam==9:
                     user.PostMessageW(handle,0x112,0xF120 if user.IsZoomed(handle) else 0xF030,0);return 0
