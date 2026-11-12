@@ -8,6 +8,7 @@ import security_server
 import hmac
 from http.cookies import SimpleCookie
 import extensions
+import marketplace
 import application_plugins
 import usage_meter
 import openai_oauth
@@ -1218,7 +1219,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.6.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.7.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1368,6 +1369,20 @@ class Handler(BaseHTTPRequestHandler):
             try: extensions.save_skill(ROOT,pathname.rsplit('/',1)[-1],body)
             except ValueError as e: raise ApiError(400,str(e)) from None
             return self.reply(200,{'ok':True})
+        if pathname.startswith('/api/marketplace'):
+            try:
+                if pathname=='/api/marketplace/refresh' and method=='POST':return self.reply(200,marketplace.refresh(ROOT,DATA))
+                with CONFIG_LOCK:
+                    if pathname=='/api/marketplace' and method=='GET':return self.reply(200,marketplace.catalog(ROOT,DATA))
+                    if pathname=='/api/marketplace/import' and method=='POST':return self.reply(201,marketplace.install(ROOT,DATA,self.body()))
+                    if pathname=='/api/marketplace/install' and method=='POST':
+                        body=self.body()
+                        return self.reply(201,marketplace.install_from_catalog(ROOT,DATA,body.get('kind'),body.get('id'),body.get('sha256')))
+                    if pathname=='/api/marketplace/uninstall' and method=='POST':
+                        body=self.body()
+                        return self.reply(200,marketplace.uninstall(ROOT,DATA,body.get('kind'),body.get('id')))
+                    if pathname=='/api/marketplace/skin' and method=='PUT':return self.reply(200,marketplace.activate(DATA,self.body().get('id')))
+            except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
         if pathname=='/api/plugins/install' and method=='POST':
             try:return self.reply(201,application_plugins.install(ROOT,self.body()))
             except ValueError as error:raise ApiError(400,str(error)) from None
@@ -1673,7 +1688,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.6.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.7.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

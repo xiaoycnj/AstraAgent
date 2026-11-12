@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "schema_version": 1,
+      "id": "focus-session",
+      "kind": "plugin",
+      "name": "专注会话",
+      "description": "发送前限制超长输入，回复完成后显示提醒。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 2,
+        "id": "focus-session",
+        "name": "专注会话",
+        "description": "发送前限制超长输入，回复完成后显示提醒。",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "event": "before_send",
+            "action": "limit_length",
+            "value": 12000
+          },
+          {
+            "event": "after_response",
+            "action": "notify",
+            "value": "专注会话 · 回复已完成"
+          }
+        ],
+        "panels": []
+      },
+      "sha256": "88992247b1fbdee9c5e1e0d7b365709138c15c9549d925018e357fbb5a14f854"
+    },
+    {
+      "schema_version": 1,
+      "id": "research-notebook",
+      "kind": "plugin",
+      "name": "研究笔记归档",
+      "description": "每次回复自动收录到资料库，便于整理研究成果。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 2,
+        "id": "research-notebook",
+        "name": "研究笔记归档",
+        "description": "每次回复自动收录到资料库，便于整理研究成果。",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "event": "after_response",
+            "action": "save_output",
+            "value": ""
+          }
+        ],
+        "panels": []
+      },
+      "sha256": "ec95c9b54f778f951c6f586dc98b24ab576d1493336078cb164f0595c705861a"
+    },
+    {
+      "schema_version": 1,
+      "id": "desktop-reader",
+      "kind": "plugin",
+      "name": "桌面阅读模式",
+      "description": "启动时切换为紧凑阅读布局，让桌面显示更多内容。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 2,
+        "id": "desktop-reader",
+        "name": "桌面阅读模式",
+        "description": "启动时切换为紧凑阅读布局，让桌面显示更多内容。",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "event": "startup",
+            "action": "reading_layout",
+            "value": "compact"
+          }
+        ],
+        "panels": []
+      },
+      "sha256": "400617e677f03327d2245cb0c6f8c3523f6c30d5bb235e9e6967b13ca0b885df"
+    },
+    {
+      "schema_version": 1,
+      "id": "midnight-orbit",
+      "kind": "skin",
+      "name": "午夜轨道",
+      "description": "深蓝玻璃与冷紫高光。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 1,
+        "id": "midnight-orbit",
+        "theme": "dark",
+        "colors": {
+          "--theme-color": "#141b30",
+          "--blue": "#9a91ff",
+          "--accent-color": "#9a91ff",
+          "--ink": "#edf0ff",
+          "--muted": "#aeb8ce",
+          "--line": "#9a91ff35",
+          "--soft": "#172036",
+          "--surface": "#172036",
+          "--glass-reading": "#172036dd"
+        },
+        "blur": 28,
+        "radius": 22
+      },
+      "sha256": "bf7f5d7314dd0c602325f3e078a65155507ea12b97f1b2cc9402284e4a555362"
+    },
+    {
+      "schema_version": 1,
+      "id": "jade-studio",
+      "kind": "skin",
+      "name": "青玉工作室",
+      "description": "低饱和青绿，适合长时间阅读。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 1,
+        "id": "jade-studio",
+        "theme": "dark",
+        "colors": {
+          "--theme-color": "#142922",
+          "--blue": "#70cdb4",
+          "--accent-color": "#70cdb4",
+          "--ink": "#e4f6ee",
+          "--muted": "#a6bfb5",
+          "--line": "#70cdb435",
+          "--soft": "#192d27",
+          "--surface": "#192d27",
+          "--glass-reading": "#192d27dd"
+        },
+        "blur": 28,
+        "radius": 22
+      },
+      "sha256": "6b3d07143ae22112435dc9d2a6e5536157e706cdbaa5fad9dbe59924b0b37368"
+    },
+    {
+      "schema_version": 1,
+      "id": "porcelain",
+      "kind": "skin",
+      "name": "白瓷",
+      "description": "温润浅色与克制的蓝。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 1,
+        "id": "porcelain",
+        "theme": "light",
+        "colors": {
+          "--theme-color": "#e8eaf4",
+          "--blue": "#446bdc",
+          "--accent-color": "#446bdc",
+          "--ink": "#25304b",
+          "--muted": "#677691",
+          "--line": "#446bdc35",
+          "--soft": "#f8f9ff",
+          "--surface": "#f8f9ff",
+          "--glass-reading": "#f8f9ffdd"
+        },
+        "blur": 28,
+        "radius": 22
+      },
+      "sha256": "329005a10051a8e2af397bb8a8ea54adb2b758fcc2a9b51be884484f5162dc98"
+    },
+    {
+      "schema_version": 1,
+      "id": "rose-glass",
+      "kind": "skin",
+      "name": "玫瑰雾",
+      "description": "玫紫色调的透彩玻璃。",
+      "author": "cnxiaoy",
+      "license": "MIT",
+      "version": "1.0.0",
+      "payload": {
+        "schema_version": 1,
+        "id": "rose-glass",
+        "theme": "dark",
+        "colors": {
+          "--theme-color": "#302035",
+          "--blue": "#e0a0cc",
+          "--accent-color": "#e0a0cc",
+          "--ink": "#fff0fa",
+          "--muted": "#c9adc4",
+          "--line": "#e0a0cc35",
+          "--soft": "#34273b",
+          "--surface": "#34273b",
+          "--glass-reading": "#34273bdd"
+        },
+        "blur": 28,
+        "radius": 22
+      },
+      "sha256": "826877f66b42263d1bedfbf5f8bc159156c422b8e74abf9f9dff523c4e6f5c6e"
+    }
+  ]
+}
