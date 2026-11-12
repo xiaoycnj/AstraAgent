@@ -35,7 +35,7 @@ def _save_settings(data,body):
 def authorize(name,args,c,emit,approve):
     policy=c.get('access_policy')
     if policy is None:return True
-    if policy=='deny':return False
+    if policy not in ('ask','trusted','full'):return False
     needs_confirmation=False
     if name in workspace_tools.NAMES|{'read_file','write_file','list_files','read_csv','inspect_json'}:
         permission=c.get('file_permission','all')

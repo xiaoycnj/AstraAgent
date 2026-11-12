@@ -35,7 +35,7 @@ def allow(path, method):
         if len(REQUESTS) >= 1200:
             return False
         REQUESTS.append(now)
-        if method == 'POST' and (path.endswith(('/chat', '/review', '/tts', '/stt', '/models', '/test', '/discover'))):
+        if method == 'POST' and (path.endswith(('/chat', '/review', '/tts', '/stt', '/models', '/test', '/discover', '/refresh', '/install', '/import'))):
             if len(EXPENSIVE) >= 60:
                 return False
             EXPENSIVE.append(now)
