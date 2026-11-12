@@ -69,6 +69,14 @@ class MarketplaceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             marketplace.activate(self.data, 'missing')
 
+    def test_direct_install_rejects_linked_plugin_root(self):
+        import application_plugins
+        entry=self.entries[0]
+        with patch.object(Path,'is_symlink',return_value=True):
+            with self.assertRaises(ValueError):
+                application_plugins.install(self.root,entry['payload'])
+        self.assertFalse((self.root/'plugins'/entry['id']).exists())
+
     def test_untrusted_redirect_rejected(self):
         with self.assertRaises(ValueError):
             marketplace.CatalogRedirect().redirect_request(None, None, 302, '', {}, 'https://localhost/catalog')

@@ -237,4 +237,9 @@ def restore_switches(data, previous):
     if previous is None:
         path.unlink(missing_ok=True)
     else:
-        path.write_bytes(previous)
+        temporary=path.with_suffix('.'+uuid.uuid4().hex+'.tmp')
+        try:
+            temporary.write_bytes(previous)
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)

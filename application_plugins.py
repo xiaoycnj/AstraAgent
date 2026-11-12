@@ -33,6 +33,11 @@ def validate(manifest):
 def install(root,manifest):
     value=validate(manifest);folder=Path(root)/'plugins'/value['id']
     with LOCK:
+        # Check the plugin root itself, including Windows directory junctions.
+        plugin_root=Path(root)/'plugins'
+        for candidate in (plugin_root,folder):
+            if candidate.is_symlink() or getattr(candidate,'is_junction',lambda:False)():
+                raise ValueError('插件安装路径不能包含链接')
         if folder.exists():raise ValueError('同名插件已存在，请更换 ID')
         if not folder.resolve().is_relative_to((Path(root)/'plugins').resolve()):raise ValueError('插件目录无效')
         folder.mkdir(parents=True)
