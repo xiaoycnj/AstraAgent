@@ -9,7 +9,9 @@ def build(source,target):
     result.update(body=value.get('body',''),draft=False,prerelease=False,assets=[])
     for asset in value.get('assets',[]):
         if not asset['name'].endswith('.zip'):continue
-        result['assets'].append({k:asset[k] for k in ('id','name','size','digest','browser_download_url')})
+        entry={k:asset[k] for k in ('id','name','size','digest')}
+        entry['browser_download_url']='https://github.com/xiaoycnj/AstraAgent/releases/download/'+value['tag_name']+'/'+asset['name']
+        result['assets'].append(entry)
     target.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
 
 if __name__=='__main__':
