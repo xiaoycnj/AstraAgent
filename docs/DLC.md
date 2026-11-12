@@ -21,3 +21,14 @@
 - 不运行 post-install 脚本。DLC 的功能入口由应用集成，下载通用包本身不会让插件自动启用。
 
 API 使用原有本机身份校验：`GET /api/dlc?release=latest`、`GET /api/dlc/status`、`POST /api/dlc/install`（`release` 和 `asset_id`）、`POST /api/dlc/cancel`。同一应用目录同时仅允许一个安装任务。
+
+
+## 文档理解 DLC
+
+AstraAgent 3.5.0 起支持 `document-understanding` 包。在附件卡片或资料库点击“识别文字”，处理完成后点击“识别结果”查看分页文本、文字四边形坐标与置信度。后续发送附件时会携带已识别文本。
+
+图片支持 PNG、JPEG、WebP，扫描 PDF 最多 20 页，沿用附件 5 MB 上限。识别进程最多 2 GB 内存、160 秒 CPU 时间，180 秒后终止。每次处理一份文档。识别失败保留原附件与已有结果。页面坐标以识别时渲染图的像素为单位。
+
+第一版提供逐行 OCR 与位置数据。表格单元格合并、复杂阅读顺序和手写内容需要人工核对。模型和依赖随 DLC 离线提供，安装后通过附件入口直接调用。
+
+源码构建依赖见 `requirements-document.txt`。将依赖安装到独立目录后执行 `scripts/build_document_dlc.py --site <目录> --output <输出目录>`，生成符合 DLC 管理器格式的 ZIP 与 SHA-256 文件。完整依赖版本和许可证也包含在包中。

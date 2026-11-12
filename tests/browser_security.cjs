@@ -309,6 +309,15 @@ state.close();db.close()
     assert.match(await page.locator('.dlc-state').textContent(),/dlcs\/.backups\/demo-old/);
     await page.locator('#dlc-manager').scrollIntoViewIfNeeded();
     await page.screenshot({path:path.join(root,'work/dlc-manager-desktop.png')});
+    await page.evaluate(()=>closeSettingsPage());
+    const ocrFixture=await page.evaluate(async()=>{const item=await api('/api/attachments','POST',{name:'ocr-ui.png',data:btoa('\x89PNG\r\n\x1a\nfixture')});pendingAttachments.push(item);renderAttachmentTray();return item;});
+    await page.route('**/api/document/status',route=>route.fulfill({json:{available:true}}));
+    await page.route('**/api/attachments/'+ocrFixture.id+'/ocr',route=>route.fulfill({json:{...ocrFixture,ocr_status:'complete'}}));
+    await page.route('**/api/attachments/'+ocrFixture.id+'/preview',route=>route.fulfill({json:{text:'OCR2026',pages:[{number:1,lines:[{text:'OCR2026',confidence:0.99,box:[[0,0],[100,0],[100,20],[0,20]]}]}]}}));
+    await page.locator('.attachment-card').filter({hasText:'ocr-ui.png'}).getByRole('button',{name:'识别文字',exact:true}).click();
+    await page.waitForFunction(()=>documentDialog.open&&documentBody.textContent.includes('OCR2026'));
+    assert.match(await page.evaluate(()=>documentBody.textContent),/第 1 页/);
+    await page.evaluate(()=>documentDialog.close());
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);

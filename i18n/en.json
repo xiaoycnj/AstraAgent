@@ -1132,6 +1132,13 @@
     "正在读取发行目录": "Reading the release catalog",
     "已取消，未安装 DLC": "Cancelled; DLC was not installed",
     "正在取消…": "Cancelling…",
-    "安装前校验 SHA-256 · 独立安装": "SHA-256 checked before install · Separate installation"
+    "安装前校验 SHA-256 · 独立安装": "SHA-256 checked before install · Separate installation",
+    "识别文字": "Recognize text",
+    "识别结果": "OCR results",
+    "正在识别…": "Recognizing…",
+    "正在加载识别结果…": "Loading OCR results…",
+    "尚无识别文本": "No recognized text yet",
+    "文字位置与置信度": "Text positions and confidence",
+    "请先安装文档理解 DLC": "Install the Document Understanding DLC first"
   }
 }
