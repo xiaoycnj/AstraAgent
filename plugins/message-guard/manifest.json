@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "id": "message-guard",
+  "name": "长消息检查",
+  "version": "1.0.0",
+  "description": "长消息检查应用行为扩展",
+  "hooks": [
+    {
+      "event": "before_send",
+      "action": "limit_length",
+      "value": 12000
+    }
+  ],
+  "panels": [
+    {
+      "title": "长消息检查",
+      "text": "在插件管理中启用或停用此扩展，变更会立即应用。"
+    }
+  ]
+}

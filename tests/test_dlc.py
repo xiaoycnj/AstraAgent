@@ -72,24 +72,24 @@ class DLC(unittest.TestCase):
   with patch.object(dlc,'no_links',side_effect=ValueError('link')),self.assertRaises(ValueError):dlc.install(self.write_package(self.package()),self.root)
  def test_catalog_tag_and_trusted_asset(self):
   raw=self.package();release=self.release(raw);manager=dlc.Manager(self.root)
-  with patch.object(dlc,'open_official',return_value=io.BytesIO(json.dumps(release).encode())) as request:
+  with patch('release_feed.fetch',return_value=release) as request:
    value=manager.catalog('3.4.1')
-   self.assertTrue(value['assets'][0]['available']);self.assertIn('/tags/v3.4.1',request.call_args.args[0]);manager.catalog('3.4.1');self.assertEqual(request.call_count,1)
+   self.assertTrue(value['assets'][0]['available']);self.assertEqual('v3.4.1',request.call_args.args[0]);manager.catalog('3.4.1');self.assertEqual(request.call_count,1)
   for tag in ('../../x','https://evil.test','latest?x=1'):
    with self.assertRaises(ValueError):manager.catalog(tag)
   for url in ('http://github.com','https://evil.test/dlc','https://github.com:8888/x','https://user@github.com/x'):
    with self.assertRaises(ValueError):dlc.check_url(url)
   release['assets'][0]['digest']=None
-  with patch.object(dlc,'open_official',return_value=io.BytesIO(json.dumps(release).encode())):
+  with patch('release_feed.fetch',return_value=release):
    self.assertFalse(dlc.Manager(self.root).catalog()['assets'][0]['available'])
  def test_download_job_end_to_end_and_digest_refusal(self):
   raw=self.package();release=self.release(raw);manager=dlc.Manager(self.root)
   def response(url):return io.BytesIO(json.dumps(release).encode() if 'api.github.com' in url else raw)
-  with patch.object(dlc,'open_official',side_effect=response):
+  with patch.object(dlc,'open_official',side_effect=response),patch('release_feed.fetch',return_value=release):
    manager.run('v3.4.1',12)
   self.assertEqual(manager.status()['phase'],'complete');self.assertTrue((self.root/'.local-stt/dlc.json').exists())
   manager=dlc.Manager(self.root);release['assets'][0]['digest']='sha256:'+'0'*64
-  with patch.object(dlc,'open_official',side_effect=response):manager.run('latest',12)
+  with patch.object(dlc,'open_official',side_effect=response),patch('release_feed.fetch',return_value=release):manager.run('latest',12)
   self.assertEqual(manager.status()['phase'],'failed');self.assertIn('SHA-256',manager.status()['message'])
  def test_job_cancel_and_single_flight(self):
   manager=dlc.Manager(self.root);manager.job={'phase':'downloading'}

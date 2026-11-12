@@ -14,13 +14,14 @@ def read_json(path,default):
     return {**default,**security_core.read_config(path, default)} if path.exists() else dict(default)
 def write_json(path,body):
     security_core.write_config(path,body)
-def profile(data): return read_json(data/'profile.json',{'display_name':'cnxiaoy','username':'cnxiaoy','role':'','bio':'','instructions':'','avatar':'','use_memory':True,'inject_profile':True})
+def profile(data): return read_json(data/'profile.json',{'display_name':'cnxiaoy','username':'cnxiaoy','role':'','region':'','bio':'','instructions':'','avatar':'','use_memory':True,'inject_profile':True})
 def save_profile(data,body):
     result=profile(data)
-    for key,limit in [('display_name',80),('username',80),('role',120),('bio',3000),('instructions',12000),('avatar',200000)]:
+    for key,limit in [('display_name',80),('username',80),('role',120),('region',120),('bio',3000),('instructions',12000),('avatar',200000)]:
         value=body.get(key,result[key])
         if not isinstance(value,str) or len(value)>limit: raise ValueError('资料字段过长或格式无效：'+key)
         if key=='avatar' and value and not re.match(r'^data:image/(png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$',value): raise ValueError('头像仅支持 PNG、JPEG、WebP')
+        if key=='region':value={'台湾':'中国（台湾）','臺灣':'中国（台湾）','Taiwan':'中国（台湾）','中国台湾':'中国（台湾）','香港':'中国（香港）','Hong Kong':'中国（香港）','中国香港':'中国（香港）','澳门':'中国（澳门）','澳門':'中国（澳门）','Macau':'中国（澳门）','Macao':'中国（澳门）','中国澳门':'中国（澳门）','中国大陆':'中国','中国内地':'中国','China':'中国'}.get(value.strip(),value.strip())
         result[key]=value.strip()
     for key in ['use_memory','inject_profile']:
         if key in body:
@@ -47,7 +48,7 @@ def memories(root):
 
 def context(root,data,include_profile=True,include_memory=True):
     p=profile(data);parts=[]
-    if include_profile and p['inject_profile']: parts.append('本地用户资料：\n'+json.dumps({k:p[k] for k in ['display_name','username','role','bio']},ensure_ascii=False))
+    if include_profile and p['inject_profile']: parts.append('本地用户资料：\n'+json.dumps({k:p[k] for k in ['display_name','username','role','region','bio']},ensure_ascii=False))
     if include_profile and p['instructions']:parts.append('用户自定义指令：\n'+p['instructions'])
     if include_memory and p['use_memory']:
         notes='\n\n'.join('【'+x['id']+'】\n'+x['content'] for x in memories(root))

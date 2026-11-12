@@ -67,7 +67,7 @@ def save_preference(root, data, language):
 
 def install(root, value):
     pack = validate(value)
-    if pack['code'].lower() in ('zh-cn', 'en'):
+    if pack['code'].lower() in ('zh-cn', 'en', 'ja'):
         raise ValueError('Use a different language code to keep the built-in packs')
     raw = json.dumps(pack, ensure_ascii=False, indent=2)
     if len(raw.encode()) > MAX_BYTES:

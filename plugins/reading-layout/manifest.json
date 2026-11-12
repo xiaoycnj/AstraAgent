@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "id": "reading-layout",
+  "name": "舒适阅读",
+  "version": "1.0.0",
+  "description": "舒适阅读应用行为扩展",
+  "hooks": [
+    {
+      "event": "startup",
+      "action": "reading_layout",
+      "value": "comfortable"
+    }
+  ],
+  "panels": [
+    {
+      "title": "舒适阅读",
+      "text": "在插件管理中启用或停用此扩展，变更会立即应用。"
+    }
+  ]
+}

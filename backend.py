@@ -8,6 +8,7 @@ import security_server
 import hmac
 from http.cookies import SimpleCookie
 import extensions
+import application_plugins
 import usage_meter
 import openai_oauth
 import openai_responses
@@ -706,6 +707,7 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
                 agent_environment.auto_memory(ROOT,DATA,c,content,answer,emit,upstream)
                 execution.done('final-memory',{'ok':True})
             token.check()
+            application_plugins.after_response(ROOT,DATA,database,sid,saved_id,emit)
             execution.finish()
             emit({'type':'done','content':answer,'message_id':saved_id,'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id')})
         except Exception as error:
@@ -1216,7 +1218,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.5.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.6.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1366,6 +1368,9 @@ class Handler(BaseHTTPRequestHandler):
             try: extensions.save_skill(ROOT,pathname.rsplit('/',1)[-1],body)
             except ValueError as e: raise ApiError(400,str(e)) from None
             return self.reply(200,{'ok':True})
+        if pathname=='/api/plugins/install' and method=='POST':
+            try:return self.reply(201,application_plugins.install(ROOT,self.body()))
+            except ValueError as error:raise ApiError(400,str(error)) from None
         if pathname.startswith('/api/plugins/') and method == 'PUT':
             body=self.body()
             try:
@@ -1490,6 +1495,8 @@ class Handler(BaseHTTPRequestHandler):
                         if previous['session_id']!=sid or previous['hash']!=stream_journal.fingerprint(request_body):raise ApiError(409,'请求 ID 与原始任务不符')
                         return stream_journal.serve(self,database,request_key)
                 content = text(request_body.get('content'), '消息', 32000, True)
+                try:content=application_plugins.before_send(ROOT,DATA,content)
+                except ValueError as error:raise ApiError(400,str(error)) from None
                 attachment_ids=request_body.get('attachments',[])
                 if not content and not attachment_ids:raise ApiError(400,'请输入消息或上传附件')
                 if not content:content='请分析附件内容。'
@@ -1542,7 +1549,8 @@ class Handler(BaseHTTPRequestHandler):
                     else: answer = completion(c, messages)
                     with database() as db:
                         db.execute('INSERT INTO messages(session_id,role,content,attachments) VALUES(?,?,?,?)',(sid,'user',content,json.dumps(attachment_ids)))
-                        db.execute('INSERT INTO messages(session_id,role,content,model) VALUES(?,?,?,?)',(sid,'assistant',answer,c['model']))
+                        message_id=db.execute('INSERT INTO messages(session_id,role,content,model) VALUES(?,?,?,?)',(sid,'assistant',answer,c['model'])).lastrowid
+                    application_plugins.after_response(ROOT,DATA,database,sid,message_id,emit if streaming else lambda event:None)
                     if streaming:
                         with database() as db: message_id=db.execute("SELECT MAX(id) FROM messages WHERE session_id=? AND role='assistant'",(sid,)).fetchone()[0]
                         agent_environment.auto_memory(ROOT,DATA,c,content,answer,emit,upstream)
@@ -1555,6 +1563,8 @@ class Handler(BaseHTTPRequestHandler):
             if path[3:] == ['review'] and method == 'POST':
                 request_body = self.body()
                 content = text(request_body.get('content'), '审查内容', 32000, True)
+                try:content=application_plugins.before_send(ROOT,DATA,content)
+                except ValueError as error:raise ApiError(400,str(error)) from None
                 attachment_ids=request_body.get('attachments',[])
                 if not content and not attachment_ids:raise ApiError(400,'请输入审查内容或附件')
                 if not content:content='请审查附件内容。'
@@ -1589,7 +1599,8 @@ class Handler(BaseHTTPRequestHandler):
                     with database() as db:
                         db.execute('INSERT INTO messages(session_id,role,content,attachments) VALUES(?,?,?,?)', (sid,'user',content,json.dumps(attachment_ids)))
                         db.executemany('INSERT INTO messages(session_id,role,content,persona,model) VALUES(?,?,?,?,?)', [(sid,'assistant',r['content'],r['persona'],c['model']) for r in reviews])
-                        db.execute('INSERT INTO messages(session_id,role,content,persona,model) VALUES(?,?,?,?,?)', (sid,'assistant',summary,'synthesis',c['model']))
+                        message_id=db.execute('INSERT INTO messages(session_id,role,content,persona,model) VALUES(?,?,?,?,?)', (sid,'assistant',summary,'synthesis',c['model'])).lastrowid
+                    application_plugins.after_response(ROOT,DATA,database,sid,message_id,lambda event:None)
                     return self.reply(200, {'reviews':reviews,'summary':summary})
                 except ApiError:
                     raise
@@ -1662,7 +1673,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.5.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.6.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

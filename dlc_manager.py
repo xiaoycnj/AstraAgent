@@ -146,10 +146,8 @@ class Manager:
         else:
             endpoint='latest' if tag=='latest' else 'tags/'+quote(tag,safe='')
             try:
-                with open_official('https://api.github.com/repos/'+updater.REPO+'/releases/'+endpoint) as response:
-                    raw=response.read(2_000_001)
-                if len(raw)>2_000_000:raise ValueError('发行目录过大')
-                release=json.loads(raw)
+                import release_feed
+                release=release_feed.fetch(tag)
             except HTTPError as error:
                 raise ValueError('GitHub 限流或拒绝访问，请稍后重试' if error.code in (403,429) else '未找到该发行版本或下载服务不可用') from error
             updater.version(release['tag_name'])

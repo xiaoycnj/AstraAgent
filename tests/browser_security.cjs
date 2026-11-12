@@ -18,6 +18,7 @@ async function main() {
   server.stdout.on('data', chunk => log += chunk.toString());
   server.stderr.on('data', chunk => log += chunk.toString());
   let browser;
+  const fixturePluginId="ui-fixture-"+Date.now();
   try {
     for (let i = 0; i < 100 && !/http:\/\/127\.0\.0\.1:\d+/.test(log); i++) {
       if (server.exitCode !== null) throw new Error('Test server exited');
@@ -318,6 +319,33 @@ state.close();db.close()
     await page.waitForFunction(()=>documentDialog.open&&documentBody.textContent.includes('OCR2026'));
     assert.match(await page.evaluate(()=>documentBody.textContent),/第 1 页/);
     await page.evaluate(()=>documentDialog.close());
+    await page.evaluate(()=>{showSettings();selectSettingsTab('profile');});
+    await page.waitForFunction(()=>localProfile.display_name&&profileForm.hidden);
+    await page.getByRole('button',{name:'编辑资料',exact:true}).click();
+    await page.locator('#profile-region').fill('中国（澳门）');
+    await page.getByRole('button',{name:'保存资料',exact:true}).click();
+    await page.waitForFunction(()=>profileForm.hidden&&localProfile.region==='中国（澳门）');
+    assert.match(await page.locator('.profile-read-view').textContent(),/中国（澳门）/);
+    await page.evaluate(()=>{selectSettingsTab('capabilities');selectIntegration('plugins');});
+    await page.getByRole('button',{name:'创建应用插件',exact:true}).click();
+    await page.locator('#maker-id').fill(fixturePluginId);
+    await page.locator('#maker-name').fill('UI Fixture');
+    await page.locator('#maker-description').fill('UI behavior fixture');
+    await page.evaluate(()=>{makerAction.value='reading_layout';makerAction._refresh?.();});
+    await page.locator('#maker-value').fill('compact');
+    await page.getByRole('button',{name:'安装插件',exact:true}).click();
+    await page.locator('.app-dialog .primary').click();
+    await page.waitForFunction(()=>!pluginMaker.open);
+    const fixtureCard=page.locator('.plugin-card').filter({hasText:'UI Fixture'});
+    await fixtureCard.locator('.plugin-switch').click();
+    await page.waitForFunction(()=>document.body.classList.contains('plugin-reading-compact'));
+    await fixtureCard.locator('.plugin-switch').click();
+    await page.waitForFunction(()=>!document.body.classList.contains('plugin-reading-compact'));
+    await page.evaluate(async()=>{languageSelect.value='ja';await languageSelect.onchange();selectSettingsTab('profile');});
+    await page.waitForFunction(()=>document.documentElement.lang.startsWith('ja'));
+    assert.equal(await page.getByRole('button',{name:'プロフィールを編集',exact:true}).count(),1);
+    await page.screenshot({path:path.join(root,'work/profile-japanese.png')});
+    await page.evaluate(async()=>{languageSelect.value='zh-CN';await languageSelect.onchange();});
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(violations, []);
@@ -325,6 +353,8 @@ state.close();db.close()
     console.log(JSON.stringify({authenticated_boot: true, reload: true, math: true, code: true, audit_dialog: true, execution_recovery:true, page_errors: errors, csp_violations: violations}));
   } finally {
     if (browser) await browser.close();
+    const fixtureFolder=path.resolve(root,'plugins',fixturePluginId);
+    if(fixtureFolder.startsWith(path.resolve(root,'plugins')+path.sep)&&fs.existsSync(path.join(fixtureFolder,'manifest.json'))&&JSON.parse(fs.readFileSync(path.join(fixtureFolder,'manifest.json'),'utf8')).id===fixturePluginId)fs.rmSync(fixtureFolder,{recursive:true});
     server.kill();
     await new Promise(resolve => server.exitCode !== null ? resolve() : server.once('exit', resolve));
     // This exact directory was created by mkdtemp for this test only.

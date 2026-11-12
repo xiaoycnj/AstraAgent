@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "id": "reply-archive",
+  "name": "回复自动归档",
+  "version": "1.0.0",
+  "description": "回复自动归档应用行为扩展",
+  "hooks": [
+    {
+      "event": "after_response",
+      "action": "save_output",
+      "value": ""
+    }
+  ],
+  "panels": [
+    {
+      "title": "回复自动归档",
+      "text": "在插件管理中启用或停用此扩展，变更会立即应用。"
+    }
+  ]
+}

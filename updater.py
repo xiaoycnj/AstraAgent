@@ -23,7 +23,8 @@ def version(value):
 def latest(root=ROOT):
     import runtime_paths
     local=runtime_paths.release_info(root)
-    with urlopen(Request('https://api.github.com/repos/'+REPO+'/releases/latest',headers={'User-Agent':'AstraAgent-Updater','Accept':'application/vnd.github+json'}),timeout=20) as response:release=json.load(response)
+    import release_feed
+    release=release_feed.fetch()
     tag=release['tag_name'];edition=local['edition']
     name=f'AstraAgent-V{tag.lstrip("v")}-{edition}-win-x64.zip'
     asset=next((a for a in release.get('assets',[]) if a['name']==name),None)
@@ -90,7 +91,7 @@ def install(package,target,progress=lambda text:None):
 def launch(data,parent):
     # Copy the interpreter and native GUI libraries out of the installation before replacing it.
     folder=Path(tempfile.mkdtemp(prefix='astra-updater-'))
-    for name in ('updater.py','native_frame.py','security_core.py','openai_oauth.py','runtime_paths.py','watchdog.py'):
+    for name in ('updater.py','release_feed.py','native_frame.py','security_core.py','openai_oauth.py','runtime_paths.py','watchdog.py'):
         shutil.copy2(ROOT/name,folder/name)
     shutil.copytree(ROOT/'vendor_desktop',folder/'vendor_desktop')
     if (ROOT/'runtimes/webview2').exists():shutil.copytree(ROOT/'runtimes/webview2',folder/'webview2')

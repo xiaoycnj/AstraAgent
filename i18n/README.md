@@ -1,6 +1,6 @@
 # Language packs
 
-Built-in packs are `zh-CN.json` and `en.json`. Choose a language or Follow system in Settings → General → Language. Selection is stored in `data/ui-preferences.json` and used by the desktop startup screen as well.
+Built-in packs are `zh-CN.json`, `en.json`, and `ja.json`. Choose a language or Follow system in Settings → General → Language. Selection is stored in `data/ui-preferences.json` and used by the desktop startup screen as well.
 
 Copy `en.json`, change `code`, `name`, `locale` and the translated values, then place the file in this folder. Click Rescan language packs or restart. You can also import a JSON file in Settings. UTF-8 JSON packs are limited to 1.5 MB and 5,000 entries. Existing custom codes are replaced on import. The built-in codes are reserved.
 

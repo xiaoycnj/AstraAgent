@@ -182,7 +182,7 @@ function renderArchives(){
                 await openSession(item);
             },'archive-title');
             const date=new Date(item.created.replace(' ','T')+'Z');
-            info.append(open,elem('small','hint',Number.isNaN(date.getTime())?item.created:date.toLocaleString('zh-CN')));
+            info.append(open,elem('small','hint',Number.isNaN(date.getTime())?item.created:date.toLocaleString(document.documentElement.lang||undefined)));
             const remove=actionButton('删除',async()=>{
                 if(!await appConfirm('永久删除这个归档会话？'))return;
                 await mutateArchive(item,'DELETE');

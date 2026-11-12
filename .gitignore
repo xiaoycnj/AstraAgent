@@ -67,3 +67,7 @@ graphflow-out/
 # Optional installed DLC and transactional downloads
 /dlcs/
 /.astra-dlc-*/
+
+!/plugins/reply-archive/
+!/plugins/message-guard/
+!/plugins/reading-layout/

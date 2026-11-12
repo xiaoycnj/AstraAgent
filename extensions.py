@@ -30,7 +30,10 @@ def catalog(root,data,include_disabled=False):
         try:
             if not path.resolve().is_relative_to((root/'plugins').resolve()) or path.stat().st_size>100000: raise ValueError('插件路径或大小无效')
             m=json.loads(path.read_text(encoding='utf-8'));pid=valid_id(m['id'])
-            if m.get('schema_version')!=1 or not isinstance(m.get('name'),str): raise ValueError('插件版本或名称无效')
+            if m.get('schema_version') not in (1,2) or not isinstance(m.get('name'),str): raise ValueError('插件版本或名称无效')
+            if m.get('schema_version')==2:
+                import application_plugins
+                m=application_plugins.validate(m)
             contributions={}
             for item in m.get('skills',[]):
                 sid=pid+'__'+valid_id(item['id']);prompt=item['prompt'];name=item['name']
@@ -39,7 +42,7 @@ def catalog(root,data,include_disabled=False):
             builtin=pid in agent_hub.PLUGINS and m.get('tools',[])==agent_hub.PLUGINS[pid][1]
             supported=builtin or not bool(m.get('tools'))
             active=enabled.get(pid,builtin) and supported
-            plugins.append({'id':pid,'name':m['name'],'version':m.get('version','1.0'),'description':m.get('description',''),'enabled':active,'supported':supported,'skills':len(contributions),'permissions':m.get('permissions',[]),'tools':agent_hub.PLUGINS[pid][1] if builtin else [],'builtin':builtin})
+            plugins.append({'id':pid,'name':m['name'],'version':m.get('version','1.0'),'description':m.get('description',''),'enabled':active,'supported':supported,'skills':len(contributions),'permissions':m.get('permissions',[]),'tools':agent_hub.PLUGINS[pid][1] if builtin else [],'builtin':builtin,'hooks':m.get('hooks',[]),'panels':m.get('panels',[])})
             if active or (include_disabled and supported): skills.update(contributions)
         except (KeyError,ValueError,TypeError,OSError) as e: errors.append(path.parent.name+': '+str(e))
     return {'skills':skills,'plugins':plugins,'errors':errors}
