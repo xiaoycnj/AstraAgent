@@ -29,7 +29,11 @@ def fingerprint(config):
     argv=resolved_argv(config)
     paths=[Path(argv[0])]
     # Pin file arguments as well, so changing a Python/Node server script invalidates trust.
-    paths.extend(Path(arg).resolve() for arg in argv[1:] if Path(arg).is_file())
+    launch_root=Path(__file__).resolve().parent
+    for arg in argv[1:]:
+        candidate=Path(arg)
+        if not candidate.is_absolute():candidate=launch_root/candidate
+        if candidate.is_file():paths.append(candidate.resolve())
     files=[]
     for path in paths:
         digest=hashlib.sha256()

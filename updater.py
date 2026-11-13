@@ -51,7 +51,11 @@ def checked_members(archive):
     return members
 
 def install(package,target,progress=lambda text:None):
-    target=Path(target).resolve()
+    target=Path(target).absolute()
+    for candidate in (target,*target.parents):
+        if candidate.is_symlink() or getattr(candidate,'is_junction',lambda:False)():
+            raise ValueError('更新目标路径不能包含链接')
+    target=target.resolve()
     if (target/'.git').exists():raise ValueError('源码工作区不支持覆盖更新')
     temporary=tempfile.mkdtemp(prefix='.astra-update-',dir=target.parent)
     try:
