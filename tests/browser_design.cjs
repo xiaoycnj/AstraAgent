@@ -273,6 +273,118 @@ async function main() {
       contrast: [],
       message_association: associations,
     };
+    async function checkHeatmap(surface, inputType) {
+      const days = Array.from({ length: 365 }, (_, index) => ({
+        day: new Date(Date.UTC(2025, 10, 14 + index))
+          .toISOString()
+          .slice(0, 10),
+        total: index === 363 ? 10 : index === 364 ? 20 : 0,
+        calls: index >= 363 ? 1 : 0,
+        unreported: 0,
+      }));
+      const fixture = {
+        days,
+        before_total: 0,
+        since: Date.UTC(2026, 10, 6) / 1000,
+        totals: {
+          calls: 2,
+          total: 30,
+          input: 20,
+          output: 10,
+          cached: 8,
+          unreported: 0,
+          input_reported: 2,
+          output_reported: 2,
+          cached_reported: 2,
+        },
+        cache: { rate: 0.4 },
+        costs: [{ currency: "USD", amount: 0.001 }],
+        unpriced_calls: 0,
+      };
+      await surface.route("**/api/usage?*", (route) =>
+        route.fulfill({ json: fixture }),
+      );
+      await surface.evaluate(() => {
+        showSettings();
+        selectSettingsTab("profile");
+      });
+      await surface.waitForFunction(() => usageData?.totals.total === 30);
+      for (const theme of ["light", "dark"]) {
+        await surface.evaluate((theme) => applyTheme(theme), theme);
+        for (const mode of ["daily", "weekly", "cumulative"]) {
+          await surface
+            .locator('.token-mode[data-mode="' + mode + '"]')
+            .click();
+          const layout = await surface
+            .locator("#token-activity")
+            .evaluate((section) => {
+              const cells = [...section.querySelectorAll("button.token-cell")];
+              const months = section
+                .querySelector(".token-months")
+                .getBoundingClientRect();
+              return {
+                count: cells.length,
+                heights: [
+                  ...new Set(
+                    cells.map((cell) => getComputedStyle(cell).height),
+                  ),
+                ],
+                widths: [
+                  ...new Set(cells.map((cell) => getComputedStyle(cell).width)),
+                ],
+                minHeights: [
+                  ...new Set(
+                    cells.map((cell) => getComputedStyle(cell).minHeight),
+                  ),
+                ],
+                bottom: Math.max(
+                  ...cells.map((cell) => cell.getBoundingClientRect().bottom),
+                ),
+                monthsTop: months.top,
+              };
+            });
+          assert.deepEqual(
+            layout.heights,
+            ["12px"],
+            JSON.stringify({ inputType, theme, mode, layout }),
+          );
+          assert.deepEqual(layout.widths, ["12px"]);
+          assert.ok(layout.bottom < layout.monthsTop, JSON.stringify(layout));
+          assert.equal(layout.count, mode === "weekly" ? 53 : 365);
+        }
+      }
+      await surface.locator(".token-mode[data-mode=daily]").click();
+      await surface.locator('.token-cell[data-tokens="20"]').focus();
+      assert.equal(await surface.locator("#token-tooltip").isVisible(), true);
+      await surface.keyboard.press("Enter");
+      assert.match(
+        await surface
+          .locator("#token-activity .hint[role=status]")
+          .textContent(),
+        /20 Token/,
+      );
+      await surface.locator("#token-activity").scrollIntoViewIfNeeded();
+      await surface.screenshot({
+        path: path.join(root, "work/heatmap-" + inputType + ".png"),
+      });
+      await surface.evaluate(() => closeSettingsPage());
+      return { inputType, themes: 2, modes: 3, cell: 12 };
+    }
+    evidence.heatmap = [await checkHeatmap(page, "mouse")];
+    const touchContext = await browser.newContext({
+      viewport: { width: 1024, height: 900 },
+      hasTouch: true,
+    });
+    const touchPage = await touchContext.newPage();
+    touchPage.on("pageerror", (error) => errors.push(error.message));
+    await touchPage.goto(url + "/#access=" + token);
+    await touchPage.waitForFunction(() => state.token && state.settings);
+    assert.equal(
+      await touchPage.evaluate(() => matchMedia("(pointer: coarse)").matches),
+      true,
+    );
+    evidence.heatmap.push(await checkHeatmap(touchPage, "touch"));
+    await touchContext.close();
     for (const theme of ["light", "dark"]) {
       await page.evaluate((theme) => applyTheme(theme), theme);
       await page.waitForTimeout(300);

@@ -3,3 +3,13 @@
 
 #messages:has(.thinking-process)>.pending{display:none}
 
+
+/* Heatmap data cells keep their grid dimensions across control and touch styles. */
+.token-grid > .token-cell {
+  box-sizing: border-box;
+  min-width: 12px;
+  min-height: 12px;
+  max-width: 12px;
+  max-height: 12px;
+  border: 0;
+}

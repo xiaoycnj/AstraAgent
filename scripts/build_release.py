@@ -7,7 +7,7 @@ import zipfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '3.11.0'
+VERSION = '3.11.1'
 ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe dlc_manager.py model_catalog.py model_registry.py auto_router.py model_adapters.py anthropic_messages.py marketplace.py application_plugins.py release_feed.py document_understanding.py document_worker.py updater.py local_stt.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
 security_core.py security_audit.py security_net.py security_server.py extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
