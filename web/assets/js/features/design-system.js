@@ -60,9 +60,11 @@
   studioReady.then(syncRoutingFields);
 
   let providerReturnFocus;
+  let providerReturnKey;
   const beforeProviderOpen = expandProvider;
   expandProvider = function (id, source, mode) {
     providerReturnFocus = source || document.activeElement;
+    providerReturnKey = providerReturnFocus?.dataset.providerKey;
     advanced.open = false;
     developer.open = false;
     metadata.open = false;
@@ -70,8 +72,13 @@
   };
   providerDialog.addEventListener("close", () => {
     closeSelect();
-    if (providerReturnFocus?.isConnected)
-      providerReturnFocus.focus({ preventScroll: true });
+    const target = providerReturnFocus?.isConnected
+      ? providerReturnFocus
+      : providerReturnKey &&
+        document.querySelector(
+          '[data-provider-key="' + CSS.escape(providerReturnKey) + '"]',
+        );
+    target?.focus({ preventScroll: true });
   });
   configFormElement.addEventListener(
     "invalid",

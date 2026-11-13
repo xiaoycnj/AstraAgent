@@ -1,0 +1,77 @@
+/* Declarative user appearance has the final normal cascade layer. */
+.market-skin #chat-form,
+.market-skin .settings-group {
+  border-radius: var(--market-radius, 20px);
+}
+body[data-skin-background="aurora"] {
+  background:
+    radial-gradient(
+      ellipse at 15% 20%,
+      color-mix(in srgb, var(--blue) 45%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 85% 80%,
+      color-mix(in srgb, var(--accent-color) 45%, transparent),
+      transparent 60%
+    ),
+    var(--theme-color) !important;
+}
+body[data-skin-background="solid"] {
+  background: var(--theme-color) !important;
+}
+body[data-skin-background="grid"] {
+  background-color: var(--theme-color) !important;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) !important;
+  background-size: 32px 32px !important;
+}
+body[data-skin-icons="fine"] .rail-icon svg {
+  stroke-width: 1.3;
+}
+body[data-skin-icons="bold"] .rail-icon svg {
+  stroke-width: 2.5;
+}
+body[data-skin-layout="compact"] .message {
+  margin-block: 10px;
+}
+body[data-skin-layout="compact"] #chat-input {
+  min-height: 44px !important;
+}
+body[data-skin-layout="focus"] #conversation-sidebar {
+  display: none !important;
+}
+.skin-shortcuts {
+  position: fixed;
+  right: 24px;
+  bottom: 18px;
+  z-index: 90;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--glass-reading);
+  backdrop-filter: blur(20px);
+}
+body[data-app-page="home"] .skin-shortcuts {
+  bottom: auto;
+  top: 100px;
+}
+.skin-shortcuts button {
+  font-size: 11px;
+  padding: 6px 9px;
+}
+
+body.market-skin {
+  --ui-control-surface: var(--soft);
+  --ui-control-hover: color-mix(in srgb, var(--ink) 8%, var(--soft));
+  --ui-panel-surface: var(--glass-reading);
+  --ui-pane-surface: var(--glass-reading);
+  --ui-chrome-surface: color-mix(
+    in srgb,
+    var(--glass-reading) 72%,
+    transparent
+  );
+}

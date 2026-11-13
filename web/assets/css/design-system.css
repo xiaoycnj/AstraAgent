@@ -71,9 +71,7 @@
   outline-offset: 3px;
   scroll-margin: 12px;
 }
-:where(button, .custom-select, .secondary, .primary) {
-  min-height: 32px;
-}
+
 button.primary {
   background: var(--blue);
   color: var(--action-ink, #fff);
@@ -373,11 +371,7 @@ dialog[open] > .select-menu {
     margin-left: auto;
   }
 }
-@media (pointer: coarse) {
-  :where(button, .custom-select, summary) {
-    min-height: 40px;
-  }
-}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

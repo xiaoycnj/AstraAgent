@@ -17,7 +17,7 @@ async function api(path,method='GET',data){
 }
 function safely(fn){return async e=>{try{await fn(e)}catch(error){toast(error.message)}}}
 function download(name,text,type='application/json'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function elem(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el}
+function elem(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;if(typeof enhanceUiElement==='function')enhanceUiElement(el);return el}
 function busyButton(button,busy,label){if(busy){button.dataset.label=button.textContent;button.textContent=label||'处理中…'}else button.textContent=button.dataset.label;button.disabled=busy}
 function updateSettings(){const c=state.settings;$('#config-dot').textContent=c.base_url&&c.model?'●':'○';$('#model-pill').textContent=c.model?`✦ ${c.model}`:'○ 配置你的模型'}
 function showSettings(){if(!$('#settings').hidden)return;const c=state.settings;$('#base-url').value=c.base_url||'';$('#model').value=c.model||'';$('#api-key').value='';$('#clear-key').checked=false;$('#system-prompt').value=c.system_prompt||'';$('#timeout').value=c.timeout||90;$('#key-status').textContent=c.has_key?'已保存，留空则保留':'可留空用于本地服务';$('#api-key').placeholder=c.has_key?'已保存 · 输入新密钥可替换':'输入你的密钥';$('#settings-feedback').textContent='';openSettingsPage()}

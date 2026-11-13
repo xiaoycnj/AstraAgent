@@ -1,0 +1,88 @@
+[hidden] {
+  display: none !important;
+}
+.ui-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+:where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-color) !important;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-surface,
+  .sidebar,
+  .app-rail,
+  .settings-nav,
+  .custom-titlebar {
+    backdrop-filter: none !important;
+    background: var(--surface-reading) !important;
+  }
+}
+@media (forced-colors: active) {
+  :root {
+    --ink: CanvasText !important;
+    --muted: CanvasText !important;
+    --ui-control-surface: Canvas !important;
+    --ui-control-hover: Canvas !important;
+    --ui-panel-surface: Canvas !important;
+    --ui-pane-surface: Canvas !important;
+    --ui-chrome-surface: Canvas !important;
+    --ui-divider: ButtonText !important;
+    --control-border: ButtonText !important;
+    --focus-color: Highlight !important;
+  }
+  body::before,
+  body::after,
+  .settings-view::before,
+  .settings-view::after {
+    display: none !important;
+  }
+  .ui-button {
+    border-color: ButtonText;
+    box-shadow: none !important;
+  }
+  .ui-button.primary,
+  .ui-button[aria-current="page"] {
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
+  .ui-switch {
+    border-color: ButtonText !important;
+    background: Canvas !important;
+    forced-color-adjust: none;
+  }
+  .ui-switch::before {
+    background: ButtonText !important;
+  }
+  .ui-switch:checked {
+    background: Highlight !important;
+    border-color: Highlight !important;
+  }
+  .ui-switch:checked::before {
+    background: HighlightText !important;
+  }
+}

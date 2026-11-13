@@ -25,7 +25,7 @@ const beforeActivityEvent=handleAgentEvent;handleAgentEvent=function(sid,event){
 const beforeActivitySession=openSession;openSession=async function(session){await beforeActivitySession(session);scheduleActivity()};
 const beforeActivityNew=newSession;newSession=async function(){await beforeActivityNew();activityOutputs=[];scheduleActivity()};
 setInterval(()=>{if(!activityRail.hidden&&!document.hidden&&(state.pending.size||activityHub.jobs.some(j=>j.status==='running')))refreshActivity()},5000);
-let activityOpen=innerWidth>=1280;try{const value=localStorage.getItem('astra-activity-rail');if(value!==null)activityOpen=value==='true'}catch{}
+let activityOpen=false;try{const value=localStorage.getItem('astra-activity-rail');if(value!==null)activityOpen=value==='true'}catch{}
 setActivityRail(activityOpen);
 const moduleGroup=elem('section','settings-group');moduleGroup.append(elem('h3','','功能模块'),elem('p','hint','内置模块使用显式工具适配器，插件和 Skills 继续在能力目录中管理。'));
 const moduleRows=elem('div');

@@ -176,15 +176,19 @@ renderProviderCards = function () {
     ["video_api", "视频服务商"],
     ["multimodal_api", "多模态服务商"],
   ]) {
+    const category = elem("section", "provider-category");
     const header = elem("div", "provider-grid-heading");
     header.append(elem("h2", "", title));
-    providerGrid.append(header);
+    const cards = elem("div", "provider-cards");
+    category.append(header, cards);
+    providerGrid.append(category);
     const rows = providerRows.filter(
       (row) => (row.type || "chat_api") === type,
     );
     for (const row of [{ id: "", name: "新增服务商" }, ...rows]) {
       const card = elem("button", "provider-card");
       card.type = "button";
+      card.dataset.providerKey = type + "|" + (row.id || "new");
       card.append(
         svgIcon(row.id ? "canvas" : "plus"),
         elem("strong", "", row.name),
@@ -196,9 +200,10 @@ renderProviderCards = function () {
           imageProviderType.value = type;
           imageProviderType._refresh?.();
           imageProviderType.dispatchEvent(new Event("change"));
+          settingsDirty = false;
         }
       };
-      providerGrid.append(card);
+      cards.append(card);
     }
   }
   const fallback = actionButton(
@@ -207,6 +212,8 @@ renderProviderCards = function () {
     "provider-card",
   );
   fallback.prepend(svgIcon("settings"));
+  fallback.dataset.providerKey = "default";
+  fallback.classList.add("provider-default-card");
   providerGrid.append(fallback);
 };
 const beforeCostUsage = drawUsage;

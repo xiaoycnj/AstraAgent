@@ -1375,6 +1375,10 @@
     "调度范围（即时生效）": "Routing scope (applies immediately)",
     "当前模型不使用推理档位": "This model does not use reasoning levels",
     "补全规格": "Fill missing specifications",
-    "显式指定，优先于最低等级": "Explicit selection takes priority over the minimum tier"
+    "显式指定，优先于最低等级": "Explicit selection takes priority over the minimum tier",
+    "设置分类": "Settings categories",
+    "收起设置分类": "Close settings navigation",
+    "服务商名称": "Provider name",
+    "应用菜单": "Application menu"
   }
 }

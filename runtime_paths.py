@@ -11,7 +11,7 @@ def release_info(root):
     path = Path(root) / 'release.json'
     if path.is_file():
         return json.loads(path.read_text(encoding='utf-8'))
-    return {'edition': 'development', 'version': '3.12.0'}
+    return {'edition': 'development', 'version': '3.13.0'}
 
 
 def workspace_id(data):

@@ -8,7 +8,7 @@ const appMenu=elem('nav','desktop-menubar');appMenu.setAttribute('aria-label','�
 for(const [name,items] of [['文件',[['新建会话',()=>$('#new-item').click()],['打开项目',showProjectManager],['设置',showSettings]]],['编辑',[['撤销',()=>document.execCommand('undo')],['重做',()=>document.execCommand('redo')],['全选',()=>{const input=$('#chat-input');input?.focus();input?.select()}]]],['视图',[['重新加载',()=>location.reload()],['切换主题',()=>$('#theme-toggle')?.click()]]],['帮助',[['检查更新',checkAppUpdate],['关于 AstraAgent',()=>{showSettings();selectSettingsTab('about')}]]]]){
  const menu=elem('details','app-menu'),title=elem('summary','',name),list=elem('div','app-menu-list');menu.append(title,list);
  for(const [label,action] of items)list.append(actionButton(label,async()=>{menu.open=false;await action()},'app-menu-item'));
- menu.ontoggle=()=>{if(menu.open)for(const other of appMenu.querySelectorAll('details'))if(other!==menu)other.open=false};appMenu.append(menu);
+ menu.ontoggle=()=>{if(menu.open)for(const other of appMenu.querySelectorAll('.app-menu'))if(other!==menu)other.open=false};appMenu.append(menu);
 }
 document.body.prepend(appMenu);document.body.classList.add('has-app-menu');
 const updateButton=actionButton('检查应用更新',checkAppUpdate,'secondary');aboutPanel.append(updateButton);

@@ -1,0 +1,45 @@
+:root {
+  --ui-font:
+    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --ui-body: 13px;
+  --ui-caption: 12px;
+  --ui-title: 24px;
+  --ui-section-title: 16px;
+  --ui-control-height: 32px;
+  --ui-control-radius: 8px;
+  --ui-card-radius: 12px;
+  --ui-dialog-radius: 20px;
+  --ui-panel-gap: 16px;
+  --ui-page-inset: clamp(24px, 4vw, 64px);
+  --ui-page-width: 1120px;
+  --ui-reading-width: 920px;
+  --ui-navigation-width: 240px;
+  --ui-control-surface: #ffffff;
+  --ui-control-hover: #f0f3f8;
+  --ui-panel-surface: rgb(255 255 255 / 0.88);
+  --ui-pane-surface: rgb(249 250 253 / 0.94);
+  --ui-chrome-surface: rgb(243 246 251 / 0.72);
+  --ui-divider: rgb(25 38 60 / 0.12);
+  --ui-shadow: 0 12px 40px rgb(21 33 58 / 0.12);
+  --ui-subtle-shadow: 0 1px 2px rgb(21 33 58 / 0.04);
+  --ui-selected: color-mix(in srgb, var(--blue) 12%, var(--ui-control-surface));
+  --ui-duration: 160ms;
+  --ui-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --radius-control: var(--ui-control-radius);
+  --radius-panel: var(--ui-card-radius);
+}
+:root[data-theme="dark"] {
+  --ui-control-surface: #282d38;
+  --ui-control-hover: #353c49;
+  --ui-panel-surface: rgb(32 37 47 / 0.92);
+  --ui-pane-surface: rgb(24 29 38 / 0.97);
+  --ui-chrome-surface: rgb(31 36 47 / 0.76);
+  --ui-divider: rgb(222 231 249 / 0.12);
+  --ui-shadow: 0 16px 48px rgb(0 0 0 / 0.3);
+  --ui-subtle-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+@media (pointer: coarse) {
+  :root {
+    --ui-control-height: 40px;
+  }
+}

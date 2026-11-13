@@ -1,4 +1,4 @@
-function colorIcon(name){const img=elem('img','color-icon');img.src='/assets/icons/library/'+name+'.svg';img.alt='';img.width=32;img.height=32;return img;}
+function colorIcon(name){const img=elem('img','color-icon');img.src='/assets/icons/library/'+name+'.svg';img.alt='';img.width=32;img.height=32;img.onerror=()=>{img.onerror=null;img.src='/assets/icons/library/cube.svg'};return img;}
 function decoratePluginIcons(){
     for(const [index,card] of [...pluginList.children].entries()){
         const plugin=capabilityCatalog.plugins[index];
