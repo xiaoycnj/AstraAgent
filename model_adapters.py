@@ -87,6 +87,9 @@ def prepare(config, payload):
     result = copy.deepcopy(payload)
     kind = vendor(config)
     effort = config.get("reasoning", result.get("reasoning_effort", "default"))
+    if config.get("_model_reasoning") is False:
+        effort = "default"
+        result.pop("reasoning_effort", None)
     model = config.get("model", "").lower()
     for message in result.get("messages", []):
         if not use_responses(config, payload):
@@ -177,6 +180,9 @@ def prepare(config, payload):
             for message in result.get("messages", []):
                 if message.get("role") == "assistant":
                     message.setdefault("reasoning_content", "")
+    if config.get("_model_reasoning") is False:
+        result.pop("reasoning_effort", None)
+        result.pop("thinking", None)
     return result
 
 

@@ -1,4 +1,4 @@
-"""Offline model identity matching. Never infer a vendor from a model's spelling."""
+"""Offline reference matching. Metadata discovery never changes transport identity."""
 
 import json
 import model_adapters
@@ -42,3 +42,51 @@ def match(config, model_id):
     if not provider or protocol not in provider["protocols"]:
         return {}
     return next((model for model in provider["models"] if model["id"] == model_id), {})
+
+
+def lookup(config, model_id):
+    """Prefer a known provider, otherwise require unambiguous exact reference IDs."""
+    selected = vendor(config)
+    providers = catalog()["providers"]
+    matches = []
+    for provider in providers:
+        if selected and provider["id"] != selected:
+            continue
+        for model in provider["models"]:
+            if model["id"] == model_id:
+                matches.append(
+                    {
+                        "provider": provider["id"],
+                        "provider_name": provider["name"],
+                        "model": model,
+                    }
+                )
+    if not matches:
+        return {"id": model_id, "status": "unknown", "matches": []}
+    keys = (
+        "kind",
+        "context_window",
+        "max_output",
+        "input_price",
+        "output_price",
+        "cached_input_price",
+        "currency",
+        "multimodal",
+        "tool_calling",
+        "reasoning",
+        "reasoning_levels",
+        "tier",
+        "enabled",
+    )
+    signatures = {
+        json.dumps({key: row["model"].get(key) for key in keys}, sort_keys=True)
+        for row in matches
+    }
+    if len(signatures) > 1:
+        return {"id": model_id, "status": "ambiguous", "matches": matches}
+    return {
+        "id": model_id,
+        "status": "matched",
+        "model": matches[0]["model"],
+        "matches": matches,
+    }

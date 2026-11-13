@@ -129,7 +129,10 @@ function renderProviderModels() {
       ),
     );
 }
-function commitProviderModel() {
+async function commitProviderModel() {
+  const pendingId = modelIdInput.value.trim();
+  if (pendingId && typeof fillModelEntry === "function") await fillModelEntry();
+  if (pendingId !== modelIdInput.value.trim()) return;
   const id = modelIdInput.value.trim(),
     name = aliasInput.value.trim() || id;
   modelManagerFeedback.textContent = "";
@@ -171,10 +174,14 @@ for (const input of [aliasInput, modelIdInput])
     }
   });
 async function fetchProviderModelList() {
+  const context =
+    typeof modelAutofillContext === "function" ? modelAutofillContext() : null;
   busyButton(fetchProviderModels, true, "获取中…");
   modelManagerFeedback.textContent = "";
   try {
     const result = await api("/api/settings/models", "POST", configForm());
+    if (context && (context !== modelAutofillContext() || !providerDialog.open))
+      return;
     for (const id of result.models) {
       if (
         !providerModelDraft.some((m) => m.id === id) &&
@@ -184,6 +191,8 @@ async function fetchProviderModelList() {
     }
     if (!$("#model").value && providerModelDraft[0])
       $("#model").value = providerModelDraft[0].id;
+    if (typeof hydrateProviderModels === "function")
+      await hydrateProviderModels();
     settingsDirty = true;
     renderProviderModels();
     modelManagerFeedback.textContent =
@@ -303,11 +312,16 @@ renderModelChoices = function () {
 syncComposerControls();
 const previousManagerSaveProvider = saveProviderEditor;
 saveProviderEditor = async function () {
+  const context =
+    typeof modelAutofillContext === "function" ? modelAutofillContext() : null;
   if (aliasInput.value.trim() || modelIdInput.value.trim()) {
-    modelManagerFeedback.textContent =
-      "这条模型尚未确认，请先点击上方加号保存条目。";
-    return;
+    await commitProviderModel();
+    if (aliasInput.value.trim() || modelIdInput.value.trim()) return;
   }
+  if (typeof hydrateProviderModels === "function")
+    await hydrateProviderModels();
+  if (context && (context !== modelAutofillContext() || !providerDialog.open))
+    return;
   await previousManagerSaveProvider();
 };
 $("#provider-save").onclick = saveProviderEditor;

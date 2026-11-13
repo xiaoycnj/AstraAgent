@@ -405,7 +405,7 @@ state.close();db.close()
       aliasInput.value='Image 2.5';modelIdInput.value='image2.5';
       modelDetailFields.context_window.value='8192';modelDetailFields.input_price.value='2';modelDetailFields.output_price.value='8';
       modelDetailFields.multimodal.value='true';modelDetailFields.kind.value='image';
-      commitProviderModel();
+      await commitProviderModel();
       const saved=await api('/api/providers','POST',{...configForm(),name:'Media regression'});
       closeProvider(true);await loadProviders();renderProviderCards();expandProvider(saved.id);
       const draft=providerModelDraft[0];

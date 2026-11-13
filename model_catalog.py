@@ -87,6 +87,11 @@ def validate_model(model):
         ):
             raise ValueError("推理档位列表无效")
         result["reasoning_levels"] = levels
+    if model.get("max_output") is not None:
+        limit = model["max_output"]
+        if type(limit) is not int or not 1 <= limit <= 10_000_000:
+            raise ValueError("模型输出上限无效")
+        result["max_output"] = limit
     return result
 
 
@@ -95,7 +100,42 @@ def spec(config):
         (row for row in config.get("models", []) if row["id"] == config.get("model")),
         {},
     )
-    return {**model_registry.match(config, config.get("model")), **stored}
+    reference = model_registry.lookup(config, config.get("model", ""))
+    inferred = dict(reference.get("model", {}))
+    prices = ("input_price", "output_price", "cached_input_price")
+    has_prices = any(stored.get(key) is not None for key in prices)
+    explicit_currency = stored.get("currency") not in (None, "USD")
+    if (
+        (has_prices or explicit_currency)
+        and stored.get("currency")
+        and inferred.get("currency") != stored["currency"]
+    ):
+        for key in prices:
+            inferred.pop(key, None)
+    overrides = {
+        key: value
+        for key, value in stored.items()
+        if value is not None
+        and not (key == "kind" and value == "auto")
+        and not (key == "reasoning_levels" and value == [])
+    }
+    if not has_prices and not explicit_currency and inferred.get("currency"):
+        overrides.pop("currency", None)
+    return {**inferred, **overrides}
+
+
+def reasoning_effort(config, requested):
+    model = spec(config)
+    if model.get("reasoning") is False:
+        return "none"
+    order = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+    levels = [level for level in model.get("reasoning_levels", []) if level in order]
+    if requested == "default" or not levels or requested in levels:
+        return requested
+    wanted = order.index(requested)
+    return min(
+        levels, key=lambda level: (abs(order.index(level) - wanted), order.index(level))
+    )
 
 
 def estimate_tokens(messages, tools=None):

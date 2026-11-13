@@ -9,16 +9,25 @@ for (const [key, title, type] of [
   ["currency", "价格币种", "currency"],
   ["multimodal", "多模态输入", "multimodal"],
   ["kind", "模型用途", "kind"],
+  ["max_output", "模型输出上限（Token）", "number"],
+  ["reasoning", "推理能力", "reasoning"],
+  ["reasoning_levels", "支持的推理档位", "text"],
 ]) {
   const label = elem("label", "", title);
-  const input = elem(type === "number" ? "input" : "select");
+  const input = elem(["number", "text"].includes(type) ? "input" : "select");
   input.id = "model-detail-" + key;
   if (type === "number") {
     input.type = "number";
-    input.min = key === "context_window" ? "1024" : "0";
-    input.max = key === "context_window" ? "10000000" : "1000000";
-    input.step = key === "context_window" ? "1" : "any";
+    input.min =
+      key === "context_window" ? "1024" : key === "max_output" ? "1" : "0";
+    input.max = ["context_window", "max_output"].includes(key)
+      ? "10000000"
+      : "1000000";
+    input.step = ["context_window", "max_output"].includes(key) ? "1" : "any";
     input.placeholder = "未配置";
+  } else if (type === "text") {
+    input.placeholder = "none, low, medium, high, xhigh, max";
+    input.maxLength = 160;
   } else {
     const choices = {
       currency: [
@@ -39,6 +48,11 @@ for (const [key, title, type] of [
         ["video", "视频生成"],
         ["other", "其他用途"],
       ],
+      reasoning: [
+        ["", "未指定"],
+        ["true", "支持"],
+        ["false", "不支持"],
+      ],
     }[type];
     for (const [value, name] of choices) input.append(new Option(name, value));
   }
@@ -46,7 +60,7 @@ for (const [key, title, type] of [
     settingsDirty = true;
   });
   label.append(input);
-  if (type !== "number") buildSelect(input);
+  if (!["number", "text"].includes(type)) buildSelect(input);
   modelDetails.append(label);
   modelDetailFields[key] = input;
 }
@@ -60,7 +74,8 @@ modelDetails.after(
 );
 function editModelDetails(item = {}) {
   for (const [key, input] of Object.entries(modelDetailFields)) {
-    input.value = item[key] ?? ({ currency: "USD", kind: "auto" }[key] || "");
+    const value = item[key] ?? ({ currency: "USD", kind: "auto" }[key] || "");
+    input.value = Array.isArray(value) ? value.join(", ") : value;
     input._refresh?.();
   }
 }
@@ -80,6 +95,11 @@ function readModelDetails() {
   }
   result.multimodal =
     result.multimodal === "" ? null : result.multimodal === "true";
+  result.reasoning =
+    result.reasoning === "" ? null : result.reasoning === "true";
+  result.reasoning_levels = result.reasoning_levels
+    .split(/[,，\s]+/)
+    .filter(Boolean);
   return result;
 }
 editModelDetails();

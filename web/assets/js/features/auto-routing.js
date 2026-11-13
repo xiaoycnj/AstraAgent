@@ -22,7 +22,7 @@ let registrySnapshot;
 const registryVendor = elem("select");
 registryVendor.id = "registry-vendor";
 registryVendor.append(new Option("自动 · 官方域名", "auto"));
-const registryField = elem("label", "", "内置数据库厂商");
+const registryField = elem("label", "", "规格参考厂商");
 registryField.append(registryVendor);
 imageProviderField.after(registryField);
 buildSelect(registryVendor);
@@ -44,7 +44,7 @@ expandProvider = function (id, source, mode) {
 for (const [key, title, choices] of [
   [
     "tier",
-    "路由模型等级",
+    "路由模型等级（预设）",
     [
       ["standard", "标准"],
       ["advanced", "高级"],
@@ -114,14 +114,16 @@ registryDialog.append(
 );
 document.body.append(registryDialog);
 function addRegistryModel(provider, model) {
-  if (providerModelDraft.some((row) => row.id === model.id)) return;
-  if (providerModelDraft.length >= 500) {
+  const existing = providerModelDraft.some((row) => row.id === model.id);
+  if (!existing && providerModelDraft.length >= 500) {
     toast("最多保存 500 个模型");
     return;
   }
-  registryVendor.value = provider.id;
-  registryVendor._refresh?.();
-  providerModelDraft.push({ ...model });
+  if (existing && typeof mergeModelReference === "function") {
+    providerModelDraft = providerModelDraft.map((item) =>
+      item.id === model.id ? mergeModelReference(item, model) : item,
+    );
+  } else if (!existing) providerModelDraft.push({ ...model });
   if (!$("#model").value) $("#model").value = model.id;
   settingsDirty = true;
   renderProviderModels();
@@ -154,11 +156,10 @@ function renderRegistryList() {
       );
       const added = providerModelDraft.some((item) => item.id === model.id);
       const button = actionButton(
-        added ? "已添加" : "导入",
+        added ? "补全规格" : "导入",
         () => addRegistryModel(provider, model),
         "secondary",
       );
-      button.disabled = added;
       row.append(modelLogo(model.id), details, button);
       registryList.append(row);
     }
@@ -266,10 +267,18 @@ async function loadRoutingSettings() {
     api("/api/auto-routing"),
   ]);
   registrySnapshot = registry;
+  const editing = providerDialog.open
+    ? providerMode === "default"
+      ? state.settings
+      : providerRows.find((row) => row.id === $("#provider-edit").value)
+    : null;
+  const selectedReference =
+    registryVendor.value || editing?.registry_vendor || "auto";
   registryVendor.replaceChildren(
     new Option("自动 · 官方域名", "auto"),
     ...registry.providers.map((row) => new Option(row.name, row.id)),
   );
+  registryVendor.value = selectedReference;
   registryVendor._refresh?.();
   refreshJudgeProviders();
   routingMode.value = settings.mode;
@@ -313,15 +322,21 @@ syncComposerControls = function () {
     const index = Math.max(0, AUTO_TIERS.indexOf(autoMinimumTier));
     slider.value = index;
     slider.setAttribute("aria-valuetext", AUTO_LABELS[index]);
-    strengthLabel.textContent = uiText("最低模型强度") + " · " + uiText(AUTO_LABELS[index]);
+    strengthLabel.textContent =
+      uiText("最低模型强度") + " · " + uiText(AUTO_LABELS[index]);
     rail.style.setProperty("--progress", (index / 2) * 100 + "%");
     const badge = $("#model-pill .model-strength");
-    if (badge) badge.textContent = uiText("最低模型强度") + " · " + uiText(AUTO_LABELS[index]);
+    if (badge)
+      badge.textContent =
+        uiText("最低模型强度") + " · " + uiText(AUTO_LABELS[index]);
     for (const node of [rail, reasoningPopover, $("#model-pill")])
       node.classList.toggle("maxed", index === 2);
   }
   ticks.hidden = automatic;
-  slider.setAttribute("aria-label", uiText(automatic ? "最低模型强度" : "思考强度"));
+  slider.setAttribute(
+    "aria-label",
+    uiText(automatic ? "最低模型强度" : "思考强度"),
+  );
   labels.firstElementChild.textContent = automatic ? "标准" : "默认";
   labels.lastElementChild.textContent = automatic ? "旗舰" : "最高";
 };

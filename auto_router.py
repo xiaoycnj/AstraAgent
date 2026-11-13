@@ -81,12 +81,36 @@ def analyze(body):
     }
 
 
+def candidate_issue(model, body, vision, tokens):
+    if model.get("enabled", True) is False:
+        return "已停用自动路由"
+    if model.get("kind", "chat") not in ("auto", "chat"):
+        return "模型用途不支持对话"
+    if not model.get("context_window"):
+        return "缺少上下文规格"
+    if model["context_window"] < tokens * 1.25 + 1024:
+        return "上下文容量不足"
+    if vision and model.get("multimodal") is not True:
+        return "视觉能力未确认"
+    if (
+        body.get("allow_tools") or "allow_tools" not in body and body.get("tools")
+    ) and model.get("tool_calling") is not True:
+        return "工具能力未确认"
+    return ""
+
+
 def candidates(providers, default, body, vision, tokens):
     rows = []
     pool = list(providers)
     if default.get("base_url") and not body.get("provider"):
         pool.append({**default, "id": "", "name": "默认接口"})
     for provider in pool:
+        if (
+            body.get("auto_scope") == "current"
+            and not body.get("provider")
+            and provider.get("id", "")
+        ):
+            continue
         if body.get("provider") and provider.get("id") != body["provider"]:
             continue
         if not model_catalog.supports(provider, "chat") or not provider.get("base_url"):
@@ -96,19 +120,7 @@ def candidates(providers, default, body, vision, tokens):
             if not entry.get("id"):
                 continue
             model = model_catalog.spec({**provider, "model": entry["id"]})
-            if model.get("enabled", True) is False or model.get("kind", "chat") not in (
-                "auto",
-                "chat",
-            ):
-                continue
-            if (
-                not model.get("context_window")
-                or model["context_window"] < tokens * 1.25 + 1024
-            ):
-                continue
-            if vision and model.get("multimodal") is not True:
-                continue
-            if body.get("allow_tools") and model.get("tool_calling") is not True:
+            if candidate_issue(model, body, vision, tokens):
                 continue
             rows.append({"provider": provider, "model": {**model, "id": entry["id"]}})
     return rows
@@ -126,6 +138,8 @@ def resolve(
     run_id=None,
 ):
     floor = body.get("auto_min_tier", "standard")
+    if body.get("auto_scope", "all") not in ("all", "current"):
+        raise ValueError("调度范围无效")
     if floor not in TIERS:
         raise ValueError("最低模型强度无效")
     config = settings(data)
@@ -143,8 +157,14 @@ def resolve(
         raise ValueError("没有能力与上下文规格完整的候选模型，请先配置模型目录")
     named = set()
     for provider in [*providers, default]:
+        if not model_catalog.supports(provider, "chat"):
+            continue
         for item in provider.get("models") or [{"id": provider.get("model", "")}]:
             mid = item.get("id", "")
+            if model_catalog.spec({**provider, "model": mid}).get(
+                "kind", "chat"
+            ) not in ("auto", "chat"):
+                continue
             if (
                 mid
                 and mid.lower() in text.lower()
@@ -160,7 +180,7 @@ def resolve(
     explicit = [row for row in rows if row["model"]["id"] in named]
     if named and not explicit:
         raise ValueError("指定模型未通过能力或上下文筛选，请检查规格或手动选择")
-    if len(explicit) > 1:
+    if len({row["model"]["id"] for row in explicit}) > 1:
         raise ValueError("任务指定了多个候选模型，请手动选择")
     if config["mode"] == "ai" and not explicit and evaluate_ai:
         judge = next(
@@ -184,6 +204,13 @@ def resolve(
                 "timeout": min(judge.get("timeout", 90), 15),
                 "_cancel_token": cancel_token,
             }
+            judge_spec = model_catalog.spec(jc)
+            jc["_model_reasoning"] = judge_spec.get("reasoning")
+            jc["reasoning"] = model_catalog.reasoning_effort(jc, "low")
+            if judge_spec.get("max_output"):
+                jc["max_output_tokens"] = min(
+                    jc["max_output_tokens"], judge_spec["max_output"]
+                )
             try:
                 response = upstream(
                     jc,
@@ -235,11 +262,21 @@ def resolve(
     if explicit:
         rows = explicit
     else:
-        rows = [
+        available = [
             row
             for row in rows
+            if TIERS.index(row["model"].get("tier", "advanced")) >= TIERS.index(floor)
+        ]
+        recommended = [
+            row
+            for row in available
             if TIERS.index(row["model"].get("tier", "advanced")) >= minimum
         ]
+        rows = recommended or available
+        if rows and not recommended:
+            fallback = (
+                fallback + "；" if fallback else ""
+            ) + "建议等级暂无可用模型，已在用户最低等级内选择"
     if not rows:
         raise ValueError(
             "没有满足最低等级、上下文、视觉或工具能力的已配置模型，请补充规格或调整最低强度"
@@ -267,7 +304,10 @@ def resolve(
         **body,
         "provider": selected["provider"].get("id", ""),
         "model": selected["model"]["id"],
-        "reasoning": judgment["reasoning_effort"],
+        "reasoning": model_catalog.reasoning_effort(
+            {**selected["provider"], "model": selected["model"]["id"]},
+            judgment["reasoning_effort"],
+        ),
     }
     if (
         judgment["task_type"].startswith("image_")
@@ -283,6 +323,7 @@ def resolve(
         "tier": selected["model"].get("tier", "advanced"),
         "minimum_tier": floor,
         "reasoning": request["reasoning"],
+        "requested_reasoning": judgment["reasoning_effort"],
         "task_type": judgment["task_type"],
         "reason": fallback
         or (
@@ -291,4 +332,71 @@ def resolve(
             else "能力筛选与" + config["strategy"] + "排序"
         ),
     }
+    if config["strategy"] == "price" and rank(selected)[0] == float("inf"):
+        route["reason"] += "；缺少同币种完整价格，已按模型等级兜底"
+    if request["reasoning"] != judgment["reasoning_effort"]:
+        route["reason"] += "；推理档位按模型规格映射为 " + request["reasoning"]
     return request, route
+
+
+def preview(data, providers, default, body):
+    """Offline candidate diagnostics using the same eligibility rules as execution."""
+    vision = body.get("vision") is True
+    tokens = model_catalog.estimate_tokens(
+        [{"content": str(body.get("content", ""))}]
+    ) + (1024 if vision else 0)
+    pool = list(providers) + (
+        [{**default, "id": "", "name": "默认接口"}] if default.get("base_url") else []
+    )
+    records = []
+    floor = body.get("auto_min_tier", "standard")
+    if floor not in TIERS:
+        raise ValueError("最低模型强度无效")
+    for provider in pool:
+        if not model_catalog.supports(provider, "chat"):
+            continue
+        for entry in provider.get("models") or [{"id": provider.get("model", "")}]:
+            if not entry.get("id"):
+                continue
+            model = model_catalog.spec({**provider, "model": entry["id"]})
+            issue = (
+                "缺少接口地址"
+                if not provider.get("base_url")
+                else candidate_issue(model, body, vision, tokens)
+            )
+            if body.get("provider") and body["provider"] != provider.get("id", ""):
+                issue = "不在当前调度范围"
+            if (
+                body.get("auto_scope") == "current"
+                and not body.get("provider")
+                and provider.get("id", "")
+            ):
+                issue = "不在当前调度范围"
+            if not issue and TIERS.index(model.get("tier", "advanced")) < TIERS.index(
+                floor
+            ):
+                issue = "低于用户最低等级"
+            records.append(
+                {
+                    "provider": provider.get("name", "默认接口"),
+                    "provider_id": provider.get("id", ""),
+                    "id": entry["id"],
+                    "tier": model.get("tier", "advanced"),
+                    "eligible": not issue,
+                    "reason": issue or "可参与路由",
+                }
+            )
+    try:
+        request, route = resolve(
+            data, providers, default, body, None, vision=vision, evaluate_ai=False
+        )
+        for record in records:
+            if (
+                record["id"] == route["resolved_model"]
+                and record["provider_id"] == route["provider_id"]
+                and record["reason"] == "低于用户最低等级"
+            ):
+                record.update(eligible=True, reason="显式指定，优先于最低等级")
+        return {"models": records, "route": route, "error": ""}
+    except ValueError as error:
+        return {"models": records, "route": None, "error": str(error)}

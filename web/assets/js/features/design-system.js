@@ -246,13 +246,13 @@
       Object.assign(row, {
         model: event.model,
         provider: event.provider_id,
-        reasoning: event.reasoning,
+        reasoning: event.requested_reasoning || event.reasoning,
       });
     if (event.type === "routing")
       Object.assign(row, {
         model: event.resolved_model,
         provider: event.provider_id,
-        reasoning: event.reasoning,
+        reasoning: event.requested_reasoning || event.reasoning,
         route: event.reason,
       });
     if (event.type === "tool_start") row.tools++;
