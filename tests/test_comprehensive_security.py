@@ -42,7 +42,9 @@ class ComprehensiveSecurity(unittest.TestCase):
     def request(self,server,path,method='GET',headers=None):
         connection=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=5)
         try:
-            connection.request(method,path,body='{}' if method!='GET' else None,headers={'Content-Type':'application/json',**(headers or {})})
+            # Authentication is checked before parsing the body. Keep this probe
+            # bodyless so Windows does not reset a rejected socket with unread data.
+            connection.request(method,path,headers={'Content-Type':'application/json',**(headers or {})})
             response=connection.getresponse()
             response.read()
             return response.status
