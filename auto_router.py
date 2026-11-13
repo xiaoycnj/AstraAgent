@@ -123,6 +123,7 @@ def resolve(
     vision=False,
     evaluate_ai=True,
     cancel_token=None,
+    run_id=None,
 ):
     floor = body.get("auto_min_tier", "standard")
     if floor not in TIERS:
@@ -174,6 +175,7 @@ def resolve(
             fallback = "Judge 未配置，已使用规则路由"
         else:
             jc = {
+                "_run_id": run_id,
                 **judge,
                 "model": config["judge_model"],
                 "reasoning": "low",

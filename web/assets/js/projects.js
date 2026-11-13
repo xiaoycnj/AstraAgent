@@ -98,7 +98,9 @@ async function cancelProjectTask() {
     if (!key && sid) key = (await api('/api/sessions/' + sid + '/stream'))?.id;
     if (!key) return;
     const result = await api('/api/stream/' + key + '/cancel', 'POST', {});
+    document.dispatchEvent(new CustomEvent('astra:task-cancel-request', {detail: {sid, ...result}}));
     toast(result.accepted ? '正在停止任务，保留已有文件和输出' : '任务已经结束');
+    return result;
 }
 
 // Project setup stays small. Each check uses explicit argv to preserve quoting.

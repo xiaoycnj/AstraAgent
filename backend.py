@@ -295,7 +295,7 @@ def completion(c, messages, emit=None):
     if pending:
         if emit:emit({'type':'routing_start','name':'正在由 Judge 分析任务'})
         old_system=c.get('system_prompt','')
-        body,route=auto_router.resolve(DATA,profiles(),config(),pending['body'],upstream,pending['vision'],cancel_token=c.get('_cancel_token'))
+        body,route=auto_router.resolve(DATA,profiles(),config(),pending['body'],upstream,pending['vision'],cancel_token=c.get('_cancel_token'),run_id=c.get('_run_id'))
         resolved=request_config(body)
         private={key:value for key,value in c.items() if key.startswith('_') or key in ('session_id','is_subagent')}
         c.clear();c.update(resolved);c.update(private);c['_routing']=route
@@ -735,7 +735,7 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
         saved_id=None
         answer=''
         try:
-            emit({'type':'start','run_id':run_id,'request_id':key,'model':auto_router.AUTO if c.get('_routing_deferred') else c['model'],'input':content,'attachments':attachment_ids,'project_id':project_id})
+            emit({'type':'start','run_id':run_id,'request_id':key,'model':auto_router.AUTO if c.get('_routing_deferred') else c['model'],'provider_id':c.get('id',''),'reasoning':c.get('reasoning','default'),'input':content,'attachments':attachment_ids,'project_id':project_id})
             token.check()
             if resume:
                 with database() as db:point=db.execute('SELECT checkpoint FROM executions WHERE request_id=?',(key,)).fetchone()
@@ -789,7 +789,7 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
             token.check()
             application_plugins.after_response(ROOT,DATA,database,sid,saved_id,emit)
             execution.finish()
-            emit({'type':'done','content':answer,'message_id':saved_id,'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id')})
+            emit({'type':'done','content':answer,'message_id':saved_id,'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id'),'usage':usage_meter.task_summary(DATA,run_id)})
         except Exception as error:
             execution.pause(error,isinstance(error,task_control.Cancelled) or token.event.is_set())
             if isinstance(error,task_control.Cancelled) or token.event.is_set():
@@ -797,12 +797,12 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
                 if not saved_id:
                     cancelled=(cancelled+'\n\n任务已取消。已发生的项目变更可检查并回退。').strip()
                     saved_id=save_answer(cancelled)
-                emit({'type':'cancelled','content':cancelled,'message_id':saved_id,'message':'任务已取消','checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id})
+                emit({'type':'cancelled','content':cancelled,'message_id':saved_id,'message':'任务已取消','checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
             else:
                 message=error.message if isinstance(error,ApiError) else str(error)[:300] or '生成中断，可以重新发起任务。'
                 if not saved_id and (partial or c.get('_checkpoint_id')):
                     saved_id=save_answer((''.join(partial)[-60000:]+'\n\n任务中断 · '+message).strip())
-                emit({'type':'error','message':message,'message_id':saved_id,'checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id})
+                emit({'type':'error','message':message,'message_id':saved_id,'checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
         finally:
             execution.close()
             journal.close()
@@ -1317,7 +1317,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.10.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.11.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1655,6 +1655,7 @@ class Handler(BaseHTTPRequestHandler):
                     if streaming:
                         self.send_response(200);self.send_header('Content-Type','text/event-stream; charset=utf-8');self.send_header('Cache-Control','no-cache');self.send_header('Connection','close');self.end_headers();self.close_connection=True
                         runid=uuid.uuid4().hex;events=[]
+                        c['_run_id']=runid
                         with database() as db: db.execute('INSERT INTO runs(id,session_id,status,events) VALUES(?,?,?,?)',(runid,sid,'running','[]'))
                         journal=stream_journal.Writer(lambda:database(shared=True),None,runid)
                         def emit(event):
@@ -1677,7 +1678,7 @@ class Handler(BaseHTTPRequestHandler):
                     if streaming:
                         with database() as db: message_id=db.execute("SELECT MAX(id) FROM messages WHERE session_id=? AND role='assistant'",(sid,)).fetchone()[0]
                         agent_environment.auto_memory(ROOT,DATA,c,content,answer,emit,upstream)
-                        emit({'type':'done','content':answer,'message_id':message_id});return
+                        emit({'type':'done','content':answer,'message_id':message_id,'usage':usage_meter.task_summary(DATA,runid)});return
                     return self.reply(200, {'role': 'assistant', 'content': answer})
                 finally:
                     if not detached:
@@ -1796,7 +1797,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.10.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.11.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

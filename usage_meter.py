@@ -14,8 +14,14 @@ def database(data):
         db.execute('CREATE TABLE IF NOT EXISTS usage_events(id TEXT PRIMARY KEY,stamp REAL NOT NULL,model TEXT NOT NULL,source TEXT NOT NULL,status TEXT NOT NULL,input INTEGER,output INTEGER,total INTEGER,cached INTEGER)')
         db.execute('CREATE INDEX IF NOT EXISTS usage_stamp ON usage_events(stamp)')
         columns={row['name'] for row in db.execute('PRAGMA table_info(usage_events)')}
-        for name,kind in [('provider_id','TEXT'),('currency','TEXT'),('estimated_cost','REAL')]:
-            if name not in columns:db.execute('ALTER TABLE usage_events ADD COLUMN '+name+' '+kind)
+        additions=[('provider_id','TEXT'),('currency','TEXT'),('estimated_cost','REAL'),('run_id','TEXT')]
+        if any(name not in columns for name,kind in additions):
+            db.execute('BEGIN IMMEDIATE')
+            columns={row['name'] for row in db.execute('PRAGMA table_info(usage_events)')}
+            for name,kind in additions:
+                if name not in columns:db.execute('ALTER TABLE usage_events ADD COLUMN '+name+' '+kind)
+            db.commit()
+        db.execute('CREATE INDEX IF NOT EXISTS usage_run ON usage_events(run_id)')
         db.execute('CREATE TABLE IF NOT EXISTS usage_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
         db.execute("INSERT OR IGNORE INTO usage_metadata VALUES('since',?)",(str(time.time()),))
         yield db;db.commit()
@@ -41,7 +47,16 @@ def record(data,key,model,source,status,usage,stamp=None,config=None):
     incoming,outgoing,total,cached=counts(usage)
     estimate=model_catalog.cost(config or {},incoming,outgoing,cached)
     with database(data) as db:
-        db.execute('INSERT OR IGNORE INTO usage_events(id,stamp,model,source,status,input,output,total,cached,provider_id,currency,estimated_cost) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(key,time.time() if stamp is None else stamp,str(model)[:200],source,status,incoming,outgoing,total,cached,(config or {}).get('id',''),estimate['currency'] if estimate else None,estimate['amount'] if estimate else None))
+        db.execute('INSERT OR IGNORE INTO usage_events(id,stamp,model,source,status,input,output,total,cached,provider_id,currency,estimated_cost,run_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(key,time.time() if stamp is None else stamp,str(model)[:200],source,status,incoming,outgoing,total,cached,(config or {}).get('id',''),estimate['currency'] if estimate else None,estimate['amount'] if estimate else None,(config or {}).get('_run_id')))
+
+def task_summary(data,run_id):
+    """Aggregate reported usage only. Missing statistics never fail a task."""
+    if not run_id:return {'available':False}
+    try:
+        with database(data) as db:
+            row=dict(db.execute('SELECT COUNT(*) calls,COUNT(total) reported,COALESCE(SUM(total),0) total,COALESCE(SUM(input),0) input,COALESCE(SUM(output),0) output FROM usage_events WHERE run_id=?',(run_id,)).fetchone())
+        return {'available':True,**row}
+    except (OSError,sqlite3.Error):return {'available':False}
 
 def metered(data,c,invoke):
     config=dict(c);result=None;status='failed'

@@ -238,8 +238,10 @@ class AutoRouting(unittest.TestCase):
                 invoke.assert_not_called()
             token = task_control.Token()
             config["_cancel_token"] = token
+            config["_run_id"] = "route-run"
 
             def judge(*args):
+                self.assertEqual(args[0]["_run_id"], "route-run")
                 token.cancel()
                 return {
                     "choices": [

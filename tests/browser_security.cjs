@@ -19,6 +19,8 @@ async function main() {
   server.stderr.on('data', chunk => log += chunk.toString());
   let browser;
   const fixturePluginId="ui-fixture-"+Date.now();
+  const marketFixturePath=path.resolve(root,'plugins','focus-session');
+  const marketFixtureExisted=fs.existsSync(marketFixturePath);
   try {
     for (let i = 0; i < 100 && !/http:\/\/127\.0\.0\.1:\d+/.test(log); i++) {
       if (server.exitCode !== null) throw new Error('Test server exited');
@@ -157,7 +159,7 @@ async function main() {
     await page.getByRole('heading', {name: '最近 200 条安全记录'}).waitFor();
     await page.getByRole('button', {name: '关闭', exact: true}).last().click();
     await page.evaluate(() => selectSettingsTab('connection'));
-    await page.getByText('允许 HTTPS 私有网络接口（信任此服务商）', {exact: true}).waitFor();
+    assert.equal(await page.getByText('允许 HTTPS 私有网络接口（信任此服务商）', {exact: true}).isVisible(),false);
     await page.evaluate(async()=>{
       await api('/api/providers','POST',{name:'Image fixture',type:'image_api',base_url:'http://127.0.0.1:9/v1',model:'gpt-image-1',models:[{id:'gpt-image-1',name:'Image'}]});
       await loadProviders();
@@ -369,12 +371,14 @@ state.close();db.close()
     await page.getByRole('button',{name:'恢复原外观',exact:true}).click();
     await page.waitForFunction(()=>marketData.state.active_skin===null);
     await page.getByRole('button',{name:'插件',exact:true}).click();
+    if(!marketFixtureExisted){
     await page.locator('[data-package-id="focus-session"]').getByRole('button',{name:'安装并启用',exact:true}).click();
     await page.locator('.app-dialog .primary').click();
     await page.waitForFunction(()=>marketData.state.installed['plugin:focus-session']);
     await page.locator('[data-package-id="focus-session"]').getByRole('button',{name:'卸载',exact:true}).click();
     await page.locator('.app-dialog .primary').click();
     await page.waitForFunction(()=>!marketData.state.installed['plugin:focus-session']);
+    }
     await page.getByRole('searchbox',{name:'搜索插件与皮肤',exact:true}).fill('没有这个作品');
     assert.equal(await page.locator('.market-card').count(),0);
     await page.evaluate(()=>navigatePage('home'));
@@ -431,6 +435,7 @@ state.close();db.close()
   } finally {
     if (browser) await browser.close();
     const fixtureFolder=path.resolve(root,'plugins',fixturePluginId);
+    if(!marketFixtureExisted&&marketFixturePath.startsWith(path.resolve(root,'plugins')+path.sep)&&fs.existsSync(path.join(marketFixturePath,'manifest.json'))&&JSON.parse(fs.readFileSync(path.join(marketFixturePath,'manifest.json'),'utf8')).id==='focus-session')fs.rmSync(marketFixturePath,{recursive:true});
     if(fixtureFolder.startsWith(path.resolve(root,'plugins')+path.sep)&&fs.existsSync(path.join(fixtureFolder,'manifest.json'))&&JSON.parse(fs.readFileSync(path.join(fixtureFolder,'manifest.json'),'utf8')).id===fixturePluginId)fs.rmSync(fixtureFolder,{recursive:true});
     server.kill();
     await new Promise(resolve => server.exitCode !== null ? resolve() : server.once('exit', resolve));

@@ -1,5 +1,6 @@
 """Real usage accounting, unknown counts, replay safety and stream integration."""
 from datetime import datetime,timezone
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 from pathlib import Path
@@ -13,6 +14,31 @@ import backend
 import usage_meter as meter
 
 class UsageMeter(unittest.TestCase):
+    def test_concurrent_legacy_migration(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data=Path(folder)
+            with sqlite3.connect(data/'usage.sqlite3') as db:
+                db.execute('CREATE TABLE usage_events(id TEXT PRIMARY KEY,stamp REAL NOT NULL,model TEXT NOT NULL,source TEXT NOT NULL,status TEXT NOT NULL,input INTEGER,output INTEGER,total INTEGER,cached INTEGER)')
+            db.close()
+            def save(index):
+                meter.record(data,str(index),'mock','api_key','completed',{'total_tokens':1},config={'_run_id':'shared'})
+            with ThreadPoolExecutor(max_workers=8) as workers:
+                list(workers.map(save,range(16)))
+            self.assertEqual(meter.task_summary(data,'shared')['total'],16)
+    def test_task_summary_isolated_replay_and_unknown(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data=Path(folder)
+            meter.record(data,'one','mock','api_key','completed',{'total_tokens':30},config={'_run_id':'a'})
+            meter.record(data,'one','mock','api_key','completed',{'total_tokens':999},config={'_run_id':'a'})
+            meter.record(data,'two','mock','api_key','failed',None,config={'_run_id':'a'})
+            meter.record(data,'three','mock','api_key','completed',{'total_tokens':90},config={'_run_id':'b'})
+            result=meter.task_summary(data,'a')
+            self.assertEqual((result['calls'],result['reported'],result['total']),(2,1,30))
+            self.assertEqual(meter.task_summary(data,'b')['total'],90)
+            self.assertEqual(meter.task_summary(data,'old')['reported'],0)
+            self.assertFalse(meter.task_summary(data,None)['available'])
+            with patch.object(meter,'database',side_effect=sqlite3.OperationalError('locked')):
+                self.assertFalse(meter.task_summary(data,'a')['available'])
     def test_counts_validate_and_normalize(self):
         self.assertEqual(meter.counts({'prompt_tokens':10,'completion_tokens':5,'prompt_tokens_details':{'cached_tokens':2}}),(10,5,15,2))
         self.assertEqual(meter.counts({'input_tokens':3,'output_tokens':4,'total_tokens':7}),(3,4,7,None))
