@@ -522,6 +522,9 @@ class AdapterTests(unittest.TestCase):
             }
         )
         self.assertTrue(adapters.use_responses(config, payload))
+        without_tools = copy.deepcopy(payload)
+        without_tools.pop("tools")
+        self.assertTrue(adapters.use_responses(config, without_tools))
         self.assertIn(
             "_response_items", adapters.prepare(config, payload)["messages"][-1]
         )

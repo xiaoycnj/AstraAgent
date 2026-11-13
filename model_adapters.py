@@ -34,7 +34,16 @@ def use_responses(config, payload=None):
     return (
         vendor(config) == "openai"
         and config.get("model", "").lower().startswith("gpt-6")
-        and bool(payload and payload.get("tools"))
+        and bool(
+            payload
+            and (
+                payload.get("tools")
+                or any(
+                    message.get("_response_items") or message.get("role") == "tool"
+                    for message in payload.get("messages", [])
+                )
+            )
+        )
     )
 
 
