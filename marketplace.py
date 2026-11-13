@@ -39,6 +39,7 @@ def skin(value):
     radius = value.get('radius', 20)
     if type(blur) is not int or not 12 <= blur <= 40 or type(radius) is not int or (not 8 <= radius <= 28):
         raise ValueError('皮肤材质参数超出范围')
+    validate_skin_extensions(value)
     return {'schema_version': 1, 'id': ident, 'theme': value['theme'], 'colors': colors, 'blur': blur, 'radius': radius}
 
 def package(value):
@@ -243,3 +244,23 @@ def restore_switches(data, previous):
             temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
+
+
+def validate_skin_extensions(value):
+    choices={'background':('art','aurora','grid','solid'),'icon_pack':('rounded','fine','bold'),'layout':('comfortable','compact','focus')}
+    for field,allowed in choices.items():
+        if value.get(field,allowed[0]) not in allowed:
+            raise ValueError('未知皮肤选项：'+field)
+    widgets=value.get('widgets',[])
+    if not isinstance(widgets,list) or len(widgets)>4:
+        raise ValueError('皮肤控件数量无效')
+    seen=set()
+    for widget in widgets:
+        if not isinstance(widget,dict) or set(widget)-{'type','label','action'}:
+            raise ValueError('皮肤控件格式无效')
+        if widget.get('type')!='shortcut' or widget.get('action') not in ('home','library','images','marketplace'):
+            raise ValueError('未知皮肤控件动作')
+        label=widget.get('label')
+        if not isinstance(label,str) or not 1<=len(label)<=30 or widget['action'] in seen:
+            raise ValueError('皮肤控件标签或动作重复')
+        seen.add(widget['action'])

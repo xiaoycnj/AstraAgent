@@ -26,6 +26,7 @@ function captureSkinAppearance() {
       ]),
     ),
     custom: document.body.classList.contains("market-skin"),
+    extensions: currentSkinExtensions,
   };
 }
 function restoreSkinAppearance(snapshot) {
@@ -33,6 +34,7 @@ function restoreSkinAppearance(snapshot) {
   for (const [token, value] of Object.entries(snapshot.colors))
     document.documentElement.style.setProperty(token, value);
   document.body.classList.toggle("market-skin", snapshot.custom);
+  applySkinExtensions(snapshot.extensions || {});
 }
 function paintMarketSkin(payload) {
   document.documentElement.dataset.theme = payload.theme;
@@ -50,6 +52,7 @@ function paintMarketSkin(payload) {
     payload.radius + "px",
   );
   document.body.classList.add("market-skin");
+  applySkinExtensions(payload);
 }
 function cancelSkinPreview() {
   if (!skinPreview) return;
@@ -417,6 +420,10 @@ async function exportCurrentSkin() {
   colors["--theme-color"] ||= "#202538";
   colors["--blue"] ||= "#879bff";
   const payload = {
+    background: currentSkinExtensions.background||"art",
+    icon_pack: currentSkinExtensions.icon_pack||"rounded",
+    layout: currentSkinExtensions.layout||"comfortable",
+    widgets: currentSkinExtensions.widgets||[],
     schema_version: 1,
     id: "custom-" + Date.now(),
     theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
@@ -595,6 +602,7 @@ async function releaseMarketAppearance() {
   ))
     document.documentElement.style.removeProperty(token);
   document.body.classList.remove("market-skin");
+  applySkinExtensions({});
   localStorage.removeItem("astra-market-baseline");
 }
 for (const input of [$("#theme-color"), $("#accent-color")].filter(Boolean))
@@ -608,3 +616,23 @@ document
       releaseMarketAppearance().catch((error) => toast(error.message)),
     ),
   );
+
+let currentSkinExtensions={};
+function applySkinExtensions(payload){
+ currentSkinExtensions=payload;
+ const body=document.body;
+ body.dataset.skinBackground=payload.background||'art';
+ body.dataset.skinIcons=payload.icon_pack||'rounded';
+ body.dataset.skinLayout=payload.layout||'comfortable';
+ for(const icon of document.querySelectorAll('.rail-glyph img')){
+  icon.dataset.originalIcon ||= icon.getAttribute('src');
+  icon.src=payload.icon_pack&&payload.icon_pack!=='rounded'?icon.dataset.originalIcon.replace('/navigation/','/packs/'+payload.icon_pack+'/'):icon.dataset.originalIcon;
+ }
+ document.getElementById('skin-shortcuts')?.remove();
+ if(!payload.widgets?.length)return;
+ const controls=elem('nav','skin-shortcuts');controls.id='skin-shortcuts';controls.setAttribute('aria-label','皮肤快捷操作');
+ for(const widget of payload.widgets){
+  controls.append(actionButton(widget.label,()=>navigatePage(widget.action),'secondary'));
+ }
+ body.append(controls);
+}

@@ -92,7 +92,7 @@
       "description": "深蓝玻璃与冷紫高光。",
       "author": "cnxiaoy",
       "license": "MIT",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "payload": {
         "schema_version": 1,
         "id": "midnight-orbit",
@@ -109,9 +109,24 @@
           "--glass-reading": "#172036dd"
         },
         "blur": 28,
-        "radius": 22
+        "radius": 22,
+        "background": "aurora",
+        "icon_pack": "fine",
+        "layout": "compact",
+        "widgets": [
+          {
+            "type": "shortcut",
+            "label": "资料库",
+            "action": "library"
+          },
+          {
+            "type": "shortcut",
+            "label": "皮肤市场",
+            "action": "marketplace"
+          }
+        ]
       },
-      "sha256": "bf7f5d7314dd0c602325f3e078a65155507ea12b97f1b2cc9402284e4a555362"
+      "sha256": "8aea770966a47fe2116eb7cc1f683e6bef3f2e13ab9703f31752b26fcc41d855"
     },
     {
       "schema_version": 1,
@@ -121,7 +136,7 @@
       "description": "低饱和青绿，适合长时间阅读。",
       "author": "cnxiaoy",
       "license": "MIT",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "payload": {
         "schema_version": 1,
         "id": "jade-studio",
@@ -138,9 +153,24 @@
           "--glass-reading": "#192d27dd"
         },
         "blur": 28,
-        "radius": 22
+        "radius": 22,
+        "background": "aurora",
+        "icon_pack": "fine",
+        "layout": "compact",
+        "widgets": [
+          {
+            "type": "shortcut",
+            "label": "资料库",
+            "action": "library"
+          },
+          {
+            "type": "shortcut",
+            "label": "皮肤市场",
+            "action": "marketplace"
+          }
+        ]
       },
-      "sha256": "6b3d07143ae22112435dc9d2a6e5536157e706cdbaa5fad9dbe59924b0b37368"
+      "sha256": "e5680fa52cb5bc8e645e950c276a7b28c40149321990fa0f6352d54deba31453"
     },
     {
       "schema_version": 1,
@@ -150,7 +180,7 @@
       "description": "温润浅色与克制的蓝。",
       "author": "cnxiaoy",
       "license": "MIT",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "payload": {
         "schema_version": 1,
         "id": "porcelain",
@@ -167,9 +197,24 @@
           "--glass-reading": "#f8f9ffdd"
         },
         "blur": 28,
-        "radius": 22
+        "radius": 22,
+        "background": "grid",
+        "icon_pack": "fine",
+        "layout": "compact",
+        "widgets": [
+          {
+            "type": "shortcut",
+            "label": "资料库",
+            "action": "library"
+          },
+          {
+            "type": "shortcut",
+            "label": "皮肤市场",
+            "action": "marketplace"
+          }
+        ]
       },
-      "sha256": "329005a10051a8e2af397bb8a8ea54adb2b758fcc2a9b51be884484f5162dc98"
+      "sha256": "6df49cebcdb2bb4087f6455b0a4ceb5d6dadc9c99136cbcd81927a1e1d588b62"
     },
     {
       "schema_version": 1,
@@ -179,7 +224,7 @@
       "description": "玫紫色调的透彩玻璃。",
       "author": "cnxiaoy",
       "license": "MIT",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "payload": {
         "schema_version": 1,
         "id": "rose-glass",
@@ -196,9 +241,24 @@
           "--glass-reading": "#34273bdd"
         },
         "blur": 28,
-        "radius": 22
+        "radius": 22,
+        "background": "aurora",
+        "icon_pack": "fine",
+        "layout": "compact",
+        "widgets": [
+          {
+            "type": "shortcut",
+            "label": "资料库",
+            "action": "library"
+          },
+          {
+            "type": "shortcut",
+            "label": "皮肤市场",
+            "action": "marketplace"
+          }
+        ]
       },
-      "sha256": "826877f66b42263d1bedfbf5f8bc159156c422b8e74abf9f9dff523c4e6f5c6e"
+      "sha256": "405f6b9b799861fc9911c5011102badac51accf1636e5b1b143a622552f7c00a"
     }
   ]
 }
