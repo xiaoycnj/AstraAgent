@@ -1,0 +1,35 @@
+{
+  "commits": 34,
+  "blobs_scanned": 1248,
+  "bytes_scanned": 19600767,
+  "skipped_large_blobs": [],
+  "private_path_candidates": [],
+  "secret_candidates": [
+    {
+      "object": "e7b0055381f96ce68431b43b585e4134b974275a",
+      "path": "tests/test_security.py",
+      "category": "private_key",
+      "line": 142,
+      "synthetic_context": true
+    }
+  ],
+  "osv": {
+    "findings": [],
+    "manual_review": [
+      "KaTeX fonts",
+      "CPython",
+      "Node.js",
+      "pip and vendored dependencies",
+      "Microsoft WebView2 SDK",
+      "Microsoft WebView2 Fixed Runtime"
+    ],
+    "online_check": true
+  },
+  "private_route_literals": 65,
+  "unauthenticated_request_cases": 260,
+  "tests": 184,
+  "tests_seconds": 61.937,
+  "browser_errors": [],
+  "browser_csp_violations": [],
+  "browser_external_http_requests": []
+}

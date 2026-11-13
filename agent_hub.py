@@ -164,7 +164,7 @@ def native_windows_fetch(host,port,address,url):
     with tempfile.TemporaryDirectory(prefix='astra-reader-') as folder:
         headers=Path(folder)/'headers';body=Path(folder)/'body'
         resolved='['+address+']' if ':' in address else address
-        result=subprocess.run([executable,'--silent','--show-error','--max-time','15','--max-filesize','1000000','--noproxy','*','--proto','=http,https','--resolve',f'{host}:{port}:{resolved}','--dump-header',str(headers),'--output',str(body),'--write-out','%{http_code}',url],capture_output=True,timeout=18,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        result=subprocess.run([executable,'--disable','--silent','--show-error','--max-time','15','--max-filesize','1000000','--noproxy','*','--proto','=http,https','--resolve',f'{host}:{port}:{resolved}','--dump-header',str(headers),'--output',str(body),'--write-out','%{http_code}',url],capture_output=True,timeout=18,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if result.returncode:raise ValueError('网页请求失败或超过大小限制')
         raw_headers=headers.read_text(encoding='iso-8859-1').strip().split('\n\n')[-1]
         _,_,fields=raw_headers.partition('\n')

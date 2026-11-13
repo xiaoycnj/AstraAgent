@@ -38,7 +38,7 @@ def addresses(host, port, allow_private=False):
     return clean
 
 
-def opener(*handlers, allow_private=False, allow_query=False):
+def opener(*handlers, allow_private=False, allow_query=False, allow_loopback=True):
     class PinnedHTTP(http.client.HTTPConnection):
         def connect(self):
             self.sock = connect(self.host, self.port, self.timeout, loopback_only=True)
@@ -55,7 +55,12 @@ def opener(*handlers, allow_private=False, allow_query=False):
     def connect(host, port, timeout, loopback_only=False):
         errors = []
         for family, kind, protocol, address in addresses(host, port, allow_private):
-            if loopback_only and not ipaddress.ip_address(address[0]).is_loopback:
+            resolved=ipaddress.ip_address(address[0])
+            if isinstance(resolved,ipaddress.IPv6Address) and resolved.ipv4_mapped:
+                resolved=resolved.ipv4_mapped
+            if not allow_loopback and resolved.is_loopback:
+                raise ValueError('此下载不允许访问本机回环地址')
+            if loopback_only and not resolved.is_loopback:
                 raise ValueError('HTTP 仅允许本机回环连接')
             stream = socket.socket(family, kind, protocol)
             stream.settimeout(timeout)

@@ -41,7 +41,7 @@ def request_image(provider,args,config):
         same_origin=(parsed.scheme,parsed.hostname,parsed.port)==(origin.scheme,origin.hostname,origin.port)
         if not same_origin and parsed.scheme!='https':raise ValueError('图片下载需要 HTTPS')
         # Download with no provider Authorization header, pinning DNS and prohibiting redirects.
-        with security_net.opener(NoRedirect(),allow_private=bool(same_origin and provider.get('allow_private_network')),allow_query=True).open(url,timeout=60) as response:
+        with security_net.opener(NoRedirect(),allow_private=bool(same_origin and provider.get('allow_private_network')),allow_query=True,allow_loopback=same_origin).open(url,timeout=60) as response:
             with ExitStack() as resources:
                 if token:resources.enter_context(token.resource(lambda:task_control.close_response(response)))
                 raw=response.read(attachments.MAX_FILE+1)

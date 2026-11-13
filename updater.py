@@ -9,8 +9,9 @@ import sys
 import tempfile
 import threading
 import time
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener
 import zipfile
+import release_feed
 
 REPO='xiaoycnj/AstraAgent'
 ROOT=Path(__file__).resolve().parent
@@ -143,11 +144,12 @@ def worker(target,data,parent):
             if not info['available'] or not info['can_install'] or not info['asset']:raise ValueError('没有可安装的新版本')
             asset=info['asset'];url=asset['browser_download_url'];digest=asset.get('digest','')
             if not url.startswith('https://github.com/'+REPO+'/releases/download/') or not digest.startswith('sha256:'):raise ValueError('发行包缺少可信来源或 SHA-256')
+            if type(asset.get('size')) is not int or not 0<asset['size']<=600_000_000:raise ValueError('发行包体积无效')
             package=ROOT/'release.zip';hashed=hashlib.sha256();size=0
-            with urlopen(Request(url,headers={'User-Agent':'AstraAgent-Updater'}),timeout=60) as response,package.open('wb') as output:
+            with build_opener(release_feed.Redirect()).open(Request(url,headers={'User-Agent':'AstraAgent-Updater'}),timeout=60) as response,package.open('wb') as output:
                 while block:=response.read(1024*1024):
                     size+=len(block)
-                    if size>600_000_000:raise ValueError('下载超过体积限制')
+                    if size>asset['size']:raise ValueError('下载超过发行清单体积限制')
                     output.write(block);hashed.update(block);status(f'正在下载 {size//1048576} MB')
             if size!=asset['size'] or 'sha256:'+hashed.hexdigest()!=digest:raise ValueError('下载校验失败')
             install(package,target,status);status('更新完成，正在重新启动')

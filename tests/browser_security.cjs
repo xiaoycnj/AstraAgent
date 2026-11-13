@@ -32,6 +32,8 @@ async function main() {
     const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
     const page = await context.newPage();
     const errors = [];
+    const externalRequests=[];
+    page.on('request',request=>{const url=new URL(request.url());if(['http:','https:'].includes(url.protocol)&&!['127.0.0.1','localhost'].includes(url.hostname))externalRequests.push(url.origin)});
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
       window.cspViolations = [];
@@ -387,6 +389,7 @@ state.close();db.close()
     await page.evaluate(async()=>{languageSelect.value='zh-CN';await languageSelect.onchange();await navigatePage('home');});
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
+    assert.deepEqual(externalRequests, []);
     assert.deepEqual(violations, []);
     await page.screenshot({path: path.join(root, 'work/security-settings.png')});
     console.log(JSON.stringify({authenticated_boot: true, reload: true, math: true, code: true, audit_dialog: true, execution_recovery:true, page_errors: errors, csp_violations: violations}));

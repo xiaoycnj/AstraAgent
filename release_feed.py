@@ -9,6 +9,7 @@ REPO='xiaoycnj/AstraAgent'
 class Redirect(HTTPRedirectHandler):
     def redirect_request(self,req,fp,code,msg,headers,url):
         target=urlsplit(url)
+        if target.username or target.password or target.port not in (None,443):raise ValueError('更新服务地址无效')
         if target.scheme!='https' or target.hostname not in ('github.com','api.github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'):raise ValueError('更新服务重定向来源无效')
         return super().redirect_request(req,fp,code,msg,headers,url)
 

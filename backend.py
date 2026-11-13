@@ -388,7 +388,10 @@ def completion(c, messages, emit=None):
                     allowed=approve_tool(n,a,e,c.get('_cancel_token'))
                     if execution:execution.phase(step,'pending')
                     return allowed
+                refresh_live_permissions(c)
                 allowed=runtime_engine.authorize(name,args,c,emit,approve_step)
+                refresh_live_permissions(c)
+                if c.get('access_policy')=='deny':allowed=False
                 security_audit.append(DATA,'authorization',name,args,c,operation,'approved' if allowed else 'denied')
                 if not allowed:
                     output={'error':'当前权限拒绝了此调用'}
@@ -521,6 +524,30 @@ def run_file_tool(name,args,project_root=None):
         return {'ok':True,'path':args['path']}
     except FileExistsError as error:return {'error':str(error),'code':'conflict'}
     except (ValueError,OSError,UnicodeError,KeyError,TypeError): return {'error':'文件不可访问、格式无效或路径超出工作目录'}
+def refresh_live_permissions(c):
+    if not c.get('_live_permissions'):return
+    latest=runtime_engine.settings(DATA)
+    ranks={'deny':0,'ask':1,'trusted':2,'full':3}
+    current=c.get('access_policy')
+    ceiling=latest.get('access_policy')
+    if current not in ranks or ceiling not in ranks:
+        c['access_policy']='deny'
+        return
+    c['access_policy']=min((current,ceiling),key=ranks.get)
+    if c['access_policy']=='deny':
+        c['auto_memory']=False
+        c['memory_policy']='off'
+    c['trusted_commands']=[argv for argv in c.get('trusted_commands',[]) if argv in latest['trusted_commands']]
+    if current=='full' and c['access_policy']!='full':
+        preferences=c.get('_permission_preferences',{})
+        c['file_permission']=preferences.get('file_permission','none')
+        c['command_permission']=preferences.get('command_permission','none')
+        c['command_mode']=preferences.get('command_mode','sandbox')
+    if c['access_policy']=='ask' and c.get('memory_policy')=='auto':
+        c['memory_policy']='ask'
+
+
+
 def approve_tool(name,args,emit,token=None):
     aid=secrets.token_urlsafe(24);entry={'event':threading.Event(),'allowed':False}
     with APPROVAL_LOCK: APPROVALS[aid]=entry
@@ -602,9 +629,14 @@ def verify_project(c,emit,manual=False):
     project=project_workspace.get(DATA,c['project_id'])
     def runner(check):
         task_control.check(c)
+        refresh_live_permissions(c)
+        if c.get('access_policy')=='deny' or c.get('command_permission')=='none':
+            return {'error':'当前权限禁止运行项目验证命令','exit_code':None}
         args={'argv':check['argv'],'cwd':project['path'],'verification':check['name']}
         if not manual and not runtime_engine.authorize('execute_command',args,c,emit,lambda n,a,e:approve_tool(n,a,e,c.get('_cancel_token'))):
             return {'error':'验证命令未获批准','exit_code':None}
+        refresh_live_permissions(c)
+        if c.get('access_policy')=='deny' or c.get('command_permission')=='none':return {'error':'权限已撤销','exit_code':None}
         command_config={**c,'command_mode':'host','command_permission':'all','_authorized_tool':'execute_command','project_root':project['path']}
         result=agent_environment.command(ROOT,DATA,{'argv':check['argv']},command_config,emit,approve_tool)
         if emit:emit({'type':'verification_command','name':check['name'],'result':result})
@@ -900,6 +932,7 @@ def request_config(body):
     if policy not in ('deny','ask','trusted','full'):raise ApiError(400,'权限档位无效')
     c.update({key:runtime[key] for key in ('trusted_commands','context_chars','tool_rounds','tool_calls','auto_compact','skill_learning')})
     c['access_policy']=policy
+    c['_live_permissions']=True
     if body.get('project_id'):configure_project(c,body['project_id'])
     if c.get('tools'):
         mcp_tools=mcp_client.definitions(DATA)
@@ -909,6 +942,7 @@ def request_config(body):
         c['tools']=[];c['auto_memory']=False;c['memory_policy']='off'
     elif policy=='ask':
         if c.get('memory_policy')=='auto':c['memory_policy']='ask'
+    c['_permission_preferences']={key:c[key] for key in ('file_permission','command_permission','command_mode')}
     if policy=='full':c.update(file_permission='all',command_permission='all',command_mode='host')
     module_tools=feature_modules.available_tools(DATA)
     c['tools']=[name for name in c['tools'] if name not in feature_modules.TOOL_MODULES or name in module_tools]
@@ -1219,7 +1253,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.7.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.8.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1688,7 +1722,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.7.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.8.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')
