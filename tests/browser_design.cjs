@@ -221,7 +221,58 @@ async function main() {
       await page.locator("#task-status-strip").textContent(),
       stripText,
     );
-    const evidence = { viewport: [], contrast: [] };
+    const associations = await page.evaluate(() => {
+      const messages = state.messages,
+        runs = state.sessionRuns;
+      try {
+        state.messages = [
+          { id: 901, role: "assistant", content: "Previous answer" },
+          { id: 902, role: "assistant", content: "Resumed answer" },
+        ];
+        state.sessionRuns = [
+          {
+            status: "failed",
+            events: [
+              { type: "start", time: 1 },
+              { type: "error", time: 2, message: "No saved response" },
+            ],
+          },
+        ];
+        renderMessages();
+        const orphan = document.querySelectorAll(".execution-summary").length;
+        state.sessionRuns = [
+          {
+            status: "complete",
+            events: [
+              { type: "start", time: 1 },
+              { type: "cancelled", time: 2, message_id: 901 },
+              { type: "start", time: 3 },
+              { type: "done", time: 4, message_id: 902 },
+            ],
+          },
+        ];
+        renderMessages();
+        return {
+          orphan,
+          previous: document
+            .querySelectorAll(".message.assistant")[0]
+            .querySelectorAll(".execution-summary").length,
+          resumed: document
+            .querySelectorAll(".message.assistant")[1]
+            .querySelectorAll(".execution-summary").length,
+        };
+      } finally {
+        state.messages = messages;
+        state.sessionRuns = runs;
+        renderMessages();
+      }
+    });
+    assert.deepEqual(associations, { orphan: 0, previous: 0, resumed: 1 });
+    const evidence = {
+      viewport: [],
+      contrast: [],
+      message_association: associations,
+    };
     for (const theme of ["light", "dark"]) {
       await page.evaluate((theme) => applyTheme(theme), theme);
       await page.waitForTimeout(300);
