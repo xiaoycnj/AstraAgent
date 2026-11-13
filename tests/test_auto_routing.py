@@ -291,21 +291,112 @@ class AutoRouting(unittest.TestCase):
 
     def test_pending_judge_and_resolved_choice_have_distinct_checkpoints(self):
         import execution_state
-        with tempfile.TemporaryDirectory() as folder,patch.object(backend,'DATA',Path(folder)):
+
+        with tempfile.TemporaryDirectory() as folder, patch.object(
+            backend, "DATA", Path(folder)
+        ):
             backend.initialize()
             with backend.database() as db:
                 db.execute("INSERT INTO sessions(id,title) VALUES('route','Route')")
-                db.execute("INSERT INTO runs(id,session_id,status,events) VALUES('run','route','running','[]')")
-                db.execute("INSERT INTO stream_requests(id,session_id,hash,run_id,status,input) VALUES('request','route','fixture','run','running','{}')")
-                config={**self.provider(),'access_policy':'ask','_routing_deferred':{'body':{}},'tools':[]}
-                execution_state.create(db,'request','route',{'model':auto_router.AUTO,'auto_min_tier':'advanced'},config)
-            state=execution_state.State(backend.database,'request')
+                db.execute(
+                    "INSERT INTO runs(id,session_id,status,events) VALUES('run','route','running','[]')"
+                )
+                db.execute(
+                    "INSERT INTO stream_requests(id,session_id,hash,run_id,status,input) VALUES('request','route','fixture','run','running','{}')"
+                )
+                config = {
+                    **self.provider(),
+                    "access_policy": "ask",
+                    "_routing_deferred": {"body": {}},
+                    "tools": [],
+                }
+                execution_state.create(
+                    db,
+                    "request",
+                    "route",
+                    {"model": auto_router.AUTO, "auto_min_tier": "advanced"},
+                    config,
+                )
+            state = execution_state.State(backend.database, "request")
             try:
-                pending=json.loads(state.db.execute("SELECT options FROM executions WHERE request_id='request'").fetchone()['options'])
-                self.assertEqual(pending['model'],auto_router.AUTO);self.assertEqual(pending['provider'],'')
-                self.assertEqual(pending['auto_min_tier'],'advanced')
-                config.update(model='strong',reasoning='high',runtime_plugins=[],_routing={'resolved_model':'strong'})
+                pending = json.loads(
+                    state.db.execute(
+                        "SELECT options FROM executions WHERE request_id='request'"
+                    ).fetchone()["options"]
+                )
+                self.assertEqual(pending["model"], auto_router.AUTO)
+                self.assertEqual(pending["provider"], "")
+                self.assertEqual(pending["auto_min_tier"], "advanced")
+                config.update(
+                    model="strong",
+                    reasoning="high",
+                    runtime_plugins=[],
+                    _routing={"resolved_model": "strong"},
+                )
                 state.resolve_model(config)
-                done=json.loads(state.db.execute("SELECT options FROM executions WHERE request_id='request'").fetchone()['options'])
-                self.assertEqual(done['model'],'strong');self.assertEqual(done['_auto_route']['resolved_model'],'strong')
-            finally:state.close()
+                done = json.loads(
+                    state.db.execute(
+                        "SELECT options FROM executions WHERE request_id='request'"
+                    ).fetchone()["options"]
+                )
+                self.assertEqual(done["model"], "strong")
+                self.assertEqual(done["_auto_route"]["resolved_model"], "strong")
+            finally:
+                state.close()
+
+    def test_deferred_judge_switches_provider_and_system_before_generation(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(
+            backend, "DATA", Path(folder)
+        ):
+            data = Path(folder)
+            backend.initialize()
+            first = self.provider()
+            first["models"] = first["models"][:2]
+            second = {
+                **self.provider(),
+                "id": "second",
+                "name": "Second",
+                "system_prompt": "SECOND SYSTEM",
+                "api_key": "second-secret",
+                "model": "strong",
+                "models": [self.provider()["models"][2]],
+            }
+            security_core.write_config(data / "providers.json", [first, second])
+            auto_router.save(
+                data,
+                {"mode": "ai", "judge_provider": "fixture", "judge_model": "basic"},
+            )
+            config = backend.request_config(
+                {"model": auto_router.AUTO, "content": "Hello"}
+            )
+            calls = []
+
+            def upstream(c, endpoint, payload):
+                calls.append((dict(c), payload))
+                content = (
+                    json.dumps(
+                        {"recommended_tier": "flagship", "reasoning_effort": "high"}
+                    )
+                    if len(calls) == 1
+                    else "Main result"
+                )
+                return {"choices": [{"message": {"content": content}}]}
+
+            messages = [
+                {"role": "system", "content": config["system_prompt"]},
+                {"role": "user", "content": "Hello"},
+            ]
+            with patch.object(backend, "upstream", side_effect=upstream), patch.object(
+                backend.local_account, "context", return_value=""
+            ), patch.object(
+                backend.local_account, "profile", return_value={"use_memory": False}
+            ):
+                self.assertEqual(backend.completion(config, messages), "Main result")
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[1][0]["id"], "second")
+            self.assertEqual(calls[1][0]["api_key"], "second-secret")
+            self.assertTrue(
+                calls[1][1]["messages"][0]["content"].startswith("SECOND SYSTEM")
+            )
+            self.assertEqual(config["model"], "strong")
+            self.assertEqual(config["_routing"]["provider_id"], "second")
