@@ -1230,6 +1230,25 @@
     "玫瑰雾": "Rose glass",
     "官方目录": "Official catalog",
     "本地导入": "Local import",
-    "导出市场作品包": "Export marketplace package"
+    "导出市场作品包": "Export marketplace package",
+    "模型专项适配": "Model-specific adapters",
+    "厂商适配": "Provider adapter",
+    "请求协议": "API protocol",
+    "显式缓存策略": "Explicit cache policy",
+    "Claude 思考模式": "Claude thinking mode",
+    "Responses 回答详略": "Responses verbosity",
+    "输出 Token 上限": "Maximum output tokens",
+    "Claude 固定思考预算": "Claude thinking token budget",
+    "自动 · 官方域名": "Auto · official domains",
+    "通用兼容": "Generic compatible",
+    "关闭客户端显式缓存": "Disable explicit client caching",
+    "Claude · 5 分钟": "Claude · 5 minutes",
+    "Claude · 1 小时": "Claude · 1 hour",
+    "按模型自动选择": "Select by model",
+    "固定思考预算": "Fixed thinking budget",
+    "极低": "Minimal",
+    "超高": "Extra high",
+    "Anthropic 适配使用 Messages 协议。DeepSeek 与 GLM 使用隐式缓存，关闭显式缓存不会关闭服务端自动缓存。代理接口可手动选择厂商，未知域名保持通用兼容。": "Anthropic uses Messages. DeepSeek and GLM use implicit caching. Disabling explicit caching does not disable server caching. Select an adapter manually for proxies. Unknown domains use generic compatibility.",
+    "档位会按模型能力映射。强制思考模型选择“关闭”时使用最低档，实际参数请参阅模型适配说明。": "Effort is mapped to model capabilities. Always-thinking models use their lowest effort when Off is selected. See the model adapter documentation for effective parameters."
   }
 }

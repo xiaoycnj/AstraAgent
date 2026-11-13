@@ -387,6 +387,13 @@ state.close();db.close()
     await page.screenshot({path:path.join(root,'work/marketplace-mobile-ja.png')});
     await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(async()=>{languageSelect.value='zh-CN';await languageSelect.onchange();await navigatePage('home');});
+    const adapterConfig=await page.evaluate(()=>{
+      showSettings();selectSettingsTab('connection');expandProvider('',null,'new');
+      adapterFields.vendor.value='anthropic';adapterFields.vendor.dispatchEvent(new Event('change'));
+      adapterFields.cache_mode.value='1h';const result=configForm();closeProvider(true);return result;
+    });
+    assert.equal(adapterConfig.vendor,'anthropic');assert.equal(adapterConfig.api_protocol,'messages');assert.equal(adapterConfig.cache_mode,'1h');
+    assert.equal(await page.locator('#reasoning-select option').count(),8);
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(externalRequests, []);

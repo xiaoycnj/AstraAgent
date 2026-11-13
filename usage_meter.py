@@ -21,12 +21,15 @@ def counts(usage):
     usage=usage if isinstance(usage,dict) else {}
     def number(value):return value if type(value) is int and 0<=value<=9007199254740991 else None
     incoming=number(usage.get('input_tokens',usage.get('prompt_tokens')))
+    if 'cache_read_input_tokens' in usage or 'cache_creation_input_tokens' in usage:
+        parts=[number(usage.get(key,0)) for key in ('input_tokens','cache_read_input_tokens','cache_creation_input_tokens')]
+        incoming=sum(parts) if all(value is not None for value in parts) else None
     outgoing=number(usage.get('output_tokens',usage.get('completion_tokens')))
     total=number(usage.get('total_tokens'))
     if total is None and incoming is not None and outgoing is not None:total=incoming+outgoing
     detail=usage.get('input_tokens_details',usage.get('prompt_tokens_details',{}))
     cached=number(detail.get('cached_tokens')) if isinstance(detail,dict) else None
-    if cached is None:cached=number(usage.get('prompt_cache_hit_tokens'))
+    if cached is None:cached=number(usage.get('prompt_cache_hit_tokens',usage.get('cache_read_input_tokens')))
     if cached is not None and incoming is not None and cached>incoming:cached=None
     return incoming,outgoing,total,cached
 
