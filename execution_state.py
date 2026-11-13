@@ -14,7 +14,7 @@ def encode(value):
 
 REQUEST_FIELDS = ('provider','model','reasoning','skill','tools','allow_tools','plugins',
                   'file_permission','command_permission','command_mode','memory_policy',
-                  'auto_memory','access_policy','project_id')
+                  'auto_memory','access_policy','project_id','auto_min_tier')
 CONTEXT_FIELDS = ('tools','runtime_plugins','system_prompt','active_skill','_untrusted_context',
                   '_mutation_epoch','delegated_count','cross_dispatch_count','cross_dispatch_depth','_verification')
 
@@ -52,6 +52,8 @@ def create(db, key, sid, body, config):
     options['access_policy']=config['access_policy']
     options['model']=config['model']
     if config.get('id'):options['provider']=config['id']
+    if config.get('_routing_deferred'):
+        options['model']='AutoModelReview';options['provider']=body.get('provider','')
     for name in ('file_permission','command_permission','command_mode','memory_policy','auto_memory'):
         if name in config:options[name]=config[name]
     options['allow_tools']=bool(config.get('tools'))
@@ -89,6 +91,13 @@ class State:
         with self.lock:
             if self.context:
                 context=self.context;self.context=None;context.__exit__(None,None,None)
+
+    def resolve_model(self, config):
+        with self.lock:
+            row=self.db.execute('SELECT options FROM executions WHERE request_id=?',(self.key,)).fetchone()
+            options=json.loads(row['options'])
+            options.update(model=config['model'],provider=config.get('id',''),reasoning=config.get('reasoning','default'),plugins=config.get('runtime_plugins',[]),_auto_route=config.get('_routing'))
+            self.db.execute('UPDATE executions SET options=? WHERE request_id=?',(encode(options),self.key));self.db.commit()
 
     def initial(self, payload, config=None):
         with self.lock:

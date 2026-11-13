@@ -2,10 +2,12 @@
   "schema_version": 1,
   "id": "image-generation",
   "name": "图片生成",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "调用独立 image_api 模型生成图片，保存为会话产物。",
   "tools": [
-    "generate_image"
+    "generate_image",
+    "image_gen",
+    "list_image_models"
   ],
   "permissions": [
     "network",
@@ -15,7 +17,7 @@
     {
       "id": "main",
       "name": "图片创作",
-      "prompt": "用户要求绘图时使用 generate_image，先确认提示词和尺寸。接口由 image_api 服务商提供，调用可能产生费用。根据工具返回的 markdown 展示图片，不要伪造图片或成功状态。"
+      "prompt": "先调用 list_image_models 查看已配置的图片服务商与模型。根据用户初版提示词润色 prompt，保留明确约束。用户提供参考图时，将会话中披露的图片附件 ID 作为 image_gen 的 file 或 files 参数，选择已配置的 provider/model 并指定 size、quality。不能虚构附件 ID、图片或成功状态。调用受权限控制且可能产生费用。使用返回的 markdown 展示结果。"
     }
   ]
 }

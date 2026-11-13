@@ -394,6 +394,34 @@ state.close();db.close()
     });
     assert.equal(adapterConfig.vendor,'anthropic');assert.equal(adapterConfig.api_protocol,'messages');assert.equal(adapterConfig.cache_mode,'1h');
     assert.equal(await page.locator('#reasoning-select option').count(),8);
+    const mediaModels=await page.evaluate(async()=>{
+      expandProvider('',null,'new');
+      imageProviderType.value='multimodal_api';imageProviderType.dispatchEvent(new Event('change'));
+      $('#base-url').value='http://127.0.0.1:9/v1';
+      aliasInput.value='Image 2.5';modelIdInput.value='image2.5';
+      modelDetailFields.context_window.value='8192';modelDetailFields.input_price.value='2';modelDetailFields.output_price.value='8';
+      modelDetailFields.multimodal.value='true';modelDetailFields.kind.value='image';
+      commitProviderModel();
+      const saved=await api('/api/providers','POST',{...configForm(),name:'Media regression'});
+      closeProvider(true);await loadProviders();renderProviderCards();expandProvider(saved.id);
+      const draft=providerModelDraft[0];
+      providerModelsList.querySelector('.model-row-action').click();
+      const value=modelDetailFields.context_window.value;closeProvider(true);
+      return {draft,value,capabilities:saved.capabilities};
+    });
+    assert.equal(mediaModels.draft.context_window,8192);assert.equal(mediaModels.draft.input_price,2);
+    assert.equal(mediaModels.draft.output_price,8);assert.equal(mediaModels.draft.multimodal,true);
+    assert.equal(mediaModels.value,'8192');assert.deepEqual(mediaModels.capabilities,['chat','image','video']);
+    await page.waitForFunction(()=>registrySnapshot?.providers?.length>=12);
+    const routingUi=await page.evaluate(()=>{
+      renderModelChoices();const count=modelList.querySelectorAll('[data-model-id="AutoModelReview"]').length;
+      useModel('AutoModelReview');const label=strengthLabel.textContent;const maximum=slider.max;
+      slider.value='2';slider.oninput();const floor=runtimeOptions().auto_min_tier;
+      useModel('fixture');const manual=slider.max;
+      return {count,label,maximum,floor,manual};
+    });
+    assert.equal(routingUi.count,1);assert.equal(routingUi.maximum,'2');assert.match(routingUi.label,/最低模型强度/);
+    assert.equal(routingUi.floor,'flagship');assert.equal(routingUi.manual,'7');
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(externalRequests, []);

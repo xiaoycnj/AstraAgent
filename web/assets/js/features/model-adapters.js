@@ -132,7 +132,7 @@ expandProvider = function (id, source, mode) {
       }[key];
     input._refresh?.();
   }
-  adapterPanel.hidden = imageProviderType.value === "image_api";
+  adapterPanel.hidden = ["image_api", "video_api"].includes(imageProviderType.value);
 };
 const reasoningChoices = $("#reasoning-select");
 reasoningChoices.replaceChildren(
@@ -152,7 +152,7 @@ reasoningChoices.value = strengths.includes(savedReasoning)
 syncComposerControls();
 
 imageProviderType.addEventListener("change", () => {
-  adapterPanel.hidden = imageProviderType.value === "image_api";
+  adapterPanel.hidden = ["image_api", "video_api"].includes(imageProviderType.value);
 });
 
 adapterFields.vendor.addEventListener("change", () => {

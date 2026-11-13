@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone, timedelta
 import sqlite3
 import time
 import uuid
+import model_catalog
 
 @contextmanager
 def database(data):
@@ -12,6 +13,9 @@ def database(data):
     try:
         db.execute('CREATE TABLE IF NOT EXISTS usage_events(id TEXT PRIMARY KEY,stamp REAL NOT NULL,model TEXT NOT NULL,source TEXT NOT NULL,status TEXT NOT NULL,input INTEGER,output INTEGER,total INTEGER,cached INTEGER)')
         db.execute('CREATE INDEX IF NOT EXISTS usage_stamp ON usage_events(stamp)')
+        columns={row['name'] for row in db.execute('PRAGMA table_info(usage_events)')}
+        for name,kind in [('provider_id','TEXT'),('currency','TEXT'),('estimated_cost','REAL')]:
+            if name not in columns:db.execute('ALTER TABLE usage_events ADD COLUMN '+name+' '+kind)
         db.execute('CREATE TABLE IF NOT EXISTS usage_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
         db.execute("INSERT OR IGNORE INTO usage_metadata VALUES('since',?)",(str(time.time()),))
         yield db;db.commit()
@@ -33,10 +37,11 @@ def counts(usage):
     if cached is not None and incoming is not None and cached>incoming:cached=None
     return incoming,outgoing,total,cached
 
-def record(data,key,model,source,status,usage,stamp=None):
+def record(data,key,model,source,status,usage,stamp=None,config=None):
     incoming,outgoing,total,cached=counts(usage)
+    estimate=model_catalog.cost(config or {},incoming,outgoing,cached)
     with database(data) as db:
-        db.execute('INSERT OR IGNORE INTO usage_events VALUES(?,?,?,?,?,?,?,?,?)',(key,time.time() if stamp is None else stamp,str(model)[:200],source,status,incoming,outgoing,total,cached))
+        db.execute('INSERT OR IGNORE INTO usage_events(id,stamp,model,source,status,input,output,total,cached,provider_id,currency,estimated_cost) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',(key,time.time() if stamp is None else stamp,str(model)[:200],source,status,incoming,outgoing,total,cached,(config or {}).get('id',''),estimate['currency'] if estimate else None,estimate['amount'] if estimate else None))
 
 def metered(data,c,invoke):
     config=dict(c);result=None;status='failed'
@@ -44,7 +49,7 @@ def metered(data,c,invoke):
         result=invoke(config);status='completed';return result
     finally:
         reported=config.get('_reported_usage') or (result.get('usage') if isinstance(result,dict) else None)
-        try:record(data,uuid.uuid4().hex,c.get('model',''),c.get('auth_type','api_key'),status,reported)
+        try:record(data,uuid.uuid4().hex,c.get('model',''),c.get('auth_type','api_key'),status,reported,config=c)
         except (OSError,sqlite3.Error):print('Token usage recording unavailable',flush=True)
 
 def activity(data,end=None,offset=0):
@@ -59,7 +64,9 @@ def activity(data,end=None,offset=0):
         cache=dict(db.execute('SELECT COALESCE(SUM(input),0) input,COALESCE(SUM(cached),0) cached,COUNT(*) calls FROM usage_events WHERE input>0 AND cached IS NOT NULL AND cached<=input').fetchone())
         cache['rate']=cache['cached']/cache['input'] if cache['input'] else None
         since=float(db.execute("SELECT value FROM usage_metadata WHERE key='since'").fetchone()[0])
+        costs=[dict(row) for row in db.execute('SELECT currency,SUM(estimated_cost) amount,COUNT(*) calls FROM usage_events WHERE estimated_cost IS NOT NULL GROUP BY currency')]
+        unpriced=db.execute('SELECT COUNT(*) FROM usage_events WHERE estimated_cost IS NULL').fetchone()[0]
     lookup={row['day']:dict(row) for row in rows}
     days=[{'day':(start+timedelta(days=i)).isoformat(),'total':0,'calls':0,'unreported':0} for i in range(365)]
     for item in days:item.update(lookup.get(item['day'],{}))
-    return {'before_total':sum(item['total'] for item in lookup.values() if item['day']<start.isoformat()),'days':days,'totals':dict(lifetime),'cache':cache,'since':since,'offset_minutes':offset,'includes_model_subrequests':True}
+    return {'before_total':sum(item['total'] for item in lookup.values() if item['day']<start.isoformat()),'days':days,'totals':dict(lifetime),'cache':cache,'costs':costs,'unpriced_calls':unpriced,'since':since,'offset_minutes':offset,'includes_model_subrequests':True}

@@ -9,6 +9,9 @@ import hmac
 from http.cookies import SimpleCookie
 import extensions
 import model_adapters
+import model_catalog
+import model_registry
+import auto_router
 import anthropic_messages
 import marketplace
 import application_plugins
@@ -138,8 +141,16 @@ def text(value, name, limit=200, empty=False):
 def validate_config(body, previous):
     result = dict(previous)
     kind=body.get('type',result.get('type','chat_api'))
-    if kind not in ('chat_api','image_api'):raise ApiError(400,'服务商类型无效')
+    if kind not in model_catalog.TYPES:raise ApiError(400,'服务商类型无效')
     result['type']=kind
+    registry_vendor=body.get('registry_vendor',result.get('registry_vendor','auto'))
+    if registry_vendor not in ['auto']+[p['id'] for p in model_registry.catalog()['providers']]:raise ApiError(400,'模型数据库厂商无效')
+    result['registry_vendor']=registry_vendor
+    if 'capabilities' in body:
+        capabilities=body['capabilities']
+        if not isinstance(capabilities,list) or not capabilities or any(value not in ('chat','image','video') for value in capabilities):raise ApiError(400,'服务商能力无效')
+        result['capabilities']=list(dict.fromkeys(capabilities))
+    elif 'type' in body:result['capabilities']=list(model_catalog.TYPES[kind])
     for field, limit in [('base_url', 2000), ('model', 200), ('system_prompt', 12000)]:
         if field in body: result[field] = text(body[field], field, limit, True)
     if 'request_usage' in body:
@@ -153,12 +164,14 @@ def validate_config(body, previous):
             if not isinstance(model,dict):raise ApiError(400,'模型条目格式无效')
             mid=text(model.get('id'),'模型 ID',200);name=text(model.get('name',mid),'显示名称',200)
             if mid in seen:raise ApiError(400,'模型 ID 重复：'+mid)
-            seen.add(mid);clean.append({'id':mid,'name':name})
+            try:item=model_catalog.validate_model({**model,'id':mid,'name':name})
+            except ValueError as error:raise ApiError(400,str(error)) from None
+            seen.add(mid);clean.append(item)
         result['models']=clean
         if not result['model'] and clean:result['model']=clean[0]['id']
         if result['model'] and result['model'] not in seen:raise ApiError(400,'默认模型必须位于模型列表中')
     base = result['base_url'].rstrip('/')
-    for suffix in ('/chat/completions','/images/generations','/messages','/responses'):
+    for suffix in ('/chat/completions','/images/generations','/images/edits','/videos','/messages','/responses'):
         if base.endswith(suffix):base=base[:-len(suffix)]
     if base:
         p = urlsplit(base)
@@ -278,11 +291,27 @@ def mark_untrusted(c):
 
 def completion(c, messages, emit=None):
     c.pop('_last_provider_message',None)
+    pending=c.pop('_routing_deferred',None)
+    if pending:
+        if emit:emit({'type':'routing_start','name':'正在由 Judge 分析任务'})
+        old_system=c.get('system_prompt','')
+        body,route=auto_router.resolve(DATA,profiles(),config(),pending['body'],upstream,pending['vision'],cancel_token=c.get('_cancel_token'))
+        resolved=request_config(body)
+        private={key:value for key,value in c.items() if key.startswith('_') or key in ('session_id','is_subagent')}
+        c.clear();c.update(resolved);c.update(private);c['_routing']=route
+        if c.get('_execution') and hasattr(c['_execution'],'resolve_model'):c['_execution'].resolve_model(c)
+        messages=[dict(message) for message in messages]
+        if messages and messages[0].get('role')=='system' and messages[0].get('content')==old_system:
+            messages.pop(0)
+        if c.get('system_prompt'):messages.insert(0,{'role':'system','content':c['system_prompt']})
+    if c.get('_routing') and emit:emit({'type':'routing','name':'自动路由 · '+c['_routing']['resolved_model']+' · '+c['_routing']['reason'],**c['_routing']})
     if not c['model']: raise ApiError(400, '请先填写模型名称。')
     messages=[dict(message) for message in messages]
     if c.get('_context_history'):
         with database() as db:model_adapters.hydrate(db,c,messages)
     if any(isinstance(m.get('content'),list) or '附件为用户提供的参考资料' in str(m.get('content','')) for m in messages):mark_untrusted(c)
+    if model_catalog.spec(c).get('multimodal') is False:
+        messages=[{**message,'content':'\n'.join(part.get('text','') for part in message['content'] if part.get('type')=='text')} if isinstance(message.get('content'),list) else message for message in messages]
     if c.get('_repository_context'):
         mark_untrusted(c)
         messages=list(messages)
@@ -421,9 +450,9 @@ def completion(c, messages, emit=None):
                 if execution:execution.phase(step,'executing')
                 if name.startswith('mcp_'):
                     output=mcp_client.call(DATA,name,args,c.get('_cancel_token'))
-                elif name=='generate_image':
+                elif name in ('generate_image','image_gen','list_image_models'):
                     output=feature_modules.execute(name,args,c,{'data':DATA,'providers':profiles,'database':database})
-                    if emit:emit({'type':'image_generated','name':name,'result':output})
+                    if emit and name!='list_image_models':emit({'type':'image_generated','name':name,'result':output})
                 elif name=='get_project':
                     output={'project':project_workspace.get(DATA,c['project_id']),'instructions':project_workspace.instructions(project_workspace.get(DATA,c['project_id']))} if c.get('project_id') else {'error':'当前会话未绑定项目'}
                 elif name=='project_diff':
@@ -584,7 +613,7 @@ def capability_tool(name,args,c,emit):
         return {'skills':[{'id':key,'name':value['name'],'source':value['source']} for key,value in catalog['skills'].items()], 'plugins':catalog['plugins'],'tools':c['tools'],'available_tools':[{'name':t['function']['name'],'description':t['function']['description'][:160],**tool_provenance.metadata(t['function']['name'])} for t in TOOL_DEFS+mcp_client.definitions(DATA)]}
     if name=='load_tools':
         names=args.get('names')
-        available={t['function']['name'] for t in TOOL_DEFS if t['function']['name'] not in agent_hub.NAMES and t['function']['name']!='generate_image'}
+        available={t['function']['name'] for t in TOOL_DEFS if t['function']['name'] not in agent_hub.NAMES and t['function']['name'] not in ('generate_image','image_gen','list_image_models')}
         available-={n for n in feature_modules.TOOL_MODULES if n not in feature_modules.available_tools(DATA)}
         if not isinstance(names,list) or not 1<=len(names)<=10 or any(not isinstance(n,str) or n not in available for n in names):return {'error':'工具不存在、属于插件或模块已关闭；请按能力目录加载插件'}
         c['tools'].extend(n for n in names if n not in c['tools'])
@@ -665,6 +694,7 @@ def verify_project(c,emit,manual=False):
 
 
 def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=False):
+    c['_attachment_ids']=attachment_ids
     c['_session_id']=sid
     with database() as db:
         previous=db.execute('SELECT untrusted_context FROM sessions WHERE id=?',(sid,)).fetchone()
@@ -705,7 +735,7 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
         saved_id=None
         answer=''
         try:
-            emit({'type':'start','run_id':run_id,'request_id':key,'model':c['model'],'input':content,'attachments':attachment_ids,'project_id':project_id})
+            emit({'type':'start','run_id':run_id,'request_id':key,'model':auto_router.AUTO if c.get('_routing_deferred') else c['model'],'input':content,'attachments':attachment_ids,'project_id':project_id})
             token.check()
             if resume:
                 with database() as db:point=db.execute('SELECT checkpoint FROM executions WHERE request_id=?',(key,)).fetchone()
@@ -887,17 +917,32 @@ def profiles():
     return security_core.read_config(path, [])
 def request_config(body):
     c=config()
+    route=None
+    routing_request=None
+    if body.get('model')==auto_router.AUTO:
+        try:
+            vision=any(attachments.meta(DATA,key)['kind']=='image' for key in body.get('attachments',[]))
+            routing_request={'body':dict(body),'vision':vision} if auto_router.settings(DATA)['mode']=='ai' else None
+            body,route=auto_router.resolve(DATA,profiles(),c,body,upstream,vision,evaluate_ai=False)
+        except ValueError as error:raise ApiError(400,str(error)) from None
     if body.get('provider'):
         found=next((x for x in profiles() if x['id']==body['provider']),None)
         if not found: raise ApiError(400,'API 配置不存在，请重新选择。')
-        if found.get('type','chat_api')!='chat_api':raise ApiError(400,'图片服务商不能用于聊天模型')
-        c={**c,**found}
-    if c.get('type','chat_api')!='chat_api':raise ApiError(400,'聊天需要 chat_api 类型接口')
+        if not model_catalog.supports(found,'chat'):raise ApiError(400,'该服务商不支持聊天模型')
+        c={**DEFAULTS,**found}
+    if not model_catalog.supports(c,'chat'):raise ApiError(400,'该服务商不支持聊天模型')
     if c.get('auth_type')=='openai_oauth':c['_oauth_subject']=openai_oauth.manager(DATA).read().get('sub','')
     if body.get('model'): c['model']=text(body['model'],'模型',200)
+    elif model_catalog.spec(c).get('kind') in ('image','video'):
+        c['model']=next((row['id'] for row in c.get('models',[]) if row.get('kind','auto') in ('chat','auto')),c['model'])
+    if model_catalog.spec(c).get('kind') in ('image','video'):raise ApiError(400,'请选择对话用途的模型')
+    window=model_catalog.spec(c).get('context_window')
+    if window:c['max_output_tokens']=min(c.get('max_output_tokens',16384),window//4)
     reasoning=body.get('reasoning','default')
     if reasoning not in model_adapters.EFFORTS: raise ApiError(400,'思考档位无效。')
     c['reasoning']=reasoning
+    if route:c['_routing']=route
+    if routing_request:c['_routing_deferred']=routing_request
     c['active_skill']=body.get('skill','general')
     if c['active_skill'] not in ('general','engineer','planner','study','writer'):c['_untrusted_context']=True
     skill=body.get('skill','general')
@@ -924,6 +969,7 @@ def request_config(body):
     for pid in sorted(set(selected_plugins)):
         plugin=next((p for p in all_catalog['plugins'] if p['id']==pid and p['supported']),None)
         if not plugin: raise ApiError(400,'插件不可用：'+pid)
+        if not plugin['enabled']:raise ApiError(400,'插件已关闭，请先在设置中启用：'+pid)
         c['runtime_plugins'].append(pid)
         c['system_prompt']+='\n'+'\n'.join(v['prompt'] for v in all_catalog['skills'].values() if v['source']=='plugin:'+pid)
     active_plugins={p['id'] for p in extensions.catalog(ROOT,DATA)['plugins'] if p['enabled']}
@@ -1271,7 +1317,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.9.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.10.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1345,14 +1391,14 @@ class Handler(BaseHTTPRequestHandler):
             draft = self.body()
             selected=next((p for p in profiles() if p['id']==draft.get('provider')),None)
             c = validate_config(draft,selected or config())
-            if c.get('type')!='image_api':c=validate_config(draft,request_config(draft))
+            if model_catalog.supports(c,'chat'):c=validate_config(draft,request_config(draft))
             if pathname.endswith('/models'):
                 result = upstream(c, '/models')
                 if not isinstance(result, dict) or not isinstance(result.get('data'), list): raise ApiError(502, '模型列表格式不兼容，可手动填写模型名。')
                 return self.reply(200, {'models': [r['id'] for r in result['data'][:500] if isinstance(r, dict) and isinstance(r.get('id'), str)]})
-            if c.get('type')=='image_api':
+            if not model_catalog.supports(c,'chat'):
                 upstream(c,'/models')
-                return self.reply(200,{'ok':True,'note':'模型目录可连接，实际生图需调用 generate_image'})
+                return self.reply(200,{'ok':True,'note':'模型目录可连接，实际生图需调用 image_gen' if model_catalog.supports(c,'image') else '视频服务商模型目录可连接，视频生成协议待适配'})
             start = time.monotonic()
             completion(c, [{'role': 'user', 'content': 'Reply with OK only.'}])
             return self.reply(200, {'ok': True, 'latency_ms': round((time.monotonic() - start) * 1000)})
@@ -1391,11 +1437,12 @@ class Handler(BaseHTTPRequestHandler):
                         if options.get('_history_epoch')!=epoch:raise ApiError(409,'历史消息已编辑或删除，请另开任务')
                         binding=db.execute('SELECT project_id FROM sessions WHERE id=?',(sid,)).fetchone()
                         if binding['project_id']!=options.get('project_id',''):raise ApiError(409,'会话项目绑定已变化，请另开任务')
-                        c=request_config(options)
-                        c['cross_dispatch_depth']=options.get('_cross_dispatch_depth',0)
-                        if c.get('project_root','')!=options.get('_project_root',''):raise ApiError(409,'项目路径已变化，请另开任务')
                         request=db.execute('SELECT input FROM stream_requests WHERE id=?',(key,)).fetchone()
                         original=json.loads(request['input'])
+                        c=request_config({**options,**original})
+                        if isinstance(options.get('_auto_route'),dict):c['_routing']=options['_auto_route']
+                        c['cross_dispatch_depth']=options.get('_cross_dispatch_depth',0)
+                        if c.get('project_root','')!=options.get('_project_root',''):raise ApiError(409,'项目路径已变化，请另开任务')
                         cursor=db.execute('SELECT COALESCE(MAX(id),0) FROM stream_events WHERE request_id=?',(key,)).fetchone()[0]
                         BUSY.add(sid)
                         try:start_durable_chat(key,sid,options,c,[],original['content'],original['attachments'],resume=True)
@@ -1445,6 +1492,13 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e: raise ApiError(400,str(e)) from None
             return self.reply(200,{'ok':True})
         if pathname == '/api/capabilities' and method == 'GET': return self.reply(200, {**extensions.catalog(ROOT,DATA),'all_skills':extensions.catalog(ROOT,DATA,True)['skills'],'tools':TOOL_DEFS+mcp_client.definitions(DATA)})
+        if pathname == '/api/model-registry' and method == 'GET':return self.reply(200,model_registry.catalog())
+        if pathname == '/api/auto-routing':
+            if method=='GET':return self.reply(200,auto_router.settings(DATA))
+            if method=='PUT':
+                try:value=auto_router.save(DATA,self.body())
+                except ValueError as error:raise ApiError(400,str(error)) from None
+                return self.reply(200,value)
         if pathname == '/api/providers':
             if method == 'GET': return self.reply(200,[public_config(x) for x in profiles()])
             if method == 'POST':
@@ -1585,6 +1639,7 @@ class Handler(BaseHTTPRequestHandler):
                     c = request_config({**request_body,'project_id':selected_project_id})
                     c['session_id']=sid
                     c['_session_id']=sid
+                    c['_attachment_ids']=attachment_ids
                     with database() as db:
                         trust=db.execute('SELECT untrusted_context FROM sessions WHERE id=?',(sid,)).fetchone()
                     if trust and trust['untrusted_context']:c['_untrusted_context']=True
@@ -1741,7 +1796,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.9.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.10.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')

@@ -1,5 +1,6 @@
 """Execution policy, compacted session context and reversible procedural learning."""
 import hashlib
+import model_catalog
 import workspace_tools
 import json
 from pathlib import Path
@@ -8,7 +9,7 @@ import time
 
 LOCK=threading.RLock()
 DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True,'terminal_enabled':False}
-READ_TOOLS={'get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
+READ_TOOLS={'list_image_models','get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
 
 def settings(data):
     path=data/'runtime.json'
@@ -94,7 +95,7 @@ def compact_session(database,sid,c,upstream,force=False):
         after=previous['through_id'] if previous else 0
         rows=[dict(row) for row in db.execute('SELECT id,role,content,attachments FROM messages WHERE session_id=? AND id>? ORDER BY id',(sid,after))]
     if len(rows)<=8:return {'compacted':False,'reason':'保留最近八条消息，当前无需压缩'}
-    if not force and sum(len(row['content']) for row in rows)<c.get('context_chars',60000):return {'compacted':False}
+    if not force and not model_catalog.needs_compaction(c,rows+[{'role':'system','content':c.get('system_prompt','')}]):return {'compacted':False}
     older=rows[:-8]
     while older and older[-1]['role']!='assistant':older.pop()
     if not older:return {'compacted':False}
@@ -164,7 +165,7 @@ def context_position(database,c,messages,content):
 
 def compact_payload(c,payload,upstream,emit):
     messages=payload['messages']
-    if not c.get('auto_compact') or len(json.dumps(messages,ensure_ascii=False))<c.get('context_chars',60000):return
+    if not c.get('auto_compact') or not model_catalog.needs_compaction(c,messages,payload.get('tools')):return
     users=[i for i,m in enumerate(messages) if m['role']=='user']
     cut=users[-2] if len(users)>1 else (users[-1] if users else 0)
     if cut<=1 and users and users[-1]>1:cut=users[-1]

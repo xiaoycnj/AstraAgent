@@ -1,0 +1,60 @@
+.model-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(
+    in srgb,
+    var(--accent-color, var(--blue)) 4%,
+    transparent
+  );
+}
+.model-details-grid label {
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+}
+.model-details-grid input {
+  width: 100%;
+  min-width: 0;
+}
+.provider-capabilities {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+@media (max-width: 520px) {
+  .model-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.registry-dialog {
+  width: min(780px, 94vw);
+  max-height: 85dvh;
+}
+.registry-model-list {
+  max-height: 52dvh;
+  overflow: auto;
+  margin: 12px 0;
+}
+.registry-model-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.registry-model-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.registry-model-row small {
+  display: block;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin-top: 5px;
+}

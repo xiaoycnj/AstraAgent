@@ -5,7 +5,7 @@ import security_core
 LOCK=threading.RLock()
 
 from . import core_tools,image_generation,workspace
-TOOL_MODULES={'calculator':core_tools,'current_time':core_tools,'generate_image':image_generation}
+TOOL_MODULES={'calculator':core_tools,'current_time':core_tools,'generate_image':image_generation,'image_gen':image_generation,'list_image_models':image_generation}
 
 TOOL_MODULES.update({name:workspace for name in workspace.NAMES})
 
@@ -19,7 +19,7 @@ def execute(name,args,config,context):
 def catalog(data=None):
     rows=[{'id':'core-tools','name':'基础计算','tools':['calculator','current_time'],'status':'available'},
             {'id':'workspace','name':'项目与文件','tools':sorted(workspace.NAMES),'status':'available'},
-            {'id':'image-generation','name':'图片生成','tools':['generate_image'],'status':'available'}]
+            {'id':'image-generation','name':'图片生成','tools':['generate_image','image_gen','list_image_models'],'status':'available'}]
     states=read_states(data) if data else {}
     for row in rows:row['enabled']=states.get(row['id'],True) is True
     return rows
