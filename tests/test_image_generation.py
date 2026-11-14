@@ -310,6 +310,13 @@ class ImageGeneration(unittest.TestCase):
         self.assertNotIn("api_key", json.dumps(result))
         self.assertEqual(ImageAPI.calls, [])
 
+    def test_image_usage_belongs_to_agent_run(self):
+        import usage_meter
+        image_generation.execute({'prompt': 'x'}, {**self.config(), '_run_id': 'image-usage-fixture'}, {
+            'data': self.data, 'providers': backend.profiles, 'database': backend.database
+        })
+        self.assertEqual(usage_meter.task_summary(self.data, 'image-usage-fixture')['calls'], 1)
+
     def test_seedream_reference_is_json_generation_without_n(self):
         provider = {**self.provider, 'model': 'doubao-seedream-4-5-251128'}
         raw = image_generation.request_image(provider, {'prompt': '星星', 'size': '2k', 'watermark': False}, {}, [('image/png', PNG)])

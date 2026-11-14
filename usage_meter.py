@@ -55,6 +55,8 @@ def task_summary(data,run_id):
     try:
         with database(data) as db:
             row=dict(db.execute('SELECT COUNT(*) calls,COUNT(total) reported,COALESCE(SUM(total),0) total,COALESCE(SUM(input),0) input,COALESCE(SUM(output),0) output FROM usage_events WHERE run_id=?',(run_id,)).fetchone())
+            row['costs']=[dict(item) for item in db.execute('SELECT currency,SUM(estimated_cost) amount FROM usage_events WHERE run_id=? AND estimated_cost IS NOT NULL GROUP BY currency',(run_id,))]
+            row['unpriced_calls']=db.execute('SELECT COUNT(*) FROM usage_events WHERE run_id=? AND estimated_cost IS NULL',(run_id,)).fetchone()[0]
         return {'available':True,**row}
     except (OSError,sqlite3.Error):return {'available':False}
 

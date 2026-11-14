@@ -54,7 +54,7 @@ def create(db, key, sid, body, config):
     if config.get('id'):options['provider']=config['id']
     if config.get('_routing_deferred'):
         options['model']='AutoModelReview';options['provider']=body.get('provider','')
-    for name in ('file_permission','command_permission','command_mode','memory_policy','auto_memory'):
+    for name in ('file_permission','command_permission','command_mode','memory_policy','auto_memory','container_image','container_memory_mb','container_network'):
         if name in config:options[name]=config[name]
     options['allow_tools']=bool(config.get('tools'))
     options['_cross_dispatch_depth']=config.get('cross_dispatch_depth',0)

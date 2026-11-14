@@ -16,6 +16,7 @@ import auto_router
 import anthropic_messages
 import marketplace
 import application_plugins
+import task_evaluations
 import usage_meter
 import openai_oauth
 import openai_responses
@@ -118,6 +119,7 @@ def initialize():
         execution_state.initialize(db)
         runtime_engine.initialize(db)
         attachments.initialize(db)
+        task_evaluations.initialize(db)
         model_adapters.initialize(db)
         if 'revision' not in {r['name'] for r in db.execute('PRAGMA table_info(canvases)')}:
             db.execute('ALTER TABLE canvases ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
@@ -602,6 +604,10 @@ def refresh_live_permissions(c):
         c['auto_memory']=False
         c['memory_policy']='off'
     c['trusted_commands']=[argv for argv in c.get('trusted_commands',[]) if argv in latest['trusted_commands']]
+    if c.get('command_mode')=='container':
+        c['container_network']=c.get('container_network') is True and latest['container_network'] is True
+        c['container_memory_mb']=min(c.get('container_memory_mb',512),latest['container_memory_mb'])
+        if c.get('container_image')!=latest['container_image']:c['container_image']=''
     if current=='full' and c['access_policy']!='full':
         preferences=c.get('_permission_preferences',{})
         c['file_permission']=preferences.get('file_permission','none')
@@ -701,7 +707,7 @@ def verify_project(c,emit,manual=False):
             return {'error':'验证命令未获批准','exit_code':None}
         refresh_live_permissions(c)
         if c.get('access_policy')=='deny' or c.get('command_permission')=='none':return {'error':'权限已撤销','exit_code':None}
-        command_config={**c,'command_mode':'host','command_permission':'all','_authorized_tool':'execute_command','project_root':project['path']}
+        command_config={**c,'command_mode':'container' if c.get('command_mode')=='container' else 'host','command_permission':'all','_authorized_tool':'execute_command','project_root':project['path']}
         result=agent_environment.command(ROOT,DATA,{'argv':check['argv']},command_config,emit,approve_tool)
         if emit:emit({'type':'verification_command','name':check['name'],'result':result})
         return result
@@ -754,7 +760,14 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
     def work():
         saved_id=None
         answer=''
+        def evaluate(terminal):
+            try:
+                with database() as db:return task_evaluations.finish(db,DATA,sid,run_id,terminal)
+            except (ValueError,OSError,sqlite3.Error) as error:
+                emit({'type':'evaluation_warning','name':str(error)[:200]})
+                return None
         try:
+            with database() as db:task_evaluations.bind(db,sid,run_id)
             emit({'type':'start','run_id':run_id,'request_id':key,'model':auto_router.AUTO if c.get('_routing_deferred') else c['model'],'provider_id':c.get('id',''),'reasoning':c.get('reasoning','default'),'requested_reasoning':c.get('_requested_reasoning',c.get('reasoning','default')),'input':content,'attachments':attachment_ids,'project_id':project_id})
             token.check()
             if resume:
@@ -809,7 +822,8 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
             token.check()
             application_plugins.after_response(ROOT,DATA,database,sid,saved_id,emit)
             execution.finish()
-            emit({'type':'done','content':answer,'message_id':saved_id,'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id'),'usage':usage_meter.task_summary(DATA,run_id)})
+            evaluation=evaluate('done')
+            emit({'type':'done','content':answer,'message_id':saved_id,'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id'),'usage':usage_meter.task_summary(DATA,run_id),'evaluation':evaluation})
         except Exception as error:
             execution.pause(error,isinstance(error,task_control.Cancelled) or token.event.is_set())
             if isinstance(error,task_control.Cancelled) or token.event.is_set():
@@ -817,11 +831,13 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
                 if not saved_id:
                     cancelled=(cancelled+'\n\n任务已取消。已发生的项目变更可检查并回退。').strip()
                     saved_id=save_answer(cancelled)
+                evaluate('cancelled')
                 emit({'type':'cancelled','content':cancelled,'message_id':saved_id,'message':'任务已取消','checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
             else:
                 message=error.message if isinstance(error,ApiError) else str(error)[:300] or '生成中断，可以重新发起任务。'
                 if not saved_id and (partial or c.get('_checkpoint_id')):
                     saved_id=save_answer((''.join(partial)[-60000:]+'\n\n任务中断 · '+message).strip())
+                evaluate('error')
                 emit({'type':'error','message':message,'message_id':saved_id,'checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
         finally:
             execution.close()
@@ -982,7 +998,7 @@ def request_config(body):
     if permission not in ('none','ask','read','all'): raise ApiError(400,'文件权限无效。')
     c['file_permission']=permission
     command_permission=body.get('command_permission','none');command_mode=body.get('command_mode','sandbox');memory_policy=body.get('memory_policy','ask')
-    if command_permission not in ('none','ask','all') or command_mode not in ('sandbox','host') or memory_policy not in ('off','ask','auto'):raise ApiError(400,'命令或记忆策略无效')
+    if command_permission not in ('none','ask','all') or command_mode not in ('sandbox','host','container') or memory_policy not in ('off','ask','auto'):raise ApiError(400,'命令或记忆策略无效')
     if type(body.get('auto_memory',False)) is not bool:raise ApiError(400,'主动记忆开关无效')
     c.update(command_permission=command_permission,command_mode=command_mode,memory_policy=memory_policy,auto_memory=body.get('auto_memory',False))
     if 'allow_tools' in body:
@@ -1022,6 +1038,7 @@ def request_config(body):
     policy=min((requested,runtime['access_policy']),key=ranks.get)
     if policy not in ('deny','ask','trusted','full'):raise ApiError(400,'权限档位无效')
     c.update({key:runtime[key] for key in ('trusted_commands','context_chars','tool_rounds','tool_calls','auto_compact','skill_learning')})
+    c.update({key:runtime[key] for key in ('container_image','container_memory_mb','container_network')})
     c['access_policy']=policy
     c['_live_permissions']=True
     if body.get('project_id'):configure_project(c,body['project_id'])
@@ -1034,7 +1051,7 @@ def request_config(body):
     elif policy=='ask':
         if c.get('memory_policy')=='auto':c['memory_policy']='ask'
     c['_permission_preferences']={key:c[key] for key in ('file_permission','command_permission','command_mode')}
-    if policy=='full':c.update(file_permission='all',command_permission='all',command_mode='host')
+    if policy=='full':c.update(file_permission='all',command_permission='all',command_mode='container' if command_mode=='container' else 'host')
     module_tools=feature_modules.available_tools(DATA)
     c['tools']=[name for name in c['tools'] if name not in feature_modules.TOOL_MODULES or name in module_tools]
     if c['skill_learning'] and c.get('tools'):c['system_prompt']+='\n任务成功后可用 evolve_skill 把可复用步骤、失败教训与验证方法保存成 Skill，保留版本。需要跨窗口工作时使用 list_sessions/read_session/dispatch_session。'
@@ -1205,6 +1222,23 @@ class Handler(BaseHTTPRequestHandler):
             if method=='PUT':
                 try:return self.reply(200,project_workspace.save(DATA,self.body()))
                 except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
+        if pathname=='/api/evaluations':
+            try:
+                with database() as db:
+                    if method=='GET':result=task_evaluations.catalog(db)
+                    elif method=='PUT':result=task_evaluations.save(db,DATA,self.body())
+                    else:raise ApiError(405,'请求方法无效')
+                return self.reply(200,result)
+            except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
+        if pathname.startswith('/api/evaluations/') and method=='POST':
+            parts=pathname.strip('/').split('/')
+            try:
+                with database() as db:
+                    if len(parts)==4 and parts[3]=='start':result=task_evaluations.start(db,DATA,parts[2])
+                    elif len(parts)==4 and parts[3]=='review':result=task_evaluations.review(db,parts[2],self.body())
+                    else:raise ApiError(404,'验收接口不存在')
+                return self.reply(200,result)
+            except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
         if pathname.startswith('/api/projects/'):
             parts=pathname.strip('/').split('/')
             if len(parts)==4:
@@ -1215,6 +1249,11 @@ class Handler(BaseHTTPRequestHandler):
                         body=self.body()
                         if action=='diff':return self.reply(200,project_workspace.diff(DATA,key,body.get('checkpoint_id','')))
                         if action=='rollback':return self.reply(200,project_workspace.rollback(DATA,key,body.get('checkpoint_id',''),body.get('revision')))
+                        if action=='review':
+                            if runtime_engine.settings(DATA)['access_policy']=='deny':raise ApiError(403,'当前权限禁止修改审阅状态或文件')
+                            result=project_workspace.review(DATA,key,body)
+                            workbench.invalidate_files(project_workspace.get(DATA,key)['path'])
+                            return self.reply(200,result)
                         if action in ('checkpoint','verify'):
                             owner='manual-'+uuid.uuid4().hex
                             project_workspace.acquire(key,owner)
@@ -1287,6 +1326,9 @@ class Handler(BaseHTTPRequestHandler):
             if method=='PUT':
                 try:return self.reply(200,runtime_engine.save_settings(DATA,self.body()))
                 except ValueError as error:raise ApiError(400,str(error)) from None
+        if pathname=='/api/runtime/isolation' and method=='GET':
+            import container_runtime
+            return self.reply(200,container_runtime.status())
         if pathname in ('/api/dlc','/api/dlc/status','/api/dlc/install','/api/dlc/cancel'):
             manager=dlc_manager.manager(ROOT)
             try:
@@ -1468,6 +1510,10 @@ class Handler(BaseHTTPRequestHandler):
                         request=db.execute('SELECT input FROM stream_requests WHERE id=?',(key,)).fetchone()
                         original=json.loads(request['input'])
                         c=request_config({**options,**original})
+                        if options.get('command_mode')=='container':
+                            if not options.get('container_image') or options['container_image']!=c.get('container_image'):raise ApiError(409,'容器镜像配置已变化，请新建任务')
+                            c['container_network']=c['container_network'] is True and options.get('container_network') is True
+                            c['container_memory_mb']=min(c['container_memory_mb'],options.get('container_memory_mb',512))
                         if isinstance(options.get('_auto_route'),dict):c['_routing']=options['_auto_route']
                         c['cross_dispatch_depth']=options.get('_cross_dispatch_depth',0)
                         if c.get('project_root','')!=options.get('_project_root',''):raise ApiError(409,'项目路径已变化，请另开任务')

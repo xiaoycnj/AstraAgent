@@ -9,6 +9,7 @@ import time
 
 LOCK=threading.RLock()
 DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True,'terminal_enabled':False}
+DEFAULTS.update(container_image='',container_memory_mb=512,container_network=False)
 READ_TOOLS={'list_image_models','get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
 
 def settings(data):
@@ -27,6 +28,10 @@ def _save_settings(data,body):
         if type(value[key]) is not int or not low<=value[key]<=high:raise ValueError(key+' 超出范围')
     for key in ('auto_compact','skill_learning','terminal_enabled'):
         if type(value[key]) is not bool:raise ValueError('开关格式无效')
+    import container_runtime
+    if not isinstance(value['container_image'],str) or (value['container_image'] and not container_runtime.IMAGE_ID.fullmatch(value['container_image'])):raise ValueError('容器镜像需使用本地 sha256 镜像 ID')
+    if type(value['container_memory_mb']) is not int or not 128<=value['container_memory_mb']<=8192:raise ValueError('容器内存需为 128–8192 MB')
+    if type(value['container_network']) is not bool:raise ValueError('容器网络开关无效')
     commands=value['trusted_commands']
     if not isinstance(commands,list) or len(commands)>80 or any(not isinstance(command,list) or not command or len(command)>30 or any(not isinstance(arg,str) or len(arg)>1000 for arg in command) for command in commands):raise ValueError('信任命令需为完整 argv 数组列表')
     with LOCK:
@@ -46,6 +51,9 @@ def authorize(name,args,c,emit,approve):
         permission=c.get('command_permission','all')
         if permission=='none':return False
         needs_confirmation=permission=='ask'
+        if c.get('command_mode')=='container':
+            if c.get('file_permission','none')=='none':return False
+            needs_confirmation=needs_confirmation or c.get('file_permission')=='ask'
     if needs_confirmation:return bool(emit and approve(name,args,emit))
     if c.get('_untrusted_context') and name not in READ_TOOLS:
         return bool(emit and approve(name,args,emit))

@@ -32,6 +32,7 @@ def database(data):
             CREATE TABLE IF NOT EXISTS checkpoints(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,label TEXT NOT NULL,run_id TEXT,manifest TEXT NOT NULL,created TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS verifications(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,run_id TEXT,results TEXT NOT NULL,revision TEXT NOT NULL,verdict TEXT NOT NULL,created TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS rollbacks(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,checkpoint_id TEXT NOT NULL,undo_id TEXT NOT NULL,status TEXT NOT NULL,error TEXT NOT NULL DEFAULT '');
+            CREATE TABLE IF NOT EXISTS reviews(project_id TEXT NOT NULL,checkpoint_id TEXT NOT NULL,path TEXT NOT NULL,fingerprint TEXT NOT NULL,scope TEXT NOT NULL,created TEXT NOT NULL,PRIMARY KEY(project_id,checkpoint_id,path,fingerprint,scope));
         ''')
         yield db
         db.commit()
@@ -229,6 +230,8 @@ def diff(data, key, identifier, token=None, current=None):
     if current is None:current = scan(data, project, token=token)
     changes = []
     root = Path(project['path'])
+    with database(data) as db:
+        reviewed = {(row['path'], row['fingerprint'], row['scope']) for row in db.execute('SELECT path,fingerprint,scope FROM reviews WHERE project_id=? AND checkpoint_id=?', (key, identifier))}
     for relative in sorted(set(baseline) | set(current)):
         before = baseline.get(relative)
         after = current.get(relative)
@@ -245,8 +248,85 @@ def diff(data, key, identifier, token=None, current=None):
                 text = ''.join(difflib.unified_diff(raw_before.decode('utf-8').splitlines(keepends=True), raw_after.decode('utf-8').splitlines(keepends=True), fromfile='before/' + relative, tofile='after/' + relative))[:100000]
             except UnicodeError:
                 binary = True
-        changes.append({'path': relative, 'kind': 'added' if not before else 'deleted' if not after else 'modified', 'binary': binary, 'diff': text, 'before': before, 'after': after})
+        fingerprint = hashlib.sha256(json.dumps([before, after], sort_keys=True).encode()).hexdigest()
+        hunks = []
+        if before and after and not binary and text and len(raw_before) + len(raw_after) <= 1_000_000:
+            for block in change_blocks(raw_before, raw_after):
+                hunks.append({'id': block['id'], 'diff': block['diff'], 'reviewed': (relative, fingerprint, block['id']) in reviewed})
+        changes.append({'path': relative, 'kind': 'added' if not before else 'deleted' if not after else 'modified', 'binary': binary, 'diff': text, 'before': before, 'after': after, 'hunks': hunks, 'reviewed': (relative, fingerprint, '*') in reviewed})
     return {'checkpoint_id': identifier, 'revision': revision(current), 'changes': changes, 'excluded_directories': sorted(EXCLUDED)}
+
+
+def change_blocks(before, after):
+    old = before.decode('utf-8').splitlines(keepends=True)
+    new = after.decode('utf-8').splitlines(keepends=True)
+    blocks = []
+    for group in difflib.SequenceMatcher(None, old, new).get_grouped_opcodes(3):
+        start_old, end_old = group[0][1], group[-1][2]
+        start_new, end_new = group[0][3], group[-1][4]
+        signature = json.dumps([start_old, end_old, start_new, end_new, old[start_old:end_old], new[start_new:end_new]])
+        text = ''.join(difflib.unified_diff(old[start_old:end_old], new[start_new:end_new], fromfile='before', tofile='after'))
+        blocks.append({'id': hashlib.sha256(signature.encode()).hexdigest(), 'diff': text, 'old': (start_old, end_old), 'new': (start_new, end_new)})
+        if len(blocks) >= 100:
+            break
+    return blocks
+
+
+def review(data, key, body):
+    action = body.get('action')
+    if action not in ('keep', 'revert'):
+        raise ValueError('审阅操作无效')
+    relative = body.get('path')
+    if not isinstance(relative, str):
+        raise ValueError('请选择要审阅的文件')
+    owner = 'review-' + uuid.uuid4().hex
+    acquire(key, owner)
+    try:
+        with LOCK:
+            preview = diff(data, key, body.get('checkpoint_id', ''))
+            if body.get('revision') != preview['revision']:
+                raise FileExistsError('项目在预览后已发生变化，请刷新差异')
+            change = next((row for row in preview['changes'] if row['path'] == relative), None)
+            if change is None:
+                raise ValueError('此文件没有可审阅的变更')
+            scope = body.get('hunk_id') or '*'
+            if not isinstance(scope, str) or (scope != '*' and scope not in {row['id'] for row in change['hunks']}):
+                raise ValueError('变更块已过期或不支持局部撤销')
+            if action == 'keep':
+                fingerprint = hashlib.sha256(json.dumps([change['before'], change['after']], sort_keys=True).encode()).hexdigest()
+                with database(data) as db:
+                    db.execute('INSERT OR REPLACE INTO reviews VALUES(?,?,?,?,?,?)', (key, preview['checkpoint_id'], relative, fingerprint, scope, now()))
+                return {'ok': True, 'action': action, 'path': relative, 'revision': preview['revision']}
+            undo = checkpoint(data, key, '局部撤销前保护检查点')
+            if undo['revision'] != preview['revision']:
+                raise FileExistsError('项目在审阅时发生变化，请刷新差异')
+            root = Path(get(data, key)['path'])
+            if scope == '*':
+                path = target(root, relative)
+                expected = change['after']
+                if path.exists() != (expected is not None) or (expected and hashlib.sha256(path.read_bytes()).hexdigest() != expected['sha256']):
+                    raise FileExistsError('文件在审阅时被外部修改，请刷新差异')
+                restore_entry(data, root, relative, change['before'])
+            else:
+                old = (data / 'project-history/blobs' / change['before']['sha256']).read_bytes()
+                after = target(root, relative).read_bytes()
+                if hashlib.sha256(old).hexdigest() != change['before']['sha256'] or hashlib.sha256(after).hexdigest() != change['after']['sha256']:
+                    raise FileExistsError('文件在审阅时发生变化，请刷新差异')
+                block = next(row for row in change_blocks(old, after) if row['id'] == scope)
+                lines = after.decode('utf-8').splitlines(keepends=True)
+                start, end = block['new']
+                before_start, before_end = block['old']
+                lines[start:end] = old.decode('utf-8').splitlines(keepends=True)[before_start:before_end]
+                raw = ''.join(lines).encode('utf-8')
+                digest = hashlib.sha256(raw).hexdigest()
+                blobs = data / 'project-history/blobs'
+                temporary = blobs / (digest + '.' + secrets.token_hex(6))
+                temporary.write_bytes(raw)
+                temporary.replace(blobs / digest)
+                restore_entry(data, root, relative, {**change['after'], 'sha256': digest, 'size': len(raw)})
+            return {'ok': True, 'action': action, 'path': relative, 'undo_checkpoint': undo['id']}
+    finally:
+        release(key, owner)
 
 
 def restore_entry(data, root, relative, entry):

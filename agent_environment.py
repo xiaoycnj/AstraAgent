@@ -9,18 +9,24 @@ import task_control
 import runtime_paths
 from contextlib import nullcontext
 import workbench
+import container_runtime
 
 def environment(root,data,c):
-    return {'agent':{'name':'AstraAgent','version':'3.14.0','model':c.get('model',''),'provider_base_url':c.get('base_url',''),'loaded_plugins':c.get('runtime_plugins',[]),'active_skill':c.get('active_skill','general'),'architecture':'local Python + SQLite, OpenAI-compatible agent tool loop'},'data_directory_security':security_core.DIRECTORY_STATUS.get(str(data.resolve()),{}),'platform':platform.system(),'python':platform.python_version(),'app_root':str(root),'workspace':str(c.get('project_root') or data/'files'),'memory':str(root/'memory'),'permissions':{'policy':c.get('access_policy','legacy'),'files':c.get('file_permission','none'),'commands':c.get('command_permission','none'),'command_mode':c.get('command_mode','sandbox'),'memory':c.get('memory_policy','ask')},'tools':c.get('tools',[]),'sandbox':{'type':'restricted-command-worker','os_isolation':False,'shell':False,'network_in_worker':False,'timeout_seconds':c.get('command_timeout',120),'output_limit':64000,'commands':sandbox_worker.COMMANDS},'host_commands':'由统一权限控制器决定是否批准','terminal_shells':[name for name,argv in workbench.available_shells()],'integrations':['CSV reader','JSON reader','file search','sha256','local memory','approved native CLI']}
+    return {'agent':{'name':'AstraAgent','version':'3.14.0','model':c.get('model',''),'provider_base_url':c.get('base_url',''),'loaded_plugins':c.get('runtime_plugins',[]),'active_skill':c.get('active_skill','general'),'architecture':'local Python + SQLite, OpenAI-compatible agent tool loop'},'data_directory_security':security_core.DIRECTORY_STATUS.get(str(data.resolve()),{}),'platform':platform.system(),'python':platform.python_version(),'app_root':str(root),'workspace':str(c.get('project_root') or data/'files'),'memory':str(root/'memory'),'permissions':{'policy':c.get('access_policy','legacy'),'files':c.get('file_permission','none'),'commands':c.get('command_permission','none'),'command_mode':c.get('command_mode','sandbox'),'memory':c.get('memory_policy','ask')},'tools':c.get('tools',[]),'sandbox':{'type':'restricted-command-worker','os_isolation':False,'shell':False,'network_in_worker':False,'timeout_seconds':c.get('command_timeout',120),'output_limit':64000,'commands':sandbox_worker.COMMANDS},'container':{'selected':c.get('command_mode')=='container','image':c.get('container_image',''),'network':c.get('container_network',False),'memory_mb':c.get('container_memory_mb',512),'engine_status':container_runtime.status() if c.get('command_mode')=='container' else {'available':None}},'host_commands':'由统一权限控制器决定是否批准','terminal_shells':[name for name,argv in workbench.available_shells()],'integrations':['CSV reader','JSON reader','file search','sha256','local memory','approved native CLI']}
 
 def command(root,data,args,c,emit,approve):
     if c.get('command_permission','none')=='none':return {'error':'命令执行未授权'}
     argv=args.get('argv');mode=c.get('command_mode','sandbox')
     if not isinstance(argv,list) or not 1<=len(argv)<=20 or any(not isinstance(x,str) or not x or len(x)>16000 for x in argv):return {'error':'argv 必须为非空字符串数组'}
-    if (mode=='host' or c['command_permission']=='ask') and c.get('_authorized_tool')!='execute_command':
-        if not emit or not approve('execute_command',{'mode':mode,'argv':argv,'cwd':str(data/'files')},emit):return {'error':'命令未获批准'}
+    if mode=='container' and c.get('file_permission','none')=='none':return {'error':'当前文件权限禁止挂载工作区'}
+    if (mode=='host' or c['command_permission']=='ask' or (mode=='container' and c.get('file_permission')=='ask')) and c.get('_authorized_tool')!='execute_command':
+        if not emit or not approve('execute_command',{'mode':mode,'argv':argv,'cwd':str(c.get('project_root') or data/'files')},emit):return {'error':'命令未获批准'}
+        if mode=='container':c={**c,'_authorized_tool':'execute_command'}
     task_control.check(c)
     workspace=Path(c['project_root']).resolve() if c.get('project_root') else (data/'files').resolve();workspace.mkdir(parents=True,exist_ok=True)
+    if mode=='container':
+        try:return container_runtime.execute(workspace,argv,c)
+        except (ValueError,OSError) as error:return {'error':str(error)[:300],'mode':'container','isolated':False}
     env=dict(os.environ) if c.get('access_policy')=='full' else {k:v for k,v in os.environ.items() if k.upper() in ('SYSTEMROOT','WINDIR','PATH','PATHEXT','COMSPEC','TEMP','TMP','USERPROFILE','HOMEDRIVE','HOMEPATH','APPDATA','LOCALAPPDATA')};env.update({'PYTHONIOENCODING':'utf-8','PYTHONUTF8':'1'})
     executable=[sys.executable,'-I','-S',str(root/'sandbox_worker.py'),str(workspace)] if mode=='sandbox' else runtime_paths.command_argv(root,argv)
     try:

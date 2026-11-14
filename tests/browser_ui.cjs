@@ -116,6 +116,49 @@ async function main() {
     assert.equal((await fileDownload).suggestedFilename(), '交付验证.md');
     await page.evaluate(() => closeResources());
     evidence.direct_file_download = true;
+    await page.evaluate(() => openWorkbench('evaluations'));
+    await page.locator('#task-evaluations button').filter({hasText: /^Creator$/}).click();
+    await page.locator('#evaluation-name').fill('Browser acceptance fixture');
+    await page.locator('#evaluation-prompt').fill('Create an HTML file for this acceptance fixture.');
+    await page.locator('#task-evaluations button').filter({hasText: '保存验收任务'}).click();
+    const acceptance = page.locator('#task-evaluations article').filter({hasText: 'Browser acceptance fixture'});
+    await acceptance.waitFor();
+    await acceptance.getByRole('button', {name: '创建验收会话'}).click();
+    await page.waitForFunction(() => document.querySelector('#chat-input').value === 'Create an HTML file for this acceptance fixture.');
+    assert.equal(await page.locator('.workbench-drawer').isVisible(), false);
+    await page.evaluate(() => openWorkbench('evaluations'));
+    await page.locator('#task-evaluations summary').filter({hasText: '待发送'}).waitFor();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({width, height: 1000});
+      await noOverflow('#task-evaluations');
+    }
+    await page.evaluate(() => closeWorkbench());
+    evidence.task_acceptance_session = true;
+    const reviewFolder = path.join(folder, 'review-project');
+    fs.mkdirSync(reviewFolder);
+    const reviewFile = path.join(reviewFolder, 'sample.txt');
+    const originalLines = Array.from({length: 40}, (_, index) => 'line ' + index + '\n').join('');
+    fs.writeFileSync(reviewFile, originalLines);
+    const reviewProject = await page.evaluate(async (root) => {
+      const project = await api('/api/projects', 'PUT', {name: 'Review fixture', path: root});
+      await api('/api/projects/' + project.id + '/checkpoint', 'POST', {label: 'Browser review baseline'});
+      return project;
+    }, reviewFolder);
+    fs.writeFileSync(reviewFile, originalLines.replace('line 2\n', 'first edit\n').replace('line 33\n', 'second edit\n'));
+    await page.evaluate(async (key) => {await refreshProjects(); await bindProject(key); openWorkbench('project');}, reviewProject.id);
+    await page.locator('#project-review .project-evidence > details > summary').click();
+    await page.locator('#project-review').getByRole('button', {name: '撤销此块', exact: true}).first().click();
+    await page.locator('.app-dialog[open] button.primary').click();
+    await page.waitForFunction(() => document.querySelector('#toast').textContent === '已撤销所选变更');
+    assert.equal(fs.readFileSync(reviewFile, 'utf8'), originalLines.replace('line 33\n', 'second edit\n'));
+    await page.locator('#project-review .project-evidence > details > summary').click();
+    fs.writeFileSync(reviewFile, 'external edit');
+    await page.locator('#project-review').getByRole('button', {name: '撤销文件', exact: true}).click();
+    await page.locator('.app-dialog[open] button.primary').click();
+    await page.waitForFunction(() => document.querySelector('#project-review .project-evidence').textContent.includes('预览后已发生变化'));
+    assert.equal(fs.readFileSync(reviewFile, 'utf8'), 'external edit');
+    await page.evaluate(async () => {await bindProject(''); await closeWorkbench();});
+    evidence.partial_review_and_conflict = true;
     await page.evaluate(() => {
       state.messages = [
         {

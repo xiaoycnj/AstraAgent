@@ -17,4 +17,11 @@
 
 :root[data-theme=dark] .project-dialog{background:#202737}
 .project-dialog .secondary,.project-dialog .custom-select{background:var(--soft);color:var(--ink)}
+#task-evaluations .project-history>article{padding:14px}
+#task-evaluations .project-change>p{margin:10px 14px;line-height:1.7;overflow-wrap:anywhere}
+#task-evaluations .project-change>.project-field,#task-evaluations .project-change>.switch-pill{margin:12px}
+#task-evaluations .project-field,#container-settings .project-field{min-width:0}
+#task-evaluations .project-form .custom-select{width:100%;box-sizing:border-box}
+.project-change>.project-row{padding:10px;margin:0}
+#container-settings .project-field{margin:12px 0}
 :root[data-theme=dark] .project-dialog .secondary,:root[data-theme=dark] .project-dialog .custom-select{background:#293143;color:#d5deef}

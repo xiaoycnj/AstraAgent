@@ -274,7 +274,7 @@ def execute(args, config, context, name=None):
     images = reference_images(args, config, context)
     if not provider.get("base_url") or not provider.get("model"):
         raise ValueError("请完善图片服务商的地址与模型配置")
-    runtime = {**provider, "_cancel_token": config.get("_cancel_token")}
+    runtime = {**provider, "_cancel_token": config.get("_cancel_token"), "_run_id": config.get("_run_id")}
     def invoke(call_config):
         result = request_image(provider, args, call_config, images) if images else request_image(provider, args, call_config)
         runtime['_image_revised_prompt'] = call_config.get('_image_revised_prompt')

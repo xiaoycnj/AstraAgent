@@ -328,7 +328,20 @@ async function showProjectDiff() {
         const details = elem('details', 'project-change');
         const summary = elem('summary', '', ({added:'新增',deleted:'删除',modified:'修改'}[change.kind]) + ' · ' + change.path);
         const pre = elem('pre', 'project-diff', change.diff || (change.binary ? '二进制文件已变化' : '内容或权限已变化，文件过大时省略文本预览'));
-        details.append(summary, pre);
+        const actions = elem('div', 'project-row');
+        actions.append(actionButton(change.reviewed ? '已保留文件' : '保留文件', () => reviewProjectChange(result, change, 'keep'), 'secondary'),
+            actionButton('撤销文件', () => reviewProjectChange(result, change, 'revert'), 'secondary danger-text'));
+        details.append(summary, actions);
+        if (change.hunks?.length) {
+            for (const hunk of change.hunks) {
+                const block = elem('section', 'project-change');
+                const controls = elem('div', 'project-row');
+                controls.append(actionButton(hunk.reviewed || change.reviewed ? '已保留此块' : '保留此块', () => reviewProjectChange(result, change, 'keep', hunk.id), 'secondary'),
+                    actionButton('撤销此块', () => reviewProjectChange(result, change, 'revert', hunk.id), 'secondary danger-text'));
+                block.append(controls, elem('pre', 'project-diff', hunk.diff));
+                details.append(block);
+            }
+        } else details.append(pre);
         if (change.kind !== 'deleted' && !change.binary) {
             details.append(actionButton('在编辑器打开', async () => {
                 openWorkbench('files');
@@ -336,6 +349,30 @@ async function showProjectDiff() {
             }, 'secondary'));
         }
         projectEvidence.append(details);
+    }
+}
+async function reviewProjectChange(preview, change, action, hunkId) {
+    const projectId = selectedProjectId;
+    if (previewedChanges?.project_id !== projectId || previewedChanges.revision !== preview.revision) return;
+    if (action === 'revert') {
+        if (!await confirmEditorChange()) return;
+        if (!await appConfirm('撤销' + (hunkId ? '此变更块' : '此文件的变更') + '？操作前会保存保护检查点。\n' + change.path)) return;
+    }
+    try {
+        await api('/api/projects/' + projectId + '/review', 'POST', {
+            checkpoint_id: preview.checkpoint_id, revision: preview.revision, path: change.path, action, hunk_id: hunkId
+        });
+        if (selectedProjectId !== projectId) return;
+        if (action === 'revert') clearProjectEditor();
+        await refreshProjectHistory();
+        checkpointChooser.value = preview.checkpoint_id;
+        checkpointChooser._refresh();
+        await showProjectDiff();
+        toast(action === 'keep' ? '已记录审阅结果' : '已撤销所选变更');
+    } catch (error) {
+        if (selectedProjectId !== projectId) return;
+        previewedChanges = null;
+        projectEvidence.textContent = error.message + '。请刷新差异。';
     }
 }
 async function rollbackProject() {
