@@ -48,17 +48,9 @@ function enhanceUiElement(element) {
   const compactList = elem("div", "compact-app-menu-list");
   compactMenu.append(compactTitle, compactList);
   appMenus[0].before(compactMenu);
-  const compactChrome = matchMedia("(max-width:600px)");
-  function syncAppMenus() {
-    compactMenu.open = false;
-    compactMenu.hidden = !compactChrome.matches;
-    for (const menu of appMenus) {
-      menu.open = false;
-      if (compactChrome.matches) compactList.append(menu);
-      else compactMenu.before(menu);
-    }
-    window.reportWindowChrome?.();
-  }
+  for (const menu of appMenus) compactList.append(menu);
+  compactTitle.textContent = "AstraAgent";
+  window.reportWindowChrome?.();
   compactList.addEventListener("click", (event) => {
     if (event.target.closest("button")) compactMenu.open = false;
   });
@@ -73,8 +65,6 @@ function enhanceUiElement(element) {
   document.addEventListener("pointerdown", (event) => {
     if (!compactMenu.contains(event.target)) compactMenu.open = false;
   });
-  compactChrome.addEventListener("change", syncAppMenus);
-  syncAppMenus();
   // Infrequent context maintenance belongs with the conversation's other options.
   composerOptionsPanel.append(compactButton);
   function registerTree(root) {
@@ -159,11 +149,11 @@ function enhanceUiElement(element) {
   navigation.addEventListener("keydown", (event) => {
     if (
       !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) ||
-      !event.target.matches("[data-settings-tab]")
+      !event.target.matches("[data-settings-group]")
     )
       return;
     const buttons = [
-      ...navigation.querySelectorAll("[data-settings-tab]"),
+      ...navigation.querySelectorAll("[data-settings-group]"),
     ].filter((button) => !button.hidden && !button.disabled);
     const current = buttons.indexOf(document.activeElement);
     const index =
@@ -177,7 +167,7 @@ function enhanceUiElement(element) {
     buttons[index]?.focus();
   });
   function syncCategoryTabStops() {
-    const buttons = [...navigation.querySelectorAll("[data-settings-tab]")];
+    const buttons = [...navigation.querySelectorAll("[data-settings-group]")];
     const visible = buttons.filter((button) => !button.hidden);
     const current =
       visible.find(
@@ -189,7 +179,7 @@ function enhanceUiElement(element) {
   settingsSearch.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      navigation.querySelector('[data-settings-tab][tabindex="0"]')?.focus();
+      navigation.querySelector('[data-settings-group][tabindex="0"]')?.focus();
     }
   });
 
@@ -217,36 +207,166 @@ function enhanceUiElement(element) {
   });
   selectIntegration(integrationCurrent);
 
+  const settingGroups = [
+    {
+      id: "connection",
+      title: "模型与语音",
+      icon: "canvas",
+      pages: [
+        ["connection", "模型服务"],
+        ["voice", "语音"],
+      ],
+    },
+    {
+      id: "general",
+      title: "常规",
+      icon: "settings",
+      pages: [["general", "常规"]],
+    },
+    {
+      id: "appearance",
+      title: "外观",
+      icon: "sun",
+      pages: [
+        ["appearance", "主题与材质"],
+        ["icons", "图标库"],
+      ],
+    },
+    {
+      id: "capabilities",
+      title: "扩展能力",
+      icon: "tools",
+      pages: [["capabilities", "扩展能力"]],
+    },
+    {
+      id: "profile",
+      title: "个人与记忆",
+      icon: "review",
+      pages: [
+        ["profile", "个人资料"],
+        ["instructions", "自定义指令"],
+        ["memory", "本地记忆"],
+      ],
+    },
+    {
+      id: "storage",
+      title: "数据与应用",
+      icon: "note",
+      pages: [
+        ["storage", "存储空间"],
+        ["archives", "已归档的聊天"],
+        ["about", "关于 AstraAgent"],
+      ],
+    },
+  ];
+  const categoryButtons = new Map(
+    [...navigation.querySelectorAll("[data-settings-tab]")].map((button) => [
+      button.dataset.settingsTab,
+      button,
+    ]),
+  );
+  const secondaryStore = elem("div");
+  secondaryStore.hidden = true;
+  secondaryStore.id = "settings-secondary-actions";
+  document.body.append(secondaryStore);
+  secondaryStore.append(...categoryButtons.values());
+  navigation.replaceChildren(navHeading, backSettings, settingsSearch);
+  const subnavigation = elem("nav", "settings-subnav");
+  subnavigation.setAttribute("role", "tablist");
+  subnavigation.setAttribute("aria-label", "设置选项");
+  header.append(subnavigation);
+  let currentSettingGroup = "general";
+  for (const group of settingGroups) {
+    const button = actionButton(
+      "",
+      () => selectSettingsTab(group.id),
+      "settings-category-link",
+    );
+    button.dataset.settingsGroup = group.id;
+    button.append(svgIcon(group.icon), elem("span", "", group.title));
+    button.dataset.search = [group.title, ...group.pages.flat()].join(" ");
+    navigation.append(button);
+  }
+  settingsSearch.oninput = () => {
+    const query = settingsSearch.value.trim().toLocaleLowerCase();
+    for (const button of navigation.querySelectorAll("[data-settings-group]"))
+      button.hidden =
+        !!query &&
+        !(button.dataset.search + " " + button.textContent)
+          .toLocaleLowerCase()
+          .includes(query);
+    syncCategoryTabStops();
+  };
+  subnavigation.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = [...subnavigation.querySelectorAll("[role=tab]")];
+    const index = buttons.indexOf(document.activeElement);
+    if (index < 0) return;
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? buttons.length - 1
+          : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) %
+            buttons.length;
+    event.preventDefault();
+    buttons[next].click();
+    buttons[next].focus();
+  });
   const selectCategory = selectSettingsTab;
   selectSettingsTab = function (name) {
+    const page = name === "mcp" ? "capabilities" : name;
+    const group =
+      settingGroups.find((item) => item.pages.some(([id]) => id === page)) ||
+      settingGroups[1];
     selectCategory(name);
-    if (!document.querySelector("#settings").hidden)
-      selectRail(
-        { capabilities: "plugins", profile: "profile" }[name] || "settings",
+    currentSettingGroup = group.id;
+    secondaryStore.append(...subnavigation.children);
+    for (const [id, label] of group.pages) {
+      const button = categoryButtons.get(id);
+      if (!button) continue;
+      button.replaceChildren(elem("span", "", label));
+      button.hidden = false;
+      button.id = "settings-tab-" + id;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", String(id === page));
+      button.tabIndex = id === page ? 0 : -1;
+      const panel = [...content.children].find(
+        (node) => node.dataset.panel === id,
       );
-    const selected = navigation.querySelector(
-      '[data-settings-tab="' + CSS.escape(name) + '"]',
-    );
-    heading.textContent = selected?.textContent.trim() || uiText("设置");
+      if (panel) {
+        panel.id ||= "settings-panel-" + id;
+        button.setAttribute("aria-controls", panel.id);
+        panel.setAttribute("aria-labelledby", button.id);
+      }
+      subnavigation.append(button);
+    }
+    subnavigation.hidden = group.pages.length === 1;
+    heading.textContent = uiText(group.title);
+    for (const button of navigation.querySelectorAll("[data-settings-group]")) {
+      const active = button.dataset.settingsGroup === currentSettingGroup;
+      button.classList.toggle("active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
     syncCategoryTabStops();
     const panel = [...content.children].find(
-      (node) => node.dataset.panel === name,
+      (node) => node.dataset.panel === page,
     );
-    const duplicate = panel?.querySelector(
-      ":scope > h2,:scope > .dialog-head h2",
-    );
-    if (duplicate && !duplicate.closest(".provider-host"))
-      duplicate.classList.add("ui-sr-only");
+    panel
+      ?.querySelector(":scope > h2,:scope > .dialog-head h2")
+      ?.classList.add("ui-sr-only");
+    if (!document.querySelector("#settings").hidden)
+      selectRail(
+        { capabilities: "plugins", profile: "profile" }[group.id] || "settings",
+      );
     const closeMenu = document.body.classList.contains(
       "settings-categories-open",
     );
     showCategories(false);
     if (closeMenu) heading.focus({ preventScroll: true });
   };
-  heading.textContent =
-    navigation.querySelector("[aria-current=page]")?.textContent.trim() ||
-    uiText("常规");
-  showCategories(false);
+  selectSettingsTab("general");
 
   const oauthDisclosure = elem(
     "details",

@@ -75,6 +75,24 @@ async function main() {
     assert.equal(await page.locator("#activity-rail").isVisible(), false);
     assert.equal(await page.locator(".pane-backdrop").isVisible(), false);
     assert.equal(await page.locator("#open-side").isVisible(), false);
+    assert.equal(await page.locator(".rail-top .rail-button").count(), 4);
+    assert.equal(
+      await page.locator(".settings-nav [data-settings-group]").count(),
+      6,
+    );
+    assert.doesNotMatch(
+      await page.locator("#toast").textContent(),
+      /not defined/,
+    );
+    assert.equal(await page.locator(".composer-shelf").isVisible(), false);
+    assert.equal(
+      await page.locator(".composer-tools > button:visible").count(),
+      3,
+    );
+    await page.locator(".composer-options > summary").click();
+    assert.equal(await page.locator("#attachment-add").isVisible(), true);
+    assert.equal(await page.locator(".shelf-project").isVisible(), true);
+    await page.keyboard.press("Escape");
     assert.ok((await page.locator("#chat-form").boundingBox()).height < 125);
     assert.ok((await page.locator("#messages").boundingBox()).height > 700);
     assert.equal(
@@ -151,10 +169,7 @@ async function main() {
         evidence.screens.push(category + "-" + theme);
       }
       await page.evaluate(() => selectSettingsTab("connection"));
-      const card = page
-        .locator(".provider-card")
-        .filter({ hasText: "新增服务商" })
-        .first();
+      const card = page.locator("#provider-add");
       await card.click();
       await page.locator(".provider-dialog[open]").waitFor();
       assert.equal(
@@ -172,7 +187,7 @@ async function main() {
       await page.keyboard.press("Escape");
       await page.waitForFunction(
         () =>
-          !providerDialog.open && providerGrid.contains(document.activeElement),
+          !providerDialog.open && providerHost.contains(document.activeElement),
       );
       assert.equal(
         await card.evaluate((el) => el === document.activeElement),
@@ -186,21 +201,41 @@ async function main() {
       showSettings();
       selectSettingsTab("general");
     });
-    await page.locator("[data-settings-tab=general]").focus();
+    await page.locator("#access-policy-choice + .custom-select").click();
+    await page
+      .locator("#custom-select-menu .select-option")
+      .filter({ hasText: "完全访问" })
+      .click();
+    await page.locator(".app-dialog[open]").waitFor();
+    await page
+      .locator(".app-dialog[open]")
+      .getByRole("button", { name: "取消", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        !policyGrid
+          .querySelector("[data-policy=full]")
+          .classList.contains("active"),
+    );
+    assert.equal(
+      await page.locator("#access-policy-choice").inputValue(),
+      "ask",
+    );
+    await page.locator("[data-settings-group=general]").focus();
     await page.keyboard.press("ArrowDown");
     assert.equal(
-      await page.evaluate(() => document.activeElement.dataset.settingsTab),
-      "profile",
+      await page.evaluate(() => document.activeElement.dataset.settingsGroup),
+      "appearance",
     );
     await page.keyboard.press("Enter");
     assert.equal(
       await page.locator(".settings-page-header h1").textContent(),
-      "个人资料",
+      "外观",
     );
     await page.locator('input[placeholder="搜索设置"]').fill("模型");
     await page.keyboard.press("ArrowDown");
     assert.equal(
-      await page.evaluate(() => document.activeElement.dataset.settingsTab),
+      await page.evaluate(() => document.activeElement.dataset.settingsGroup),
       "connection",
     );
     await page.locator('input[placeholder="搜索设置"]').fill("");
@@ -243,7 +278,7 @@ async function main() {
           true,
         );
         await page.locator(".settings-categories").click();
-        await page.locator("[data-settings-tab=appearance]").click();
+        await page.locator("[data-settings-group=appearance]").click();
         assert.equal(await page.locator(".settings-nav").isVisible(), false);
         await noOverflow(".settings-content");
       }

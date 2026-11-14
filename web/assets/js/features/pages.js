@@ -7,7 +7,7 @@ const destinationBody=elem('div','destination-body');destination.append(destinat
 const assetSearch=elem('input');assetSearch.type='search';assetSearch.placeholder='搜索资料库';assetSearch.setAttribute('aria-label','搜索资料库');assetSearch.oninput=renderAssetGrid;
 const pageCounts=elem('span','page-counts');
 function routeUrl(page){const url=new URL(location.href);if(page==='home')url.searchParams.delete('view');else url.searchParams.set('view',page);return url.pathname+url.search}
-function rememberPage(page,replace=false){const method=replace?'replaceState':'pushState';if(location.pathname+location.search!==routeUrl(page)||!history.state?.astraPage)history[method]({astraPage:page},'',routeUrl(page));syncHistoryButtons()}
+function rememberPage(page,replace=false){const method=replace?'replaceState':'pushState';if(location.pathname+location.search!==routeUrl(page)||!history.state?.astraPage)history[method]({astraPage:page},'',routeUrl(page));if(typeof syncHistoryButtons==='function')syncHistoryButtons()}
 async function navigatePage(page,{historyMode='push'}={}){
  if(!['home','images','library','schedule','marketplace'].includes(page))page='home';
  if(!$('#settings').hidden&&!await closeSettingsPage())return false;

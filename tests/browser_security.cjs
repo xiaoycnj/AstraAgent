@@ -46,7 +46,7 @@ async function main() {
     await page.waitForFunction(() => state.token && state.settings);
     assert.equal(await page.evaluate(() => location.hash), '');
     await page.waitForSelector('#nav-home');
-    assert.equal(await page.locator('.rail-top .rail-button').count(),7);
+    assert.equal(await page.locator('.rail-top .rail-button').count(),4);
     assert.equal(await page.locator('#sidebar-toggle').getAttribute('aria-expanded'),'true');
     await page.locator('#sidebar-toggle').click();
     await page.waitForTimeout(280);
@@ -72,6 +72,7 @@ async function main() {
     await page.locator('#history-forward').click();
     await page.waitForFunction(()=>appPage==='library');
     await page.evaluate(()=>api('/api/hub/record','POST',{kind:'task',action:'create',title:'Long record fixture',content:'L'.repeat(1000)}));
+    await page.locator('#nav-more').click();
     await page.locator('#nav-schedule').click();
     await page.waitForFunction(()=>appPage==='schedule');
     await page.locator('.destination-body .hub-section-heading').waitFor();
@@ -92,6 +93,7 @@ async function main() {
     assert.equal(await page.locator('.rail-menu').isVisible(),true);
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.rail-menu').isVisible(),false);
+    await page.locator('#nav-more').click();
     await page.locator('#nav-review').click();
     await page.locator('.workbench-drawer').waitFor();
     await page.evaluate(()=>closeWorkbench());
@@ -103,7 +105,7 @@ async function main() {
     assert.equal(await page.locator('.composer-shelf').count(),1);
     await page.locator('.starter-card').first().click();
     assert.ok(await page.locator('#chat-input').inputValue());
-    await page.locator('.composer-options summary').click();
+    await page.locator('.composer-options > summary').click();
     assert.equal(await page.locator('#review-toggle').isVisible(),true);
     await page.keyboard.press('Escape');
     await page.evaluate(()=>{
@@ -155,6 +157,7 @@ async function main() {
     await page.waitForFunction(() => state.token && state.settings);
     await page.click('#nav-settings');
     await page.evaluate(() => selectSettingsTab('general'));
+    await page.locator('.workspace-disclosure > summary').filter({hasText:'高级执行与安全'}).click();
     await page.getByRole('button', {name: '查看安全记录', exact: true}).click();
     await page.getByRole('heading', {name: '最近 200 条安全记录'}).waitFor();
     await page.getByRole('button', {name: '关闭', exact: true}).last().click();
@@ -183,6 +186,7 @@ async function main() {
     assert.equal(await page.locator('.studio-body').isVisible(),false);
     assert.equal(await page.locator('dialog[open]').count(),0);
     await page.screenshot({path:path.join(root,'work/library-page.png')});
+    await page.locator('#nav-more').click();
     await page.locator('#nav-plugins').click();
     await page.locator('#settings:not([hidden])').waitFor();
     assert.equal(await page.locator('#destination-page').isVisible(),false,'settings must replace library');
@@ -190,16 +194,18 @@ async function main() {
     await page.evaluate(()=>applyTheme('dark'));
     await page.waitForTimeout(500);
     await page.screenshot({path:path.join(root,'work/settings-exclusive.png')});
-    await page.getByRole('button',{name:'返回对话',exact:true}).click();
+    await page.getByRole('button',{name:'返回工作空间',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('#settings').hidden);
     assert.equal(await page.locator('#destination-page').isVisible(),true);
     assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),false);
     for(const origin of ['images','schedule','home']){
+      if(origin==='schedule')await page.locator('#nav-more').click();
       await page.locator('#nav-'+origin).click();
       await page.waitForFunction(name=>appPage===name,origin);
       // The File menu retains its original showSettings callback.
       const fileMenu=page.locator('.desktop-menubar .app-menu').first();
-      await fileMenu.locator('summary').click();
+    await page.locator('.compact-app-menu > summary').click();
+    await fileMenu.locator('summary').click();
       await fileMenu.getByRole('button',{name:'设置',exact:true}).click();
       assert.equal(await page.locator('#destination-page').isVisible(),false);
       assert.equal(await page.locator('.studio-body').isVisible(),false);
@@ -331,6 +337,7 @@ state.close();db.close()
     await page.waitForFunction(()=>profileForm.hidden&&localProfile.region==='中国（澳门）');
     assert.match(await page.locator('.profile-read-view').textContent(),/中国（澳门）/);
     await page.evaluate(()=>{selectSettingsTab('capabilities');selectIntegration('plugins');});
+    await page.locator('.integration-manage > summary').click();
     await page.getByRole('button',{name:'创建应用插件',exact:true}).click();
     await page.locator('#maker-id').fill(fixturePluginId);
     await page.locator('#maker-name').fill('UI Fixture');

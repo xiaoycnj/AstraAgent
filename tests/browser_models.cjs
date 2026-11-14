@@ -62,11 +62,7 @@ async function main() {
       showSettings();
       selectSettingsTab("connection");
     });
-    await page
-      .locator(".provider-card")
-      .filter({ hasText: "新增服务商" })
-      .first()
-      .click();
+    await page.locator("#provider-add").click();
     await page.locator("#provider-name").fill("Autofill fixture");
     await page.locator("#base-url").fill("http://127.0.0.1:9/v1");
     await page.locator("#model-api-id").fill("gpt-5.4");

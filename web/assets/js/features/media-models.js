@@ -168,52 +168,86 @@ expandProvider = function (id, source, mode) {
 imageProviderType.addEventListener("change", () =>
   setProviderCapabilities({ type: imageProviderType.value }),
 );
+const providerToolbar = elem("div", "provider-toolbar");
+const providerSearchInput = elem("input");
+providerSearchInput.type = "search";
+providerSearchInput.placeholder = "搜索服务商";
+providerSearchInput.setAttribute("aria-label", "搜索服务商");
+const providerAddButton = actionButton(
+  "添加服务商",
+  () => expandProvider("", providerAddButton, "new"),
+  "primary",
+);
+providerAddButton.id = "provider-add";
+providerAddButton.prepend(svgIcon("plus"));
+providerToolbar.append(providerSearchInput, providerAddButton);
+providerGrid.before(providerToolbar);
+providerGrid.classList.add("provider-list");
+providerSearchInput.oninput = () => renderProviderCards();
 renderProviderCards = function () {
   providerGrid.replaceChildren();
-  for (const [type, title] of [
-    ["chat_api", "对话服务商"],
-    ["image_api", "图片服务商"],
-    ["video_api", "视频服务商"],
-    ["multimodal_api", "多模态服务商"],
-  ]) {
-    const category = elem("section", "provider-category");
-    const header = elem("div", "provider-grid-heading");
-    header.append(elem("h2", "", title));
-    const cards = elem("div", "provider-cards");
-    category.append(header, cards);
-    providerGrid.append(category);
-    const rows = providerRows.filter(
-      (row) => (row.type || "chat_api") === type,
-    );
-    for (const row of [{ id: "", name: "新增服务商" }, ...rows]) {
-      const card = elem("button", "provider-card");
-      card.type = "button";
-      card.dataset.providerKey = type + "|" + (row.id || "new");
-      card.append(
-        svgIcon(row.id ? "canvas" : "plus"),
-        elem("strong", "", row.name),
-        chevron(),
-      );
-      card.onclick = () => {
-        expandProvider(row.id, card);
-        if (!row.id) {
-          imageProviderType.value = type;
-          imageProviderType._refresh?.();
-          imageProviderType.dispatchEvent(new Event("change"));
-          settingsDirty = false;
-        }
-      };
-      cards.append(card);
-    }
-  }
-  const fallback = actionButton(
-    "默认接口",
-    () => expandProvider("", null, "default"),
-    "provider-card",
+  const kinds = {
+    chat_api: "对话",
+    image_api: "图片",
+    video_api: "视频",
+    multimodal_api: "多模态",
+  };
+  const query = providerSearchInput.value.trim().toLocaleLowerCase();
+  const rows = providerRows.filter(
+    (row) =>
+      !query ||
+      (row.name + " " + row.model + " " + row.base_url)
+        .toLocaleLowerCase()
+        .includes(query),
   );
-  fallback.prepend(svgIcon("settings"));
+  for (const row of rows) {
+    const card = actionButton(
+      "",
+      () => expandProvider(row.id, card),
+      "provider-card",
+    );
+    card.dataset.providerKey = (row.type || "chat_api") + "|" + row.id;
+    const info = elem("span", "provider-card-info");
+    info.dataset.i18nIgnore = "";
+    info.append(
+      elem("strong", "", row.name),
+      elem("small", "", row.model || row.base_url || ""),
+    );
+    card.append(
+      modelLogo(row.model || row.name),
+      info,
+      elem("span", "provider-kind", kinds[row.type] || "对话"),
+      chevron(),
+    );
+    providerGrid.append(card);
+  }
+  if (!rows.length)
+    providerGrid.append(
+      elem(
+        "p",
+        "provider-empty",
+        query ? "没有匹配的服务商。" : "添加一个服务商，即可开始使用模型。",
+      ),
+    );
+  if (
+    query &&
+    !("默认接口 " + uiText("默认接口") + " " + (state.settings.model || ""))
+      .toLocaleLowerCase()
+      .includes(query)
+  )
+    return;
+  const fallback = actionButton(
+    "",
+    () => expandProvider("", fallback, "default"),
+    "provider-card provider-default-card",
+  );
   fallback.dataset.providerKey = "default";
-  fallback.classList.add("provider-default-card");
+  const info = elem("span", "provider-card-info");
+  info.append(
+    elem("strong", "", "默认接口"),
+    elem("small", "", state.settings.model || uiText("未配置模型")),
+  );
+  fallback.append(svgIcon("settings"), info, chevron());
   providerGrid.append(fallback);
 };
 const beforeCostUsage = drawUsage;

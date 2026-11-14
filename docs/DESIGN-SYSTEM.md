@@ -92,3 +92,26 @@
 本轮按 Windows 平台习惯确定字体与窗口控制，采用 Apple HIG 中的内容层级、分组和可控性原则。任务与产物栏仅在没有保存偏好时默认收起，已有偏好继续保留。
 
 上述选择基于官方资料阅读。[Fluent 2 Layout](https://fluent2.microsoft.design/layout)、[Fluent 2 Buttons](https://fluent2.microsoft.design/components/web/react/core/button/usage)、[Apple Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars)、[Apple Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars)、[Apple Settings](https://developer.apple.com/design/human-interface-guidelines/settings)
+
+## V3.14 信息架构
+
+本轮研究了 Cherry Studio 官方主仓库，以及官方 V2 原型的 Sidebar、ChatPage、ChatSettingsPanel、ModelServicePage 和 SettingsPage。采用的交互组织包括独立的功能导航与内容、极简输入模式、当前操作与全局设置分工、基础配置与模型细节的逐层展开。
+
+主导航保留对话、生图、资料库和更多四个入口。定时任务、插件和代码审阅使用更多菜单中的原有按钮。会话栏集中展示新建、搜索和会话列表。项目管理与画布从更多菜单进入。
+
+输入区默认提供添加、权限、模型与发送。附件、项目选择、压缩和审查等动作位于添加菜单，权限状态仍常驻可见。欢迎页仅保留动态问候、技能与插件触发提示、三个紧凑的建议入口。
+
+设置一级导航统一为六组。
+
+| 一级导航 | 组内页面 |
+| --- | --- |
+| 模型与语音 | 模型服务、语音 |
+| 常规 | 语言、权限、高级执行与安全 |
+| 外观 | 主题与材质、图标库 |
+| 扩展能力 | 插件、Skills、MCP、Tools |
+| 个人与记忆 | 个人资料、自定义指令、本地记忆 |
+| 数据与应用 | 存储空间、已归档的聊天、关于 |
+
+服务商采用可搜索列表和单一添加入口，用途在编辑表单内选择。权限选择调用原有策略动作和确认。语言包、执行预算、材质细节、使用统计和创建扩展等低频操作使用分组展开。
+
+这些布局与交互由项目自己的 DOM、CSS 和现有事件处理实现。研究来源用于设计参考。[Cherry Studio 官方仓库](https://github.com/CherryHQ/cherry-studio)、[Sidebar 原型](https://github.com/CherryHQ/cherry-studio-ui-design/blob/main/src/app/components/layout/Sidebar.tsx)、[输入设置原型](https://github.com/CherryHQ/cherry-studio-ui-design/blob/main/src/features/assistant/ChatSettingsPanel.tsx)、[模型服务原型](https://github.com/CherryHQ/cherry-studio-ui-design/blob/main/src/app/components/settings/ModelServicePage.tsx)

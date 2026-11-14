@@ -65,11 +65,7 @@ async function main() {
       await page.locator(".routing-disclosure").getAttribute("open"),
       null,
     );
-    await page
-      .locator(".provider-card")
-      .filter({ hasText: "新增服务商" })
-      .first()
-      .click();
+    await page.locator("#provider-add").click();
     await page.locator(".provider-dialog[open]").waitFor();
     assert.equal(
       await page.locator(".provider-dialog .settings-disclosure[open]").count(),
@@ -118,9 +114,7 @@ async function main() {
     });
     assert.equal(
       await page
-        .locator(".provider-card")
-        .filter({ hasText: "新增服务商" })
-        .first()
+        .locator("#provider-add")
         .evaluate((node) => node === document.activeElement),
       true,
     );
@@ -309,6 +303,9 @@ async function main() {
         selectSettingsTab("profile");
       });
       await surface.waitForFunction(() => usageData?.totals.total === 30);
+      await surface
+        .locator("#token-activity")
+        .evaluate((el) => (el.closest("details").open = true));
       for (const theme of ["light", "dark"]) {
         await surface.evaluate((theme) => applyTheme(theme), theme);
         for (const mode of ["daily", "weekly", "cumulative"]) {
@@ -354,6 +351,9 @@ async function main() {
         }
       }
       await surface.locator(".token-mode[data-mode=daily]").click();
+      await surface
+        .locator("#token-activity")
+        .evaluate((el) => (el.closest("details").open = true));
       await surface.locator('.token-cell[data-tokens="20"]').focus();
       assert.equal(await surface.locator("#token-tooltip").isVisible(), true);
       await surface.keyboard.press("Enter");
@@ -363,6 +363,9 @@ async function main() {
           .textContent(),
         /20 Token/,
       );
+      await surface
+        .locator("#token-activity")
+        .evaluate((el) => (el.closest("details").open = true));
       await surface.locator("#token-activity").scrollIntoViewIfNeeded();
       await surface.screenshot({
         path: path.join(root, "work/heatmap-" + inputType + ".png"),
