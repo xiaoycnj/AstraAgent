@@ -14,7 +14,7 @@ def encode(value):
 
 REQUEST_FIELDS = ('provider','model','reasoning','skill','tools','allow_tools','plugins',
                   'file_permission','command_permission','command_mode','memory_policy',
-                  'auto_memory','access_policy','project_id','auto_min_tier')
+                  'auto_memory','access_policy','project_id','story_id','auto_min_tier')
 CONTEXT_FIELDS = ('tools','runtime_plugins','system_prompt','active_skill','_untrusted_context',
                   '_mutation_epoch','delegated_count','cross_dispatch_count','cross_dispatch_depth','_verification')
 
@@ -59,6 +59,7 @@ def create(db, key, sid, body, config):
     options['allow_tools']=bool(config.get('tools'))
     options['_cross_dispatch_depth']=config.get('cross_dispatch_depth',0)
     options['project_id']=config.get('project_id','')
+    options['story_id']=config.get('story_id','')
     options['_project_root']=config.get('project_root','')
     boundary=db.execute('SELECT COALESCE(MAX(id),0) FROM messages WHERE session_id=?',(sid,)).fetchone()[0]
     options['_history_epoch']=db.execute('SELECT history_epoch FROM sessions WHERE id=?',(sid,)).fetchone()[0]

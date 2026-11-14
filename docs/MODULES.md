@@ -54,6 +54,20 @@ DeepSeek Harness 官方仓库强调插件组织。这里借鉴按能力组织模
 
 以上是依据公开资料作出的工程设计判断，未复制这些产品的私有实现或界面素材。
 
+## 创作与定时执行
+
+更多菜单中的“作品工作台”和“写作项目”拥有独立页面。作品版本由 `creation_store.py` 存储，文件交付和生图自动登记，源文件编辑与恢复采用版本头校验。关联同会话的同目录 CSS、PNG、JPEG、WebP 可进入静态预览，原文件及关联附件可导出 ZIP。
+
+`browser_checks.py` 调用安装在本机的 Edge 或 Chrome，使用已有 Node 22+ 运行 `scripts/static_browser.cjs`。浏览器使用临时配置、禁用作品脚本、阻止网络和文件请求，检查横向溢出并导出实际 PNG/PDF。应用内预览使用无权限 sandbox iframe。检查范围为静态布局，交互、脚本运行和复杂嵌套资源仍需项目自身的验证流程。Lite 需自行提供 Node 22+ 和 Chromium 浏览器。
+
+图片版本可并排对比，并在画布上涂抹局部重绘范围。准备请求将源图转换为 PNG，保存转换版本，并把透明区域蒙版与源图加入所属会话。发送前可继续修改提示词。蒙版只接受当前会话附件，须与首张 PNG 同尺寸。GPT Image 使用 JSON mask 引用，兼容网关使用 multipart mask 文件，未接入蒙版的协议会返回错误。
+
+`story_projects.py` 保存章节、人物、地点、时间线、大纲和笔记。写作工作室插件可读取绑定项目、按修订号保存条目。默认上下文包含已确认设定与最近章节，正文有明确截断标记，可用工具补充全文。草稿和假设保留独立状态。导出支持 Markdown、EPUB 3 和基础 DOCX，Office 与电子书格式以段落输出正文，保留原有 Markdown 字符。
+
+`task_scheduler.py` 在主后端启动后每五秒轮询。先在“任务验收”保存任务，再到“定时任务”选择任务、触发方式和错过策略。启用会调用模型，使用当前服务商凭证和当前权限上限。每次派发创建普通持久化会话，批准请求、停止及恢复沿用原执行系统。调度配置不保存 API Key，任务定义变化会暂停计划。应用重启后不确定的派发需要人工核对，避免自动重复副作用。电脑休眠或应用退出时无法执行，错过触发可跳过或补执行一次。同一时刻最多执行一个定时派发。
+
+协议与隔离依据可查阅 [OpenAI 图片编辑接口](https://developers.openai.com/api/reference/resources/images/methods/edit)、[Chrome Headless](https://developer.chrome.com/docs/automation-and-testing/headless) 和 [Chromium 禁用脚本接口](https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setScriptExecutionDisabled)。
+
 ## 启动器
 
 `native/Launcher.cs` 编译为两个程序，GUI 版本使用 Windows 图形子系统并启动 `pythonw.exe`，CLI 使用控制台子系统并启动 `python.exe`。可以用 `scripts/build_launcher.ps1` 在 Windows .NET Framework 环境下重建。两版都保持参数引用规则和相同的 Python 应用入口。

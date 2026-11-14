@@ -9,7 +9,7 @@ const pageCounts=elem('span','page-counts');
 function routeUrl(page){const url=new URL(location.href);if(page==='home')url.searchParams.delete('view');else url.searchParams.set('view',page);return url.pathname+url.search}
 function rememberPage(page,replace=false){const method=replace?'replaceState':'pushState';if(location.pathname+location.search!==routeUrl(page)||!history.state?.astraPage)history[method]({astraPage:page},'',routeUrl(page));if(typeof syncHistoryButtons==='function')syncHistoryButtons()}
 async function navigatePage(page,{historyMode='push'}={}){
- if(!['home','images','library','schedule','marketplace'].includes(page))page='home';
+ if(!['home','images','library','schedule','marketplace','creator','story'].includes(page))page='home';
  if(!$('#settings').hidden&&!await closeSettingsPage())return false;
  if(state.mode==='canvas'&&!await flushBoard())return false;
  const ticket=++pageTicket;appPage=page;document.body.dataset.appPage=page;document.body.classList.toggle('in-destination',page!=='home');
@@ -18,12 +18,10 @@ async function navigatePage(page,{historyMode='push'}={}){
  if(historyMode!=='none')rememberPage(page,historyMode==='replace');selectRail(page==='home'?'home':page);
  if(page==='home'){scheduleConversationMap();return true}
  destinationTitle.textContent={images:'生图',library:'资料库',schedule:'定时任务'}[page];destinationActions.replaceChildren();destinationTabs.replaceChildren();destinationBody.replaceChildren();destination.scrollTop=0;
+ if(page==='creator'){await renderCreatorPage();return true}
+ if(page==='story'){await renderStoryPage();return true}
  if(page==='marketplace'){await renderMarketplacePage();return true}
- if(page==='schedule'){
-  destinationBody.append(elem('p','page-description','管理任务与执行进度。当前尚未接入定时触发，不会在后台自动执行。'));
-  hubView='task';hubBody.replaceChildren(elem('p','hint','正在加载任务…'));destinationBody.append(hubBody);
-  try{await refreshHub()}catch(error){if(ticket===pageTicket)hubBody.replaceChildren(elem('p','hint',error.message),actionButton('重试',()=>navigatePage('schedule',{historyMode:'none'}),'secondary'))}return true;
- }
+ if(page==='schedule'){await renderSchedulePage();return true}
  destinationActions.append(assetSearch,actionButton('刷新',()=>loadAssetPage(page,pageTicket),'secondary'));
  if(page==='library')destinationActions.append(actionButton('添加资料',()=>attachmentPicker.click(),'primary'));
  else destinationActions.append(actionButton('模型服务商',()=>{showSettings();selectSettingsTab('connection')},'secondary'));

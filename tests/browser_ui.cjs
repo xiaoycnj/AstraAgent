@@ -273,7 +273,9 @@ async function main() {
       () =>
         !policyGrid
           .querySelector("[data-policy=full]")
-          .classList.contains("active"),
+          .classList.contains("active") &&
+        !document.querySelector('#access-policy-choice').disabled &&
+        document.querySelector('#access-policy-choice').value==='ask',
     );
     assert.equal(
       await page.locator("#access-policy-choice").inputValue(),

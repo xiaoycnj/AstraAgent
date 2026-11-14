@@ -29,7 +29,7 @@ PLUGINS = {
     'world-tree': ('世界树', ['world_tree'], '使用 world_tree 保存长期主题、能力、项目事实，parent 指向已有节点 ID。事实必须来自用户或可核实结果，冲突时更新旧节点。'),
     'decision-log': ('决策日志', ['manage_decision'], '使用 manage_decision 记录决定、理由和约束，后续更改时更新状态。'),
     'notebook': ('项目笔记库', ['manage_note'], '使用 manage_note 保存可复用资料、摘要和研究笔记，给出来源和日期。'),
-    'writing-studio': ('写作工作室', [], '先确认读者、目的与语气，再拟结构、创作、润色。长篇阶段成果使用 manage_note 保存。'),
+    'writing-studio': ('写作工作室', ['story_context','story_read_entry','story_save_entry'], '使用已绑定的写作项目。先用 story_context 读取已确认设定和衔接章节，按需 story_read_entry 补全。新设定默认草稿或假设，只有用户明确确认后才标为 confirmed。用 story_save_entry 和 expected_revision 保存可追溯修订，避免覆盖用户改动。'),
     'code-review': ('代码审阅室', [], '先用 search_files、search_text、read_file 获取相关实现。逐条报告可复现的错误与文件位置，区分检查过的证据与推断。必要时派发独立审阅。'),
     'data-lab': ('数据分析室', [], '先检查 CSV/JSON 字段与缺失值，再计算与解释，给出数据来源和计算范围。使用现有 read_csv、inspect_json、calculator。'),
     'workflow-studio': ('工作流编排', [], '建立目标，拆解任务与依赖，先执行具备输入的任务，按需派发子智能体，真实完成后更新任务并总结。'),

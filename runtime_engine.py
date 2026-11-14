@@ -11,6 +11,7 @@ LOCK=threading.RLock()
 DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],['git','diff','--stat'],['git','log','-5','--oneline'],['whoami']], 'context_chars':60000,'tool_rounds':32,'tool_calls':120,'auto_compact':True,'skill_learning':True,'terminal_enabled':False}
 DEFAULTS.update(container_image='',container_memory_mb=512,container_network=False)
 READ_TOOLS={'list_image_models','get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
+READ_TOOLS.update(('story_context','story_read_entry'))
 
 def settings(data):
     path=data/'runtime.json'

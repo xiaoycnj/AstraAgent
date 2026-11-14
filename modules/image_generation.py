@@ -14,6 +14,7 @@ import security_net
 import security_server
 import task_control
 from . import image_requests
+import creation_store
 
 IMAGE_PARAMETERS = {
     "type": "object",
@@ -30,6 +31,7 @@ IMAGE_PARAMETERS = {
         "image_protocol": {"type": "string", "enum": ["auto", "gpt-image", "dall-e", "seedream", "compatible"], "description": "默认自动识别。网关使用模型别名时，可依据服务商文档显式指定图片协议。"},
         "size": {"type": "string", "description": "宽x高，也接受 *。GPT Image 支持 auto，Seedream 档位依版本为 1K/1.5K/2K/3K/4K。省略使用模型默认尺寸。"},
         "file": {"type": "string", "description": "当前会话参考图片附件 ID"},
+        "mask": {"type": "string", "description": "当前会话透明通道 PNG 蒙版附件 ID，透明区为编辑范围，需与首张 PNG 参考图同尺寸"},
         "files": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
         "quality": {
             "type": "string",
@@ -106,7 +108,7 @@ def reference_images(args, config, context):
     return images
 
 
-def multipart(body, images):
+def multipart(body, images, mask=None):
     boundary = "astra-" + secrets.token_hex(24)
     chunks = []
     for key, value in body.items():
@@ -141,6 +143,8 @@ def multipart(body, images):
             + raw
             + b"\r\n"
         )
+    if mask:
+        chunks.append(('--'+boundary+'\r\nContent-Disposition: form-data; name="mask"; filename="mask.png"\r\nContent-Type: image/png\r\n\r\n').encode()+mask[1]+b'\r\n')
     chunks.append(("--" + boundary + "--\r\n").encode())
     return b"".join(chunks), "multipart/form-data; boundary=" + boundary
 
@@ -151,8 +155,11 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 @security_server.bounded
-def request_image(provider, args, config, images=None):
+def request_image(provider, args, config, images=None, mask=None):
     body, endpoint = image_requests.parameters(provider, args, images)
+    if mask:
+        if endpoint!='/images/edits':raise ValueError('此图片协议未接入蒙版编辑，请选择 GPT Image 或支持蒙版的兼容接口')
+        if 'images' in body:body['mask']={'image_url':'data:image/png;base64,'+base64.b64encode(mask[1]).decode('ascii')}
     headers = {"Content-Type": "application/json"}
     key = provider.get("api_key", "")
     if not isinstance(key, str) or "\r" in key or "\n" in key:
@@ -161,7 +168,7 @@ def request_image(provider, args, config, images=None):
         headers["Authorization"] = "Bearer " + key
     raw_body = json.dumps(body).encode()
     if endpoint == "/images/edits" and 'images' not in body:
-        raw_body, headers["Content-Type"] = multipart(body, images)
+        raw_body, headers["Content-Type"] = multipart(body, images, mask)
     task_control.check(config)
     request = Request(provider["base_url"] + endpoint, data=raw_body, headers=headers)
     token = config.get("_cancel_token")
@@ -272,11 +279,20 @@ def execute(args, config, context, name=None):
             raise ValueError("请先在图片服务商中添加此模型")
         provider["model"] = args["model"]
     images = reference_images(args, config, context)
+    mask=None
+    if args.get('mask'):
+        if not images:raise ValueError('蒙版编辑需要参考图')
+        mask=reference_images({'file':args['mask']},config,context)[0]
+        signature=b'\x89PNG\r\n\x1a\n'
+        if any(mime!='image/png' or len(raw)<33 or not raw.startswith(signature) for mime,raw in (images[0],mask)):
+            raise ValueError('蒙版与首张参考图需为 PNG，可在作品工作台转换并绘制')
+        if mask[1][16:24]!=images[0][1][16:24] or mask[1][25] not in (4,6):
+            raise ValueError('蒙版需含透明通道，并与首张参考图同尺寸')
     if not provider.get("base_url") or not provider.get("model"):
         raise ValueError("请完善图片服务商的地址与模型配置")
     runtime = {**provider, "_cancel_token": config.get("_cancel_token"), "_run_id": config.get("_run_id")}
     def invoke(call_config):
-        result = request_image(provider, args, call_config, images) if images else request_image(provider, args, call_config)
+        result = request_image(provider,args,call_config,images,mask) if mask else request_image(provider, args, call_config, images) if images else request_image(provider, args, call_config)
         runtime['_image_revised_prompt'] = call_config.get('_image_revised_prompt')
         return result
 
@@ -306,6 +322,10 @@ def execute(args, config, context, name=None):
                     "INSERT INTO session_outputs(session_id,attachment_id) VALUES(?,?)",
                     (sid, item["id"]),
                 )
+                reference_ids = list(dict.fromkeys(([args['file']] if args.get('file') else [])+args.get('files', [])))
+                parent = re.sub(r'^/api/attachments/([^/]+)/content$', r'\1', reference_ids[0]) if len(reference_ids) == 1 else None
+                version=creation_store.register(db, sid, item, metadata={'provider':provider['id'],'model':provider['model'],'prompt':args['prompt'],'parameters':{key:value for key,value in args.items() if key not in ('prompt','file','files')},'references':reference_ids}, parent_attachment=parent)
+                item.update(creation_id=version['id'],version_id=version['version'])
     except BaseException:
         import shutil
 

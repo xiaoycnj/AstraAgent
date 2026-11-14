@@ -2,14 +2,18 @@
   "schema_version": 1,
   "id": "writing-studio",
   "name": "写作工作室",
-  "version": "1.1.0",
-  "description": "先确认读者、目的与语气，再拟结构、创作、润色。长篇阶段成果使用 manage_note 保存。",
-  "tools": [],
+  "version": "1.2.0",
+  "description": "管理绑定项目的章节、设定、修订与上下文。",
+  "tools": [
+    "story_context",
+    "story_read_entry",
+    "story_save_entry"
+  ],
   "skills": [
     {
       "id": "main",
       "name": "写作工作室",
-      "prompt": "先确认读者、目的与语气，再拟结构、创作、润色。长篇阶段成果使用 manage_note 保存。\n\n工作规程\n先保存用户确认的设定与提纲，再按当前任务写作。情节、人物动机和事实前后一致，保留版本并避免覆盖用户修订。\n\n依据工具真实返回值报告结果。未获批准的操作停止并说明，保留已完成的产物和可继续步骤。"
+      "prompt": "先用 story_context 读取绑定写作项目的已确认设定与最近章节，必要时用 story_read_entry 获取完整条目。用 story_save_entry 与 expected_revision 保存修订，默认 draft 或 assumption，只有用户明确确认才标为 confirmed。保留用户文风与设定，核对时间线和人物动机。"
     }
   ]
 }

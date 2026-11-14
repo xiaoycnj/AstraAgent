@@ -197,6 +197,31 @@ class ImageGeneration(unittest.TestCase):
         self.assertNotIn("private-fixture", str(caught.exception))
         self.assertEqual(ImageAPI.calls, [])
 
+    def test_mask_json_and_multipart_protocol(self):
+        images=[('image/png',PNG)]
+        mask=('image/png',PNG)
+        image_generation.request_image(self.provider,{'prompt':'Edit selection'},{},images,mask)
+        self.assertIn('mask',ImageAPI.calls[-1][1])
+        self.assertTrue(ImageAPI.calls[-1][1]['mask']['image_url'].startswith('data:image/png;base64,'))
+        image_generation.request_image({**self.provider,'model':'custom-image'},{'prompt':'Edit selection'},{},images,mask)
+        self.assertEqual(ImageAPI.calls[-1][1]['mask'],PNG)
+        self.assertEqual(ImageAPI.calls[-1][1]['image'],PNG)
+        count=len(ImageAPI.calls)
+        with self.assertRaises(ValueError):image_generation.request_image({**self.provider,'model':'seedream-4-5'},{'prompt':'Edit selection'},{},images,mask)
+        self.assertEqual(len(ImageAPI.calls),count)
+
+    def test_mask_scope_and_dimensions_reject_before_network(self):
+        reference=attachments.upload(self.data,{'name':'reference.png','data':base64.b64encode(PNG).decode()})
+        mask=attachments.upload(self.data,{'name':'mask.png','data':base64.b64encode(PNG).decode()})
+        context={'data':self.data,'providers':backend.profiles,'database':backend.database}
+        config={**self.config(),'_attachment_ids':[reference['id']]}
+        with self.assertRaisesRegex(ValueError,'当前会话'):image_generation.execute({'prompt':'edit','file':reference['id'],'mask':mask['id']},config,context)
+        wrong=bytearray(PNG);wrong[16:20]=(2).to_bytes(4,'big')
+        larger=attachments.upload(self.data,{'name':'larger.png','data':base64.b64encode(wrong).decode()})
+        config['_attachment_ids'].append(larger['id'])
+        with self.assertRaisesRegex(ValueError,'同尺寸'):image_generation.execute({'prompt':'edit','file':reference['id'],'mask':larger['id']},config,context)
+        self.assertEqual(ImageAPI.calls,[])
+
     def test_disabled_image_module_blocks_before_api(self):
         catalog.set_enabled(self.data, "image-generation", False)
         with self.assertRaises(ValueError):

@@ -6,6 +6,7 @@ import attachments
 import base64
 import task_control
 import sqlite3
+import creation_store
 NAMES=workspace_tools.NAMES|{'read_file','write_file','list_files'}
 DEFINITIONS=workspace_tools.DEFINITIONS+[
  {'type':'function','function':{'name':name,'description':description,'parameters':{'type':'object','properties':properties,'required':required,'additionalProperties':False}}}
@@ -52,6 +53,8 @@ def deliver(args,config,context):
         task_control.check(config)
         with context['database']() as db:
             db.execute('INSERT INTO session_outputs(session_id,attachment_id) VALUES(?,?)',(sid,item['id']))
+            version=creation_store.register(db,sid,item,'file:'+args['path'])
+            item.update(creation_id=version['id'],version_id=version['version'])
     except BaseException:
         folder=attachments.location(context['data'],item['id'])
         (folder/'content').unlink(missing_ok=True)

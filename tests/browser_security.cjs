@@ -75,12 +75,15 @@ async function main() {
     await page.locator('#nav-more').click();
     await page.locator('#nav-schedule').click();
     await page.waitForFunction(()=>appPage==='schedule');
-    await page.locator('.destination-body .hub-section-heading').waitFor();
-    assert.equal(await page.locator('.destination-body .hub-body').isVisible(),true);
-    await page.locator('.destination-body .hub-card').filter({hasText:'Long record fixture'}).getByRole('button',{name:'编辑',exact:true}).click();
+    await page.getByRole('button',{name:'保存定时任务',exact:true}).waitFor();
+    assert.equal(await page.locator('.destination-body .story-editor').isVisible(),true);
+    await page.evaluate(()=>{hubView='task';hubOpen.click();});
+    await page.locator('.hub-dialog .hub-section-heading').waitFor();
+    await page.locator('.hub-dialog .hub-card').filter({hasText:'Long record fixture'}).getByRole('button',{name:'编辑',exact:true}).click();
     await page.locator('.hub-editor textarea').waitFor();
     assert.equal((await page.locator('.hub-editor textarea').inputValue()).length,1000);
     await page.locator('.hub-editor').getByRole('button',{name:'取消',exact:true}).click();
+    await page.locator('.hub-dialog').getByRole('button',{name:'返回工作空间',exact:true}).click();
 
     assert.equal(await page.locator('dialog[open]').count(),0);
     await page.locator('#nav-home').click();

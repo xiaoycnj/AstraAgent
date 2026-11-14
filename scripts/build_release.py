@@ -9,7 +9,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = '3.14.0'
 ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe dlc_manager.py model_catalog.py model_registry.py auto_router.py model_adapters.py anthropic_messages.py marketplace.py application_plugins.py release_feed.py document_understanding.py document_worker.py updater.py local_stt.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py desktop.py
-container_runtime.py task_evaluations.py
+container_runtime.py task_evaluations.py creation_store.py browser_checks.py story_projects.py task_scheduler.py
 security_core.py security_audit.py security_net.py security_server.py extensions.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
 task_control.py usage_meter.py ui_locale.py watchdog.py workbench.py workspace_tools.py
@@ -34,7 +34,7 @@ def validate_public_paths(root,files):
 
 def source_files(root, edition):
     files = [root / name for name in ROOT_FILES]
-    files += [root / 'scripts' / name for name in ('update_model_registry.py','build_release.py','build_stt_dlc.py','build_document_dlc.py','build_release_catalog.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py','install_local_stt.ps1','start_local_stt.ps1','stt_notices.py')]
+    files += [root / 'scripts' / name for name in ('static_browser.cjs','update_model_registry.py','build_release.py','build_stt_dlc.py','build_document_dlc.py','build_release_catalog.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py','install_local_stt.ps1','start_local_stt.ps1','stt_notices.py')]
     files += [path for path in (root/'licenses/optional-stt').rglob('*') if path.is_file()]
     files += [root/'docs/DESIGN-SYSTEM.md',root/'docs/INTERACTION-SPEC.md',root/'docs/UI-UX-ACCEPTANCE.md',root/'docs/MEDIA-AND-ROUTING.md',root/'docs/MODEL-ADAPTERS.md',root/'docs/LOCAL-STT.md',root/'docs/DLC.md',root/'docs/APPLICATION-PLUGINS.md',root/'docs/MARKETPLACE.md',root/'docs/SECURITY-AUDIT-2026-11-13.md']
     files += [root / 'security/npm-runtime-lock.json',root/'security/audit-2026-11-13.json',root / 'docs/UI-DESIGN.md',root/'docs/MODULES.md',root/'docs/AUDIT-2026-11-07.md',root/'docs/EXECUTION-RECOVERY.md',root/'native/Launcher.cs',root/'scripts/build_launcher.ps1']
