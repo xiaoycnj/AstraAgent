@@ -19,9 +19,21 @@
 
 服务商使用 `type: image_api`，聊天使用 `chat_api`，缺少类型的旧记录按聊天接口读取。图片配置保存在原有加密服务商存储中，密钥不会放入模型上下文。工具名为 `generate_image`，接受提示词、可选服务商 ID 和尺寸，单次一张。
 
-图片接口使用兼容 OpenAI 的 `/images/generations`。返回 base64 时直接验证并存储，URL 响应经 DNS、协议和重定向限制下载，不向图片下载站点转发服务商 Bearer。图片受附件体积和格式限制，成功后链接到当前会话输出。取消不能保证服务商撤销已经发生的计费。
+图片参数由 `modules/image_requests.py` 按已选模型及服务商地址构造。GPT Image 文生图使用 `/images/generations`，参考图编辑使用 `/images/edits` 的 JSON `images`。GPT Image 与 `chatgpt-image-latest` 不发送 `response_format`。Seedream 参考图通过 JSON `image` 字符串或数组发送到 `/images/generations`，固定单张模式，省略 OpenAI 的 `n`，尺寸按版本校验档位、像素总量与宽高比。未知模型别名沿用 OpenAI 兼容接口，参考图通过 multipart `/images/edits` 发送。
 
-测试使用本地合成图片 API，覆盖工具获批、拒绝不出网、取消不保存、加密密钥、持久化会话输出、模块关闭和类型隔离。尚未使用真实付费服务商执行生图验收。
+`list_image_models` 向聊天模型披露配置中的模型及参数提示，包括尺寸、质量档位和协议。工具接受 `output_format`、透明背景、压缩、参考图保真度以及 Seedream 的种子、水印，按接口和版本校验。不适用的组合返回可纠正错误。旧版 DALL·E 兼容服务保留文生图参数映射，模型可用性由服务商决定。
+
+网关自定义型号如 `image2.5` 默认采用兼容协议。调用方可依据网关说明，通过 `image_protocol` 显式选择 `gpt-image`、`dall-e`、`seedream` 或 `compatible`。协议选择只影响已配置服务商上的固定图片端点和参数，不能指定新地址或访问其他会话的文件。
+
+返回 base64 时直接验证并存储，URL 响应经 DNS、协议和重定向限制下载，不向图片下载站点转发服务商 Bearer。单张图片沿用 5 MB 附件限制，每次最多四张参考图、合计 10 MB。成功后链接到当前会话输出。取消不能保证服务商撤销已经发生的计费。
+
+在一轮所有工具结果返回后，宿主将生成图片的实际像素作为下一轮多模态消息发给已配置视觉能力的聊天模型。模型可检查结果，并使用输出附件 ID 再次调用编辑。未知或明确不支持视觉的聊天模型会收到尚未视觉检查的提示。执行记录只保存附件元信息，像素从本地附件读取。图片作为不可信参考资料处理，继续遵守原有工具审批策略。
+
+用户要求直接交付 HTML、SVG、Markdown、代码或数据文件时，模型可调用 `write_file` 并设置 `deliver: true`。文件成功写入后，以相同内容建立会话输出附件并返回下载链接。写入失败、拒绝或越界时不交付附件。交付失败会单独报告，已完成写入可在工作区找到。最终回复自动补上尚未包含的真实交付链接，附件栏和资料库同步刷新。下载响应携带 UTF-8 文件名，HTML 和 SVG 沿用下载处置。
+
+测试使用本地合成图片 API，覆盖协议参数、参考图请求、实际像素回读、多工具消息顺序、文件交付、获批、拒绝不出网、取消不保存、加密密钥、会话输出、模块关闭和类型隔离。真实付费服务商的出图质量与兼容网关差异仍需部署者验收。
+
+接口核对依据为 [OpenAI 生成图片参考](https://developers.openai.com/api/reference/resources/images/methods/generate)、[OpenAI 编辑图片参考](https://developers.openai.com/api/reference/resources/images/methods/edit)、[OpenAI 生图工具多轮流程](https://developers.openai.com/api/docs/guides/tools-image-generation)、[DALL·E 历史 SDK 参数](https://github.com/openai/openai-python/blob/v1.66.3/src/openai/types/image_generate_params.py) 与 [Seedream 官方接口](https://docs.volcengine.com/docs/ark/image-generation-api?lang=zh)。核对日期为 2026-11-14。
 
 ## 其他智能体模块
 

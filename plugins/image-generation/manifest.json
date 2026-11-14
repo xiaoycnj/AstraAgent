@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "image-generation",
   "name": "图片生成",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "调用独立 image_api 模型生成图片，保存为会话产物。",
   "tools": [
     "generate_image",
@@ -17,7 +17,7 @@
     {
       "id": "main",
       "name": "图片创作",
-      "prompt": "先调用 list_image_models 查看已配置的图片服务商与模型。根据用户初版提示词润色 prompt，保留明确约束。用户提供参考图时，将会话中披露的图片附件 ID 作为 image_gen 的 file 或 files 参数，选择已配置的 provider/model 并指定 size、quality。不能虚构附件 ID、图片或成功状态。调用受权限控制且可能产生费用。使用返回的 markdown 展示结果。"
+      "prompt": "先调用 list_image_models 查看已配置的图片服务商、模型和 image_parameters。根据用户初版提示词润色 prompt，保留明确约束。用户提供参考图时，将会话中披露的图片附件 ID 作为 image_gen 的 file 或 files 参数。按模型参数提示选择 size、quality 等，尺寸未指定时可省略，Seedream 不传 quality。不能虚构附件 ID、图片或成功状态。调用受权限控制且可能产生费用。工具返回后，支持视觉的聊天模型会收到真实图片，请检查构图、文字和参考一致性。需要继续修改时复用生成结果的附件 ID，并遵守用户目标和费用授权。视觉回读不可用时明确说明未完成视觉检查。使用工具返回的真实 markdown 展示交付结果。"
     }
   ]
 }

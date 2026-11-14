@@ -70,7 +70,7 @@ $('#settings-close').onclick=()=>closeSettingsPage();
 new MutationObserver(syncWorkspaceVisibility).observe($('#settings'),{attributes:true,attributeFilter:['hidden']});
 const beforePageHubOpen=hubOpen.onclick;hubOpen.onclick=function(...args){hubDialog.append(hubBody);return beforePageHubOpen.apply(this,args)};
 attachmentPicker.addEventListener('change',()=>{if(appPage!=='library')return;let attempts=0;const refresh=()=>{if(appPage!=='library')return;if(uploadBusy&&attempts++<100){setTimeout(refresh,200);return}loadAssetPage(appPage,pageTicket)};setTimeout(refresh,200)});
-const beforePageImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforePageImageEvent(sid,event);if(['images','library'].includes(appPage)&&event.type==='image_generated')loadAssetPage(appPage,pageTicket)};
+const beforePageImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforePageImageEvent(sid,event);if(['images','library'].includes(appPage)&&['image_generated','file_generated'].includes(event.type))loadAssetPage(appPage,pageTicket)};
 window.addEventListener('popstate',()=>navigatePage(new URLSearchParams(location.search).get('view')||'home',{historyMode:'none'}));
 const initialPage=new URLSearchParams(location.search).get('view')||'home';
 Promise.resolve(studioReady).then(()=>navigatePage(initialPage,{historyMode:'replace'})).catch(error=>toast(error.message));

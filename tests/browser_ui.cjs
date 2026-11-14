@@ -101,6 +101,21 @@ async function main() {
         .evaluate((el) => el.classList.contains("ui-field")),
       false,
     );
+    const delivered = await page.evaluate(async () => {
+      const session = await api('/api/sessions', 'POST', {title: 'File delivery fixture'});
+      await openSession(session);
+      const item = await api('/api/sessions/' + session.id + '/resources', 'POST', {name: '交付验证.md', content: '# Download fixture'});
+      handleAgentEvent(session.id, {type: 'file_generated', name: 'write_file', result: {ok: true, attachment: item}});
+      return item;
+    });
+    await page.locator('#session-resources').click();
+    const deliveredLink = page.locator('.resource-row[data-attachment-id="' + delivered.id + '"] .resource-download');
+    await deliveredLink.waitFor();
+    const fileDownload = page.waitForEvent('download');
+    await deliveredLink.click();
+    assert.equal((await fileDownload).suggestedFilename(), '交付验证.md');
+    await page.evaluate(() => closeResources());
+    evidence.direct_file_download = true;
     await page.evaluate(() => {
       state.messages = [
         {

@@ -5,6 +5,9 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import threading
+from urllib.request import Request, urlopen
+from urllib.parse import quote
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -65,6 +68,23 @@ class SessionResources(unittest.TestCase):
             for body in [{'content':''},{'content':'x'*60001},{'message_id':True},{'message_id':999}]:
                 with self.assertRaises(ValueError):attachments.save_output(db,self.data,'one',body)
         self.assertFalse((self.data/'attachments').exists())
+
+    def test_generated_html_download_preserves_name_and_sandbox(self):
+        name='鹈鹕动画.html'
+        raw=b'<!doctype html><script>throw 1</script>'
+        item=attachments.upload(self.data,{'name':name,'data':base64.b64encode(raw).decode()})
+        app=backend.LocalServer(('127.0.0.1',0),backend.Handler)
+        threading.Thread(target=app.serve_forever,daemon=True).start()
+        try:
+            request=Request('http://127.0.0.1:'+str(app.server_port)+'/api/attachments/'+item['id']+'/content',headers={'X-App-Token':backend.TOKEN})
+            with urlopen(request) as response:
+                self.assertEqual(response.read(),raw)
+                self.assertEqual(response.headers['Content-Disposition'],"attachment; filename*=UTF-8''"+quote(name,safe=''))
+                self.assertIn('sandbox',response.headers['Content-Security-Policy'])
+                self.assertEqual(response.headers['X-Content-Type-Options'],'nosniff')
+        finally:
+            app.shutdown()
+            app.server_close()
 
 
 if __name__=='__main__':unittest.main()

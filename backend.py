@@ -1,5 +1,6 @@
 """Local browser workbench. Standard library only; Python 3.10+."""
 import argparse
+import re
 from modules import catalog as feature_modules
 import security_core
 import security_audit
@@ -55,7 +56,7 @@ import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 ROOT = Path(__file__).resolve().parent
@@ -345,6 +346,7 @@ def completion(c, messages, emit=None):
     seen_calls={}
     call_count=0
     budget_exhausted=False
+    delivered_outputs=[]
     for turn in range(c.get('max_tool_rounds',c.get('tool_rounds',32))+1):
         task_control.check(c)
         enabled=c.get('tools',[])
@@ -386,6 +388,7 @@ def completion(c, messages, emit=None):
         if not calls: break
         if not enabled or not isinstance(calls, list) or len(calls)>8: raise ApiError(502, '模型返回了未授权或过多的工具调用。')
         payload['messages'].append(model_adapters.assistant_message(message))
+        image_outputs=[]
         for call_index,call in enumerate(calls):
             task_control.check(c)
             name = call.get('function',{}).get('name')
@@ -405,6 +408,8 @@ def completion(c, messages, emit=None):
                     execution.restore(cached,c)
                     if c.get('access_policy')=='deny':c['tools']=[]
                     output=cached['result']
+                    if name in ('generate_image','image_gen','write_file') and isinstance(output,dict) and output.get('attachment'):delivered_outputs.append(output)
+                    if name in ('generate_image','image_gen'):image_outputs.append(output)
                     if emit:emit({'type':'step_reused','name':name,'step':step})
                     payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
                     continue
@@ -478,7 +483,7 @@ def completion(c, messages, emit=None):
                 elif name in agent_hub.NAMES:
                     output=agent_hub.execute(ROOT,DATA,name,args,c,emit,dispatch_agents)
                 elif name in feature_modules.TOOL_MODULES:
-                    output=feature_modules.execute(name,args,c,{'data':DATA,'emit':emit,'approve':approve_tool,'file_tool':run_file_tool})
+                    output=feature_modules.execute(name,args,c,{'data':DATA,'emit':emit,'approve':approve_tool,'file_tool':run_file_tool,'database':database})
                 else: output = run_tool(name,args)
             except (ValueError, TypeError, KeyError, ArithmeticError, RecursionError, OSError) as error:output={'error':str(error)[:300] or '工具参数无效或执行失败'}
             finally:c.pop('_authorized_tool',None)
@@ -490,11 +495,26 @@ def completion(c, messages, emit=None):
             if execution and step:execution.tool_done(step,output,c)
             if emit: emit({'type':'tool','name':name,'result':output})
             payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
+            if name in ('generate_image','image_gen'):image_outputs.append(output)
+            if name in ('generate_image','image_gen','write_file') and isinstance(output,dict) and output.get('attachment'):delivered_outputs.append(output)
+        if image_outputs:
+            from modules import image_generation
+            feedback=image_generation.feedback(c,{'data':DATA,'database':database},image_outputs)
+            if feedback:
+                mark_untrusted(c)
+                payload['messages'].append(feedback)
     else: raise ApiError(502, '执行循环异常终止，任务记录已保存。')
     try:
         answer = result['choices'][0]['message']['content']
         if isinstance(answer, list): answer = '\n'.join(p.get('text', '') for p in answer if isinstance(p, dict))
         if not isinstance(answer, str) or not answer.strip(): raise ValueError()
+        delivered=set()
+        for output in delivered_outputs:
+            key=output['attachment'].get('id')
+            if not isinstance(key,str) or not re.fullmatch('[a-f0-9]{32}',key) or key in delivered:continue
+            delivered.add(key)
+            url='/api/attachments/'+key+'/content'
+            if url not in answer:answer+='\n\n'+output['markdown']
         c['_last_provider_message']=model_adapters.assistant_message(result['choices'][0]['message'])
         c['_last_provider_message']['content']=answer
         return answer
@@ -1178,7 +1198,8 @@ class Handler(BaseHTTPRequestHandler):
             if parts[3:]!=['content']:raise ApiError(404,'附件路径无效')
             raw=(attachments.location(DATA,parts[2])/'content').read_bytes()
             self.send_response(200);self.send_header('Content-Type',item['mime']);self.send_header('Content-Length',str(len(raw)));self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
-            self.send_header('Content-Disposition','inline' if item['kind']=='image' else 'attachment');self.end_headers();self.wfile.write(raw);return
+            disposition='inline' if item['kind']=='image' else 'attachment'
+            self.send_header('Content-Disposition',disposition+"; filename*=UTF-8''"+quote(item['name'],safe=''));self.end_headers();self.wfile.write(raw);return
         if pathname=='/api/projects':
             if method=='GET':return self.reply(200,project_workspace.projects(DATA))
             if method=='PUT':

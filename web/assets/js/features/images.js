@@ -11,6 +11,6 @@ function previewGeneratedImage(item){
  const dialog=elem('dialog','generated-image-dialog');const image=elem('img');image.src='/api/attachments/'+item.id+'/content';image.alt=item.name||'生成的图片';
  const close=actionButton('关闭',async()=>dialog.close(),'secondary'),downloadLink=elem('a','secondary','下载图片');downloadLink.href=image.src;downloadLink.download=item.name||'generated.png';dialog.append(image,downloadLink,close);dialog.onclose=()=>dialog.remove();document.body.append(dialog);dialog.showModal();
 }
-const beforeImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforeImageEvent(sid,event);if(event.type==='image_generated'){toast('图片已生成并保存到会话产物');if(sid===state.session?.id&&typeof refreshResources==='function')refreshResources()}};
+const beforeImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforeImageEvent(sid,event);if(['image_generated','file_generated'].includes(event.type)){toast(event.type==='image_generated'?'图片已生成并保存到会话产物':'文件已保存到会话产物');if(sid===state.session?.id&&typeof refreshResources==='function')refreshResources()}};
 
 buildSelect(imageProviderType);
