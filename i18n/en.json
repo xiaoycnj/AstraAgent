@@ -1533,6 +1533,8 @@
     "暂停后续触发": "Pause future triggers",
     "正在派发": "Dispatching",
     "等待复核": "Needs review",
-    "已跳过": "Skipped"
+    "已跳过": "Skipped",
+    "搜索项目": "Search projects",
+    "没有匹配的项目": "No matching projects"
   }
 }

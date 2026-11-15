@@ -99,6 +99,27 @@ async function main() {
       .getByRole("heading", { name: "作品工作台", exact: true })
       .waitFor();
     await page.locator(".creative-frame").waitFor();
+    await page.locator('.creative-detail .studio-field').filter({hasText:'版本'}).locator('button.custom-select').waitFor();
+    assert.equal(
+      await page.locator(".creative-item[aria-current=true]").count(),
+      1,
+    );
+    const projectSearch = page.locator(
+      ".creative-navigation input[type=search]",
+    );
+    await projectSearch.fill("no-such-project");
+    await page.getByText("没有匹配的项目", { exact: true }).waitFor();
+    assert.equal(await page.locator(".creative-item:visible").count(), 0);
+    await projectSearch.press("Escape");
+    await page.locator(".creative-item").first().focus();
+    await page.keyboard.press("Home");
+    assert.equal(
+      await page
+        .locator(".creative-item")
+        .first()
+        .evaluate((e) => e === document.activeElement),
+      true,
+    );
     assert.equal(
       await page.locator(".creative-frame").getAttribute("sandbox"),
       "",

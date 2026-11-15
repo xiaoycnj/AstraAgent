@@ -43,9 +43,63 @@ function studioLayout() {
     detail = elem("section", "creative-detail");
   list.setAttribute("aria-label", "项目列表");
   detail.setAttribute("aria-label", "项目详情");
-  layout.append(list, detail);
+  const navigation = elem("aside", "creative-navigation");
+  const search = elem("input");
+  search.type = "search";
+  search.placeholder = "搜索项目";
+  search.setAttribute("aria-label", "搜索项目");
+  const empty = elem("p", "hint", "没有匹配的项目");
+  empty.hidden = true;
+  empty.setAttribute("role", "status");
+  function filter() {
+    const query = search.value.trim().toLocaleLowerCase();
+    for (const item of list.children)
+      item.hidden = !item.textContent.toLocaleLowerCase().includes(query);
+    empty.hidden =
+      !list.children.length || [...list.children].some((item) => !item.hidden);
+  }
+  search.oninput = filter;
+  search.onkeydown = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      search.value = "";
+      filter();
+    }
+  };
+  list.addEventListener("keydown", (event) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const items = [...list.querySelectorAll("button")].filter(
+      (item) => !item.hidden && !item.disabled,
+    );
+    if (!items.length) return;
+    event.preventDefault();
+    const index = items.indexOf(document.activeElement);
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : Math.max(
+              0,
+              Math.min(
+                items.length - 1,
+                index + (event.key === "ArrowDown" ? 1 : -1),
+              ),
+            );
+    items[next].focus();
+  });
+  new MutationObserver(filter).observe(list, { childList: true });
+  navigation.append(search, list, empty);
+  layout.append(navigation, detail);
   destinationBody.append(layout);
   return { list, detail };
+}
+function selectCreativeItem(list, id) {
+  for (const button of list.children) {
+    if (button.dataset.creationId === id)
+      button.setAttribute("aria-current", "true");
+    else button.removeAttribute("aria-current");
+  }
 }
 async function renderCreatorPage() {
   const renderTicket = pageTicket;
@@ -75,6 +129,7 @@ async function renderCreatorPage() {
         "creative-item",
       );
       button.dataset.i18nIgnore = "";
+      button.dataset.creationId = item.id;
       button.append(
         elem(
           "small",
@@ -102,6 +157,7 @@ async function renderCreatorPage() {
     )
       return;
     detail.replaceChildren(elem("h2", "", item.title));
+    selectCreativeItem(list, id);
     detail.querySelector("h2").dataset.i18nIgnore = "";
     const versions = studioSelect(
       item.versions.map((v, index) => [
@@ -120,7 +176,7 @@ async function renderCreatorPage() {
       const version = item.versions.find((v) => v.id === versions.value);
       content.replaceChildren();
       const url = "/api/attachments/" + version.attachment_id + "/content";
-      controls.querySelectorAll("a,button").forEach((node) => node.remove());
+      while(controls.children.length>1)controls.lastElementChild.remove();
       controls.append(
         studioLink("下载文件", url, version.attachment.name),
         studioLink(
@@ -497,6 +553,7 @@ async function renderStoryPage() {
         "creative-item",
       );
       button.dataset.i18nIgnore = "";
+      button.dataset.creationId = item.id;
       list.append(button);
     }
     if (selected || result[0]) await open(selected || result[0].id);
@@ -515,6 +572,7 @@ async function renderStoryPage() {
     )
       return;
     detail.replaceChildren(elem("h2", "", project.title));
+    selectCreativeItem(list, id);
     detail.querySelector("h2").dataset.i18nIgnore = "";
     const actions = elem("div", "creative-controls");
     actions.append(

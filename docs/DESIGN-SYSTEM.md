@@ -115,3 +115,15 @@
 服务商采用可搜索列表和单一添加入口，用途在编辑表单内选择。权限选择调用原有策略动作和确认。语言包、执行预算、材质细节、使用统计和创建扩展等低频操作使用分组展开。
 
 这些布局与交互由项目自己的 DOM、CSS 和现有事件处理实现。研究来源用于设计参考。[Cherry Studio 官方仓库](https://github.com/CherryHQ/cherry-studio)、[Sidebar 原型](https://github.com/CherryHQ/cherry-studio-ui-design/blob/main/src/app/components/layout/Sidebar.tsx)、[输入设置原型](https://github.com/CherryHQ/cherry-studio-ui-design/blob/main/src/features/assistant/ChatSettingsPanel.tsx)、[模型服务原型](https://github.com/CherryHQ/cherry-studio-ui-design/blob/main/src/app/components/settings/ModelServicePage.tsx)
+
+
+## 作品与写作导航改进 · 2026-11-15
+
+- 采用 Fluent 2 的 4px 间距体系，将详情间距统一为 16px，操作组统一为 8px，通过接近关系表达分组。
+- 作品与写作采用列表加详情结构，列表选中项同时使用底色、侧线与 aria-current 标记。窄窗口下列表回到内容上方，保留玻璃导航表面。
+- 列表支持搜索、无结果反馈、Escape 清空搜索，以及方向键、Home、End 移动焦点。Enter 和 Space 沿用按钮激活行为，移动焦点与加载项目分别响应。
+- 导航控件提供 2px 焦点轮廓和 44px 最小条目高度。焦点颜色复用深浅色主题令牌。
+
+专业资料与应用依据
+
+[Microsoft Fluent 2 Layout](https://fluent2.microsoft.design/layout) 说明空间接近关系、4px 间距和自适应布局。[Apple HIG Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars) 讨论列表详情分层及有限空间下的侧栏适配。[W3C Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html) 给出 AAA 级焦点面积与对比度判定。本轮使用这些资料指导局部改进，整站符合性需要逐项独立评估。
