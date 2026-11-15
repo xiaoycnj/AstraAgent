@@ -1,4 +1,49 @@
 // Independent creative workspaces reuse immutable attachments and normal chat permissions.
+let creativeEdit = null,
+  creativeLeavePrompt = null;
+function trackCreativeEdit(element, read) {
+  if (creativeEdit?.element === element) {
+    element.removeEventListener("input", creativeEdit.update);
+    element.removeEventListener("change", creativeEdit.update);
+  }
+  const status = elem("p", "hint creative-save-status", "已保存");
+  status.setAttribute("role", "status");
+  element.append(status);
+  const edit = {
+    element,
+    read,
+    baseline: JSON.stringify(read()),
+    saving: false,
+  };
+  edit.saved = () => {
+    edit.baseline = JSON.stringify(read());
+    status.textContent = "已保存";
+  };
+  edit.update = () => {
+    status.textContent =
+      JSON.stringify(read()) === edit.baseline ? "已保存" : "有未保存的修改";
+  };
+  element.addEventListener("input", edit.update);
+  element.addEventListener("change", edit.update);
+  creativeEdit = edit;
+  return edit;
+}
+async function confirmCreativeLeave() {
+  if (!creativeEdit?.element.isConnected) return true;
+  if (creativeEdit.saving) {
+    toast("正在保存，请稍候");
+    return false;
+  }
+  if (JSON.stringify(creativeEdit.read()) === creativeEdit.baseline)
+    return true;
+  if (!creativeLeavePrompt)
+    creativeLeavePrompt = appConfirm(
+      "有未保存的修改，放弃修改并继续？",
+    ).finally(() => {
+      creativeLeavePrompt = null;
+    });
+  return creativeLeavePrompt;
+}
 function studioField(label, control) {
   const wrapper = elem("label", "studio-field");
   wrapper.append(elem("span", "", label), control);
@@ -148,6 +193,7 @@ async function renderCreatorPage() {
       );
   }
   async function open(id) {
+    if (!(await confirmCreativeLeave())) return;
     const opening = ++openTicket;
     const item = await api("/api/creations/" + id);
     if (
@@ -176,7 +222,7 @@ async function renderCreatorPage() {
       const version = item.versions.find((v) => v.id === versions.value);
       content.replaceChildren();
       const url = "/api/attachments/" + version.attachment_id + "/content";
-      while(controls.children.length>1)controls.lastElementChild.remove();
+      while (controls.children.length > 1) controls.lastElementChild.remove();
       controls.append(
         studioLink("下载文件", url, version.attachment.name),
         studioLink(
@@ -246,13 +292,22 @@ async function renderCreatorPage() {
         elem("summary", "", "编辑源文件"),
         editor,
         studioAction("保存新版本", async () => {
-          await api("/api/creations/" + id, "PUT", {
-            expected_head: item.head,
-            content: editor.value,
-          });
+          editState.saving = true;
+          source.inert = true;
+          try {
+            await api("/api/creations/" + id, "PUT", {
+              expected_head: item.head,
+              content: editor.value,
+            });
+            editState.saved();
+          } finally {
+            editState.saving = false;
+            source.inert = false;
+          }
           await refresh(id);
         }),
       );
+      const editState = trackCreativeEdit(source, () => editor.value);
       const report = elem("div", "creative-report");
       report.setAttribute("role", "status");
       const assets = elem("details");
@@ -352,8 +407,20 @@ async function renderCreatorPage() {
         report,
       );
     }
-    versions.onchange = () =>
-      showVersion().catch((error) => toast(error.message));
+    let shownVersion = versions.value;
+    versions.onchange = async () => {
+      if (!(await confirmCreativeLeave())) {
+        versions.value = shownVersion;
+        versions._refresh?.();
+        return;
+      }
+      shownVersion = versions.value;
+      try {
+        await showVersion();
+      } catch (error) {
+        toast(error.message);
+      }
+    };
     await showVersion();
   }
   await refresh();
@@ -563,6 +630,7 @@ async function renderStoryPage() {
       );
   }
   async function open(id) {
+    if (!(await confirmCreativeLeave())) return;
     const opening = ++openTicket;
     const project = await api("/api/stories/" + id);
     if (
@@ -618,7 +686,8 @@ async function renderStoryPage() {
       entries.append(button);
     }
     detail.append(entries, editor);
-    function edit(entry) {
+    async function edit(entry) {
+      if (!(await confirmCreativeLeave())) return;
       editor.replaceChildren();
       editor.dataset.revision = String(entry?.revision || 0);
       const title = elem("input");
@@ -659,8 +728,18 @@ async function renderStoryPage() {
       const save = elem("button", "primary", "保存条目");
       save.type = "submit";
       editor.append(fields, text, save);
+      const editState = trackCreativeEdit(editor, () => ({
+        title: title.value,
+        kind: kind.value,
+        state: status.value,
+        position: position.value,
+        content: text.value,
+      }));
       editor.onsubmit = async (event) => {
         event.preventDefault();
+        if (editState.saving) return;
+        editState.saving = true;
+        editor.inert = true;
         try {
           await api("/api/stories/" + id + "/entries", "PUT", {
             id: entry?.id,
@@ -671,9 +750,14 @@ async function renderStoryPage() {
             position: Number(position.value),
             content: text.value,
           });
+          editState.saved();
+          editState.saving = false;
           await open(id);
         } catch (error) {
           toast(error.message);
+        } finally {
+          editState.saving = false;
+          editor.inert = false;
         }
       };
       if (entry)
@@ -693,6 +777,7 @@ async function renderStoryPage() {
                   status._refresh?.();
                   position.value = version.snapshot.position;
                   text.value = version.snapshot.content;
+                  editState.update();
                   toast("已载入历史版本，保存后创建新修订");
                 }),
               );
@@ -700,7 +785,7 @@ async function renderStoryPage() {
           }),
         );
     }
-    edit(project.entries[0] || null);
+    await edit(project.entries[0] || null);
   }
   await refresh();
 }

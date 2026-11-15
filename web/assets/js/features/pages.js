@@ -9,6 +9,7 @@ const pageCounts=elem('span','page-counts');
 function routeUrl(page){const url=new URL(location.href);if(page==='home')url.searchParams.delete('view');else url.searchParams.set('view',page);return url.pathname+url.search}
 function rememberPage(page,replace=false){const method=replace?'replaceState':'pushState';if(location.pathname+location.search!==routeUrl(page)||!history.state?.astraPage)history[method]({astraPage:page},'',routeUrl(page));if(typeof syncHistoryButtons==='function')syncHistoryButtons()}
 async function navigatePage(page,{historyMode='push'}={}){
+ if(!await confirmCreativeLeave()){selectRail(appPage);return false;}
  if(!['home','images','library','schedule','marketplace','creator','story'].includes(page))page='home';
  if(!$('#settings').hidden&&!await closeSettingsPage())return false;
  if(state.mode==='canvas'&&!await flushBoard())return false;
@@ -69,6 +70,6 @@ new MutationObserver(syncWorkspaceVisibility).observe($('#settings'),{attributes
 const beforePageHubOpen=hubOpen.onclick;hubOpen.onclick=function(...args){hubDialog.append(hubBody);return beforePageHubOpen.apply(this,args)};
 attachmentPicker.addEventListener('change',()=>{if(appPage!=='library')return;let attempts=0;const refresh=()=>{if(appPage!=='library')return;if(uploadBusy&&attempts++<100){setTimeout(refresh,200);return}loadAssetPage(appPage,pageTicket)};setTimeout(refresh,200)});
 const beforePageImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforePageImageEvent(sid,event);if(['images','library'].includes(appPage)&&['image_generated','file_generated'].includes(event.type))loadAssetPage(appPage,pageTicket)};
-window.addEventListener('popstate',()=>navigatePage(new URLSearchParams(location.search).get('view')||'home',{historyMode:'none'}));
+window.addEventListener('popstate',async()=>{if(!await navigatePage(new URLSearchParams(location.search).get('view')||'home',{historyMode:'none'}))rememberPage(appPage,true)});
 const initialPage=new URLSearchParams(location.search).get('view')||'home';
 Promise.resolve(studioReady).then(()=>navigatePage(initialPage,{historyMode:'replace'})).catch(error=>toast(error.message));

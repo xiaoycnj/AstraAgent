@@ -99,7 +99,11 @@ async function main() {
       .getByRole("heading", { name: "作品工作台", exact: true })
       .waitFor();
     await page.locator(".creative-frame").waitFor();
-    await page.locator('.creative-detail .studio-field').filter({hasText:'版本'}).locator('button.custom-select').waitFor();
+    await page
+      .locator(".creative-detail .studio-field")
+      .filter({ hasText: "版本" })
+      .locator("button.custom-select")
+      .waitFor();
     assert.equal(
       await page.locator(".creative-item[aria-current=true]").count(),
       1,
@@ -153,6 +157,24 @@ async function main() {
     await page
       .locator(".story-editor textarea")
       .fill("Revised through normal editor");
+    await page.evaluate(() => {
+      navigatePage("home");
+    });
+    await page
+      .locator(".app-dialog[open]")
+      .getByRole("button", { name: "取消", exact: true })
+      .click();
+    assert.equal(await page.evaluate(() => appPage), "story");
+    assert.equal(
+      await page.locator(".story-editor textarea").inputValue(),
+      "Revised through normal editor",
+    );
+    const saveEndpoint='**/api/stories/'+ids.story+'/entries';
+    await page.route(saveEndpoint,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'fixture save failed'})}));
+    await page.getByRole('button',{name:'保存条目',exact:true}).click();
+    await page.waitForFunction(()=>$('#toast').textContent==='fixture save failed'&&!document.querySelector('.story-editor').inert);
+    assert.equal(await page.locator('.story-editor textarea').inputValue(),'Revised through normal editor');
+    await page.unroute(saveEndpoint);
     await page.getByRole("button", { name: "保存条目", exact: true }).click();
     await page.waitForFunction(
       () => document.querySelector(".story-editor")?.dataset.revision === "2",
