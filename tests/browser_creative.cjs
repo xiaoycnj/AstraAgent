@@ -49,6 +49,7 @@ async function main() {
         "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
     });
     const page = await browser.newPage({
+      locale: 'zh-CN',
       viewport: { width: 1440, height: 1000 },
     });
     const errors = [];

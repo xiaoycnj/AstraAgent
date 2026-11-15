@@ -31,7 +31,7 @@ async function main() {
     const token = execFileSync(python, ['-c', 'import security_core,sys;from pathlib import Path;print(security_core.capability(Path(sys.argv[1])))', data], {cwd: root, windowsHide: true}).toString().trim();
     const edge = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
     browser = await chromium.launch({headless: true, executablePath: process.env.ASTRA_TEST_BROWSER || (fs.existsSync(edge) ? edge : undefined)});
-    const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
+    const context = await browser.newContext({locale:'zh-CN',viewport: {width: 1440, height: 1000}});
     const page = await context.newPage();
     const errors = [];
     const externalRequests=[];
