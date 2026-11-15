@@ -1,0 +1,45 @@
+name: Windows regression
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-regression:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - name: Core execution and security tests
+        shell: pwsh
+        run: |
+          foreach ($suite in @('test_agent_runtime.py','test_context_oauth.py','test_creative_workflows.py','test_durable_execution.py','test_image_generation.py','test_security.py')) {
+            python -m unittest discover -s tests -p $suite -q
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Browser workflows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force work | Out-Null
+          npm install --prefix "$env:RUNNER_TEMP/astra-ui" --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PLAYWRIGHT_MODULE = "$env:RUNNER_TEMP/astra-ui/node_modules/playwright"
+          $env:ASTRA_TEST_PYTHON = (Get-Command python).Source
+          $env:ASTRA_TEST_BROWSER = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
+          if (!(Test-Path -LiteralPath $env:ASTRA_TEST_BROWSER)) { throw 'Microsoft Edge is required for the browser gate' }
+          node tests/browser_creative.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/browser_security.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

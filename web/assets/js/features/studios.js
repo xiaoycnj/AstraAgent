@@ -1,7 +1,7 @@
 // Independent creative workspaces reuse immutable attachments and normal chat permissions.
 let creativeEdit = null,
   creativeLeavePrompt = null;
-function trackCreativeEdit(element, read) {
+function trackCreativeEdit(element, read, target, base, apply) {
   if (creativeEdit?.element === element) {
     element.removeEventListener("input", creativeEdit.update);
     element.removeEventListener("change", creativeEdit.update);
@@ -23,6 +23,7 @@ function trackCreativeEdit(element, read) {
     status.textContent =
       JSON.stringify(read()) === edit.baseline ? "已保存" : "有未保存的修改";
   };
+  attachEditorDraft(edit, status, target, base, apply);
   element.addEventListener("input", edit.update);
   element.addEventListener("change", edit.update);
   creativeEdit = edit;
@@ -36,6 +37,12 @@ async function confirmCreativeLeave() {
   }
   if (JSON.stringify(creativeEdit.read()) === creativeEdit.baseline)
     return true;
+  try {
+    await creativeEdit.flush();
+  } catch {
+    toast("本地草稿保存失败，请手动保存");
+    return false;
+  }
   if (!creativeLeavePrompt)
     creativeLeavePrompt = appConfirm(
       "有未保存的修改，放弃修改并继续？",
@@ -299,7 +306,7 @@ async function renderCreatorPage() {
               expected_head: item.head,
               content: editor.value,
             });
-            editState.saved();
+            await editState.saved();
           } finally {
             editState.saving = false;
             source.inert = false;
@@ -307,7 +314,15 @@ async function renderCreatorPage() {
           await refresh(id);
         }),
       );
-      const editState = trackCreativeEdit(source, () => editor.value);
+      const editState = trackCreativeEdit(
+        source,
+        () => editor.value,
+        "creation:" + id,
+        version.id,
+        (value) => {
+          editor.value = value;
+        },
+      );
       const report = elem("div", "creative-report");
       report.setAttribute("role", "status");
       const assets = elem("details");
@@ -728,13 +743,27 @@ async function renderStoryPage() {
       const save = elem("button", "primary", "保存条目");
       save.type = "submit";
       editor.append(fields, text, save);
-      const editState = trackCreativeEdit(editor, () => ({
-        title: title.value,
-        kind: kind.value,
-        state: status.value,
-        position: position.value,
-        content: text.value,
-      }));
+      const editState = trackCreativeEdit(
+        editor,
+        () => ({
+          title: title.value,
+          kind: kind.value,
+          state: status.value,
+          position: position.value,
+          content: text.value,
+        }),
+        "story:" + id + ":" + (entry?.id || "new"),
+        String(entry?.revision || 0),
+        (value) => {
+          title.value = value.title;
+          kind.value = value.kind;
+          status.value = value.state;
+          position.value = value.position;
+          text.value = value.content;
+          kind._refresh?.();
+          status._refresh?.();
+        },
+      );
       editor.onsubmit = async (event) => {
         event.preventDefault();
         if (editState.saving) return;
@@ -750,7 +779,7 @@ async function renderStoryPage() {
             position: Number(position.value),
             content: text.value,
           });
-          editState.saved();
+          await editState.saved();
           editState.saving = false;
           await open(id);
         } catch (error) {
@@ -769,7 +798,8 @@ async function renderStoryPage() {
             const history = elem("div", "creative-controls");
             for (const version of result)
               history.append(
-                studioAction("V" + version.revision, () => {
+                studioAction("V" + version.revision, async () => {
+                  if (!(await confirmCreativeLeave())) return;
                   title.value = version.snapshot.title;
                   kind.value = version.snapshot.kind;
                   status.value = version.snapshot.state;
@@ -808,6 +838,23 @@ async function renderSchedulePage() {
   destinationActions.append(
     studioAction("刷新", () =>
       navigatePage("schedule", { historyMode: "none" }),
+    ),
+  );
+  const health = await api("/api/schedules/health");
+  if (pageTicket !== renderTicket) return;
+  destinationBody.append(
+    elem(
+      "p",
+      "hint",
+      (health.running ? "调度器运行中" : "调度器未运行") +
+        " · " +
+        (health.last_success
+          ? new Date(health.last_success * 1000).toLocaleString()
+          : "尚未完成轮询") +
+        " · " +
+        health.consecutive_failures +
+        " " +
+        "次连续轮询失败",
     ),
   );
   const catalog = await api("/api/evaluations");

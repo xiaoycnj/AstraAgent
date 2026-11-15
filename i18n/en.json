@@ -1538,6 +1538,20 @@
     "没有匹配的项目": "No matching projects",
     "有未保存的修改": "Unsaved changes",
     "正在保存，请稍候": "Saving, please wait",
-    "有未保存的修改，放弃修改并继续？": "Discard unsaved changes and continue?"
+    "有未保存的修改，放弃修改并继续？": "Discard unsaved changes and continue?",
+    "本地草稿已保存": "Local draft saved",
+    "本地草稿保存失败，请手动保存": "Local draft failed. Save manually.",
+    "正文已保存，草稿清理失败": "Content saved. Draft cleanup failed.",
+    "恢复本地草稿": "Recover local drafts",
+    "发现未保存的本地草稿": "An unsaved local draft is available",
+    "草稿基于旧版本，请对照当前内容后恢复": "Draft uses an older base. Compare with current content before restoring.",
+    "草稿内容": "Draft content",
+    "删除草稿": "Delete draft",
+    "删除这份本地草稿？": "Delete this local draft?",
+    "本地草稿不可用，请手动保存": "Local drafts unavailable. Save manually.",
+    "调度器运行中": "Scheduler running",
+    "调度器未运行": "Scheduler stopped",
+    "尚未完成轮询": "No completed poll yet",
+    "次连续轮询失败": "consecutive polling failures"
   }
 }

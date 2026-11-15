@@ -247,6 +247,18 @@ class CreativeWorkflows(unittest.TestCase):
 
 
 class ScheduledIntegration(unittest.TestCase):
+    def test_health_reports_failure_and_recovers_without_error_payload(self):
+        scheduler = task_scheduler.Scheduler(None, None)
+        with patch.object(scheduler, "tick", side_effect=RuntimeError("secret token")):
+            self.assertFalse(scheduler.poll())
+        report = scheduler.snapshot()
+        self.assertEqual(report["consecutive_failures"], 1)
+        self.assertEqual(report["last_error"], "RuntimeError")
+        self.assertNotIn("secret", json.dumps(report))
+        with patch.object(scheduler, "tick", return_value=None):
+            self.assertTrue(scheduler.poll())
+        self.assertEqual(scheduler.snapshot()["consecutive_failures"], 0)
+
     def test_scheduled_task_uses_durable_chat_and_live_policy(self):
         import backend
         import runtime_engine

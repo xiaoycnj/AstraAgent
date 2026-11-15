@@ -73,3 +73,9 @@ DeepSeek Harness 官方仓库强调插件组织。这里借鉴按能力组织模
 `native/Launcher.cs` 编译为两个程序，GUI 版本使用 Windows 图形子系统并启动 `pythonw.exe`，CLI 使用控制台子系统并启动 `python.exe`。可以用 `scripts/build_launcher.ps1` 在 Windows .NET Framework 环境下重建。两版都保持参数引用规则和相同的 Python 应用入口。
 
 标准版使用包内运行时，Lite 查找 CPython 3.14 或 Python Launcher。无需 PyInstaller 或额外常驻服务。GUI 异常写入本机启动日志，CLI 交互输出采用 UTF-8。启动器当前未进行 Authenticode 签名。
+
+## 编辑草稿与回归检查
+
+作品与写作的输入缓冲保存在当前浏览器或桌面 WebView 配置的 IndexedDB 中，输入后延迟 350ms 写入，应用内离开确认前等待落盘。恢复面板显示草稿内容和基础版本是否变化，由用户选择载入，保存正文仍校验当前服务端版本。成功保存后清理该窗口和本次恢复的草稿。草稿在恢复前保留本地，浏览器配置清理会影响草稿。进程在延迟写入完成前被终止时，最近输入仍可能丢失。
+
+Windows regression 工作流运行所选核心执行、安全测试及作品/安全浏览器流程。分支合并限制需要在仓库保护规则中将该检查设为必需。原生窗口动画、签名和完整发行版验收继续采用独立检查。

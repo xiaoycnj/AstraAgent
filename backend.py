@@ -21,6 +21,7 @@ import creation_store
 import browser_checks
 import story_projects
 import task_scheduler
+SCHEDULER=None
 import usage_meter
 import openai_oauth
 import openai_responses
@@ -1295,6 +1296,8 @@ class Handler(BaseHTTPRequestHandler):
                     else:raise ApiError(405,'请求方法无效')
                 return self.reply(200,result)
             except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
+        if pathname=='/api/schedules/health' and method=='GET':
+            return self.reply(200,SCHEDULER.snapshot() if SCHEDULER else {'running':False,'last_poll':None,'last_success':None,'consecutive_failures':0,'last_error':''})
         if pathname=='/api/schedules':
             try:
                 with database() as db:
@@ -2024,7 +2027,7 @@ class LocalServer(ThreadingHTTPServer):
         finally:self.workers.release()
 
 def main():
-    global DATA,TOKEN
+    global DATA,TOKEN,SCHEDULER
     p = argparse.ArgumentParser()
     p.add_argument('--port', type=int, default=int(os.getenv('PORT', '8787')))
     p.add_argument('--open', action='store_true')
@@ -2045,7 +2048,7 @@ def main():
     url = f'http://127.0.0.1:{server.server_port}'
     print(f'\nAstraAgent — Personal Agent Workspace / V3.14.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
-    scheduler=task_scheduler.Scheduler(database,dispatch_schedule);scheduler.start()
+    scheduler=task_scheduler.Scheduler(database,dispatch_schedule);SCHEDULER=scheduler;scheduler.start()
     try: server.serve_forever()
     except KeyboardInterrupt: print('\nStopped.')
     finally: scheduler.stop.set();server.server_close()

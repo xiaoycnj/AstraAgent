@@ -10,7 +10,9 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-shared-ui-"));
   const data = path.join(folder, "data");
-  const python = path.join(root, "runtimes/python/python.exe");
+  const python =
+    process.env.ASTRA_TEST_PYTHON ||
+    path.join(root, "runtimes/python/python.exe");
   const server = spawn(
     python,
     ["-u", "server.py", "--port", "0", "--data-dir", data],
@@ -43,6 +45,7 @@ async function main() {
     browser = await chromium.launch({
       headless: true,
       executablePath:
+        process.env.ASTRA_TEST_BROWSER ||
         "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
     });
     const page = await browser.newPage({
@@ -169,11 +172,24 @@ async function main() {
       await page.locator(".story-editor textarea").inputValue(),
       "Revised through normal editor",
     );
-    const saveEndpoint='**/api/stories/'+ids.story+'/entries';
-    await page.route(saveEndpoint,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'fixture save failed'})}));
-    await page.getByRole('button',{name:'保存条目',exact:true}).click();
-    await page.waitForFunction(()=>$('#toast').textContent==='fixture save failed'&&!document.querySelector('.story-editor').inert);
-    assert.equal(await page.locator('.story-editor textarea').inputValue(),'Revised through normal editor');
+    const saveEndpoint = "**/api/stories/" + ids.story + "/entries";
+    await page.route(saveEndpoint, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "fixture save failed" }),
+      }),
+    );
+    await page.getByRole("button", { name: "保存条目", exact: true }).click();
+    await page.waitForFunction(
+      () =>
+        $("#toast").textContent === "fixture save failed" &&
+        !document.querySelector(".story-editor").inert,
+    );
+    assert.equal(
+      await page.locator(".story-editor textarea").inputValue(),
+      "Revised through normal editor",
+    );
     await page.unroute(saveEndpoint);
     await page.getByRole("button", { name: "保存条目", exact: true }).click();
     await page.waitForFunction(
@@ -181,6 +197,48 @@ async function main() {
     );
     await page.getByRole("button", { name: "历史版本", exact: true }).click();
     await page.getByRole("button", { name: "V1", exact: true }).waitFor();
+    await page.locator(".story-editor textarea").fill("UNSAVED HISTORY BUFFER");
+    await page.getByRole("button", { name: "V1", exact: true }).click();
+    await page
+      .locator(".app-dialog[open]")
+      .getByRole("button", { name: "取消", exact: true })
+      .click();
+    assert.equal(
+      await page.locator(".story-editor textarea").inputValue(),
+      "UNSAVED HISTORY BUFFER",
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".creative-save-status")?.textContent ===
+        "本地草稿已保存",
+    );
+    await page.reload();
+    await page.waitForFunction(
+      () =>
+        state.token &&
+        appPage === "story" &&
+        document.querySelector(".creative-draft-recovery:not([hidden])"),
+    );
+    await page.locator(".creative-draft-recovery summary").click();
+    await page.locator(".creative-draft-recovery textarea").first().waitFor();
+    assert.ok(
+      (
+        await page
+          .locator(".creative-draft-recovery textarea")
+          .first()
+          .inputValue()
+      ).includes("UNSAVED HISTORY BUFFER"),
+    );
+    await page.locator(".creative-draft-recovery button").first().click();
+    assert.equal(
+      await page
+        .locator(".creative-detail > .story-editor > textarea")
+        .inputValue(),
+      "UNSAVED HISTORY BUFFER",
+    );
+    await page
+      .locator(".creative-detail > .story-editor > textarea")
+      .fill("Revised through normal editor");
     await page
       .getByRole("button", { name: "绑定当前会话", exact: true })
       .click();

@@ -193,6 +193,34 @@ class Scheduler:
         self.database = database
         self.dispatch = dispatch
         self.stop = threading.Event()
+        self.health_lock = threading.Lock()
+        self.health = {
+            "running": False,
+            "last_poll": None,
+            "last_success": None,
+            "consecutive_failures": 0,
+            "last_error": "",
+        }
+
+    def snapshot(self):
+        with self.health_lock:
+            return dict(self.health)
+
+    def poll(self):
+        with self.health_lock:
+            self.health["last_poll"] = time.time()
+        try:
+            self.tick()
+        except Exception as error:
+            with self.health_lock:
+                self.health["consecutive_failures"] += 1
+                self.health["last_error"] = type(error).__name__
+            return False
+        with self.health_lock:
+            self.health.update(
+                last_success=time.time(), consecutive_failures=0, last_error=""
+            )
+        return True
 
     def tick(self, now=None):
         with self.database() as db:
@@ -233,12 +261,15 @@ class Scheduler:
     def start(self):
         with self.database() as db:
             recover(db)
+        with self.health_lock:
+            self.health["running"] = True
 
         def work():
-            while not self.stop.wait(5):
-                try:
-                    self.tick()
-                except Exception:
-                    pass  # The next transaction retries polling, never a claimed dispatch.
+            try:
+                while not self.stop.wait(5):
+                    self.poll()
+            finally:
+                with self.health_lock:
+                    self.health["running"] = False
 
         threading.Thread(target=work, daemon=True, name="astra-scheduler").start()
