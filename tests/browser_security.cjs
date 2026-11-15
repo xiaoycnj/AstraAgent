@@ -213,6 +213,7 @@ async function main() {
       assert.equal(await page.locator('#destination-page').isVisible(),false);
       assert.equal(await page.locator('.studio-body').isVisible(),false);
       assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),true);
+      assert.equal(await page.evaluate(()=>document.querySelector('#settings').contains(document.activeElement)),true);
       await page.keyboard.press('Escape');
       await page.waitForFunction(()=>document.querySelector('#settings').hidden);
       assert.equal(await page.locator('#app>main').evaluate(el=>el.inert),false);

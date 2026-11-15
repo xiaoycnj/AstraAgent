@@ -62,7 +62,7 @@ function syncWorkspaceVisibility(){
  if(!settingsOpen)selectRail(appPage==='home'?'home':appPage);
 }
 // Hook the page owner, so older menu callbacks that captured showSettings also synchronize.
-const beforePageOpenSettings=openSettingsPage;openSettingsPage=function(){beforePageOpenSettings();syncWorkspaceVisibility()};
+const beforePageOpenSettings=openSettingsPage;openSettingsPage=function(){beforePageOpenSettings();syncWorkspaceVisibility();settingsSearch.focus({preventScroll:true})};
 const beforePageCloseSettings=closeSettingsPage;closeSettingsPage=async function(){const result=await beforePageCloseSettings();syncWorkspaceVisibility();return result};
 $('#settings-close').onclick=()=>closeSettingsPage();
 // Covers legacy callbacks that captured a previous closeSettingsPage function.
