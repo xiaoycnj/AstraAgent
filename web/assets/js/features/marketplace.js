@@ -501,13 +501,18 @@ makerForm.append(
 
 const marketImporter = elem("input");
 marketImporter.type = "file";
-marketImporter.accept = ".json";
+marketImporter.accept = ".json,.zip";
 marketImporter.hidden = true;
 document.body.append(marketImporter);
 marketImporter.onchange = async () => {
   try {
     const file = marketImporter.files[0];
     if (!file) return;
+    if (file.name.toLowerCase().endsWith('.zip')) {
+      await importAppearancePack(file);
+      toast('皮肤包已应用');
+      return;
+    }
     if (file.size > 500000) throw Error("作品包过大");
     const entry = JSON.parse(await file.text());
     if (

@@ -11,8 +11,8 @@
 .header-actions{gap:6px}.header-icon{border-radius:10px;width:33px;height:33px}.header-icon:hover{background:var(--soft)}
 .chat-view{min-height:0}.messages{padding:30px max(48px,calc((100% - var(--chat-width))/2)) 34px;scroll-padding-block:24px;overscroll-behavior:contain}
 .message{font-size:15px;line-height:1.85;overflow-wrap:anywhere;min-width:0}
-.message.assistant{border:0!important;background:transparent!important;box-shadow:none!important;padding:8px 0 24px;margin:0 auto 26px;max-width:var(--chat-width);width:100%}
-.message.user{width:fit-content;max-width:min(78%,650px);margin:8px 0 32px auto;padding:13px 20px;border-radius:20px 20px 6px 20px;background:color-mix(in srgb,var(--blue) 7%,var(--glass-reading))!important;border:1px solid color-mix(in srgb,var(--glass-edge) 65%,transparent);box-shadow:0 2px 8px var(--glass-shadow);line-height:1.7}
+.message.assistant{border:0!important;background:transparent;box-shadow:none!important;padding:8px 0 24px;margin:0 auto 26px;max-width:var(--chat-width);width:100%}
+.message.user{width:fit-content;max-width:min(78%,650px);margin:8px 0 32px auto;padding:13px 20px;border-radius:20px 20px 6px 20px;background:color-mix(in srgb,var(--blue) 7%,var(--glass-reading));border:1px solid color-mix(in srgb,var(--glass-edge) 65%,transparent);box-shadow:0 2px 8px var(--glass-shadow);line-height:1.7}
 .message-header{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:650;letter-spacing:.09em;color:var(--muted);margin-bottom:14px;min-height:28px}
 .message-header:before{content:'';width:7px;height:7px;border-radius:3px;background:var(--blue);box-shadow:0 0 10px color-mix(in srgb,var(--blue) 25%,transparent)}
 .message-header button{font-size:11px;letter-spacing:0;font-weight:400;margin-left:auto;opacity:.6}.message:hover .message-header button{opacity:1}

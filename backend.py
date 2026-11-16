@@ -15,6 +15,7 @@ import model_registry
 import auto_router
 import anthropic_messages
 import marketplace
+import personalization
 import application_plugins
 import task_evaluations
 import creation_store
@@ -1204,6 +1205,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def route(self):
         pathname = urlsplit(self.path).path
+        if pathname.startswith(('/api/appearance', '/appearance-assets/')):
+            try:
+                if personalization.handle_request(self, DATA):
+                    return
+            except ValueError as error:
+                raise ApiError(400, str(error)) from None
         if pathname.startswith('/api/openai-oauth/'):
             action=pathname.rsplit('/',1)[-1];manager=openai_oauth.manager(DATA)
             try:
