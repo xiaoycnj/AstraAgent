@@ -6,7 +6,7 @@ const oldRuntimeOptions=runtimeOptions;runtimeOptions=function(){return {...oldR
 const approvalDialog=elem('dialog','approval-dialog');const approvalHeading=elem('h2','','Agent 请求文件访问');const approvalDetails=elem('pre');const approvalActions=elem('div','approval-actions');const rejectApproval=elem('button','secondary','拒绝');const acceptApproval=elem('button','primary','允许本次');approvalActions.append(rejectApproval,acceptApproval);approvalDialog.append(approvalHeading,elem('p','hint','仅访问 data/files 工作目录。请核对路径和写入内容。'),approvalDetails,approvalActions);document.body.append(approvalDialog);
 let approvalQueue=Promise.resolve();function requestApproval(event){approvalQueue=approvalQueue.then(()=>new Promise(resolve=>{approvalHeading.textContent=event.name==='remember_memory'?'保存这条长期记忆？':event.name==='execute_command'?'允许执行此命令？':'Agent 请求文件访问';approvalDialog.querySelector('.hint').textContent=event.name==='remember_memory'?'记忆将保存在 memory/，并在启用记忆时用于后续对话。':event.name==='execute_command'?'请核对命令参数和模式。本机模式不具备系统隔离。':'仅访问受控目录。请核对路径和写入内容。';approvalDetails.textContent=event.name+'\n'+JSON.stringify(event.args,null,2);approvalDialog.showModal();const finish=async allow=>{approvalDialog.close();try{await api('/api/approvals','POST',{id:event.id,allow})}catch(e){toast(e.message)}resolve()};rejectApproval.onclick=()=>finish(false);acceptApproval.onclick=()=>finish(true);approvalDialog.oncancel=e=>{e.preventDefault();finish(false)}}));return approvalQueue}
 async function receiveStream(sid,content,onDelta){const response=await fetch(`/api/sessions/${sid}/chat`,{method:'POST',headers:{'Content-Type':'application/json','X-App-Token':state.token},body:JSON.stringify({content,...runtimeOptions(),...(typeof attachmentOptions==='function'?attachmentOptions(sid):{}),stream:true})});if(!response.ok){const err=await response.json();throw new Error(err.error||'请求失败')}const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',final='',finished=false;try{while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value||new Uint8Array(),{stream:!done});let boundary;while((boundary=buffer.indexOf('\n\n'))>=0){const packet=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);const line=packet.split('\n').find(x=>x.startsWith('data:'));if(!line)continue;const event=JSON.parse(line.slice(5));if(typeof handleAgentEvent==='function')handleAgentEvent(sid,event);if(event.type==='delta')onDelta(event.text);if(event.type==='approval')await requestApproval(event);if(event.type==='tool')toast((event.result?.error?'工具未完成：':'工具已执行：')+event.name);if(event.type==='error')throw new Error(event.message);if(event.type==='done'){final=event.content;finished=true}}if(done)break}if(!finished)throw new Error('流式连接中断，回复未保存。');return {content:final}}finally{reader.releaseLock()}}
-async function streamChat(sid,content){const draft={role:'assistant',content:'',streaming:true};state.messages.push(draft);let nextRender=0;try{return await receiveStream(sid,content,text=>{draft.content+=text;if(state.session?.id===sid&&Date.now()>nextRender){renderMessages();nextRender=Date.now()+60}})}catch(e){state.messages=state.messages.filter(m=>m!==draft);throw e}}
+async function streamChat(sid,content){const draft={role:'assistant',content:'',streaming:true};if(state.session?.id===sid)state.messages.push(draft);let nextRender=0;try{return await receiveStream(sid,content,text=>{draft.content+=text;if(state.session?.id===sid&&Date.now()>nextRender){renderMessages();nextRender=Date.now()+60}})}catch(e){if(state.session?.id===sid)state.messages=state.messages.filter(m=>m!==draft);throw e}}
 async function streamCanvasChat(sid,content,nodeId){let text='';const result=await receiveStream(sid,content,chunk=>{text+=chunk;const card=$$('.node').find(n=>n.dataset.id===nodeId);if(card)card.querySelector('.node-content').textContent=text.slice(-500)});return result}
 // The first view is reasoning; clicking its model label replaces it with model choices.
 reasoningButton.hidden=true;reasoningPopover.hidden=true;
@@ -28,7 +28,57 @@ providerClose.onclick=()=>closeProvider();providerDialog.oncancel=e=>{e.preventD
 function expandProvider(id,source,mode=id?'edit':'new'){providerMode=mode;$('#provider-edit').value=id;$('#provider-edit').onchange();const c=mode==='default'?state.settings:providerRows.find(x=>x.id===id)||{};for(const [field,value] of [['provider-name',c.name||''],['base-url',c.base_url||''],['model',c.model||''],['timeout',c.timeout||90],['system-prompt',c.system_prompt||'你是一个认真、清晰、可靠的 AI 助手。']])$('#'+field).value=value;$('#api-key').value='';$('#clear-key').checked=false;$('#key-status').textContent=c.has_key?'已保存，留空则保留':'可留空用于本地服务';$('#settings-feedback').textContent='';$('#settings-feedback').classList.remove('error');$('#provider-save').hidden=mode==='default';$('#save-settings').hidden=mode!=='default';$('#provider-delete').hidden=mode!=='edit';$('#provider-name').required=mode!=='default';$('#provider-name').closest('.input-row').classList.toggle('default-editor',mode==='default');$('.dialog-head h2').textContent=mode==='new'?'新增服务商':mode==='default'?'默认接口':c.name;settingsDirty=false;providerDialog.showModal();$('#provider-name').focus({preventScroll:true})}
 function renderProviderCards(){providerGrid.replaceChildren();const heading=elem('div','provider-grid-heading');heading.append(elem('h2','','模型服务商'),elem('p','hint','新增或编辑独立接入，保存后即可在对话里切换。'));providerGrid.append(heading);for(const row of [{id:'',name:'新增服务商'},...providerRows]){const card=elem('button','provider-card');card.type='button';card.append(svgIcon(row.id?'canvas':'plus'),elem('strong','',row.name),chevron());card.onclick=()=>expandProvider(row.id,card);providerGrid.append(card)}const card=elem('button','provider-card');card.type='button';card.append(svgIcon('settings'),elem('strong','','默认接口'),chevron());card.onclick=()=>expandProvider('',card,'default');providerGrid.append(card)}
 const previousLoadProviders=loadProviders;loadProviders=async function(){await previousLoadProviders();renderProviderCards()};renderProviderCards();
-async function saveProviderEditor(){if(providerSaving)return;const invalid=configFormElement.querySelector(':invalid');if(invalid){for(let parent=invalid.parentElement;parent&&parent!==configFormElement;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;invalid.focus();invalid.reportValidity();return;}const button=providerMode==='default'?$('#save-settings'):$('#provider-save');providerSaving=true;busyButton(button,true,'保存中…');$('#settings-feedback').classList.remove('error');try{if(providerMode==='default'){state.settings=await api('/api/settings','PUT',configForm());updateSettings()}else{const result=await api('/api/providers','POST',{...configForm(),id:providerMode==='edit'?$('#provider-edit').value:'',name:$('#provider-name').value.trim()});await loadProviders();$('#provider-select').value=result.id;selectProvider()}settingsDirty=false;providerSaving=false;closeProvider(true);toast('接入配置已保存')}catch(e){$('#settings-feedback').classList.add('error');$('#settings-feedback').textContent=e.message}finally{providerSaving=false;busyButton(button,false)}}
+async function saveProviderEditor() {
+  if (providerSaving) return;
+  const invalid = configFormElement.querySelector(':invalid');
+  if (invalid) {
+    for (let parent = invalid.parentElement; parent && parent !== configFormElement; parent = parent.parentElement)
+      if (parent.tagName === 'DETAILS') parent.open = true;
+    invalid.focus();
+    invalid.reportValidity();
+    return;
+  }
+  const button = providerMode === 'default' ? $('#save-settings') : $('#provider-save');
+  const data = configForm();
+  const name = $('#provider-name').value;
+  providerSaving = true;
+  busyButton(button, true, '保存中…');
+  $('#settings-feedback').classList.remove('error');
+  try {
+    if (providerMode === 'default') {
+      state.settings = await api('/api/settings', 'PUT', data);
+    } else {
+      const result = await api('/api/providers', 'POST', {
+        ...data, id: providerMode === 'edit' ? $('#provider-edit').value : '', name: name.trim()
+      });
+      // Retain the created ID so saving further edits updates this provider.
+      await loadProviders();
+      $('#provider-edit').value = result.id;
+      $('#provider-select').value = result.id;
+      selectProvider();
+      if (providerMode === 'new') providerMode = 'edit';
+      data.provider = result.id;
+    }
+    const current = configForm();
+    const unchanged = JSON.stringify(current) === JSON.stringify(data) && $('#provider-name').value === name;
+    if (!unchanged) {
+      settingsDirty = true;
+      $('#settings-feedback').textContent = uiText('提交的配置已保存，后续修改尚未保存。');
+      return;
+    }
+    if (providerMode === 'default') updateSettings();
+    settingsDirty = false;
+    providerSaving = false;
+    closeProvider(true);
+    toast('接入配置已保存');
+  } catch (error) {
+    $('#settings-feedback').classList.add('error');
+    $('#settings-feedback').textContent = error.message;
+  } finally {
+    providerSaving = false;
+    busyButton(button, false);
+  }
+}
 $('#provider-save').onclick=saveProviderEditor;$('#save-settings').onclick=e=>{e.preventDefault();saveProviderEditor()};configFormElement.onsubmit=e=>{e.preventDefault();saveProviderEditor()};
 $('#provider-delete').onclick=async()=>{if(providerSaving||providerMode!=='edit'||!await appConfirm('删除这个服务商配置？'))return;try{await api('/api/providers/'+$('#provider-edit').value,'DELETE');settingsDirty=false;await loadProviders();selectProvider();closeProvider(true);toast('服务商已删除')}catch(e){$('#settings-feedback').textContent=e.message}};
 // Twenty-four welcome messages, rotating once every five seconds.

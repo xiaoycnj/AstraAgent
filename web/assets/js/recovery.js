@@ -9,15 +9,16 @@ async function refreshExecutionRecovery(){
  if(!sid){recoveryPanel.hidden=true;return;}
  const rows=await api(`/api/sessions/${sid}/executions`);
  if(ticket!==recoveryGeneration||state.session?.id!==sid)return;
- const row=rows.find(item=>item.resumable);
- if(!row||state.pending.has(sid)){recoveryPanel.hidden=true;recoverySnapshot='';return;}
- const signature=sid+JSON.stringify(row);
+ const resumable=rows.filter(item=>item.resumable);
+ if(!resumable.length||state.pending.has(sid)){recoveryPanel.hidden=true;recoverySnapshot='';return;}
+ const signature=sid+JSON.stringify(resumable);
  if(signature===recoverySnapshot&&!recoveryPanel.hidden)return;
- const opened=!!recoveryPanel.querySelector('details')?.open;
+ const opened=new Map([...recoveryPanel.querySelectorAll('details')].map(detail=>[detail.dataset.execution,detail.open]));
  recoveryPanel.replaceChildren();recoveryPanel.hidden=false;recoverySnapshot=signature;
+ for(const row of resumable){
  const heading=elem('div','recovery-heading');heading.append(svgIcon('history'),elem('strong','','有一个任务可以继续'));
  const details=elem('details'),summary=elem('summary','',`${row.steps.filter(s=>s.status==='done').length} 个已保存步骤 · 查看执行记录`);
- details.open=opened;
+ details.dataset.execution=row.request_id;details.open=opened.get(row.request_id)||false;
  details.append(summary);
  for(const step of row.steps){
   const line=elem('div','recovery-step');line.append(elem('code','',step.name),elem('span','hint',recoveryLabels[step.status]||step.status));
@@ -33,22 +34,28 @@ async function refreshExecutionRecovery(){
  const unknown=row.steps.some(step=>step.status==='unknown');
  const hint=elem('p','hint',unknown?'有步骤的结果不确定。先核对并处置，再继续执行。':'已完成的步骤直接复用；待批准的调用会重新询问。');
  const resume=actionButton('继续任务',async()=>resumeExecution(row),'secondary');resume.disabled=unknown;resume.dataset.resumeExecution=row.request_id;
+ if(row.error)details.prepend(elem('p','hint',row.error));
  recoveryPanel.append(heading,hint,details,resume);
+ }
 }
 async function resumeExecution(row){
  const sid=row.session_id;if(activeStreams.has(sid)||state.pending.has(sid))return;
- state.pending.add(sid);recoveryPanel.hidden=true;
+ state.pending.add(sid);recoveryPanel.hidden=true;renderMessages();
  let promise;
  try{
   const result=await api(`/api/executions/${row.request_id}/resume`,'POST',{});
-  const draft={role:'assistant',content:'',streaming:true};state.messages.push(draft);renderMessages();
+  const draft={role:'assistant',content:'',streaming:true};
+  if(state.session?.id===sid){state.messages.push(draft);renderMessages();}
   promise=consumeDurableStream(sid,row.request_id,null,text=>{draft.content+=text;if(state.session?.id===sid)renderMessages();},result.after);
   activeStreams.set(sid,promise);streamKeys.set(sid,row.request_id);await promise;
  }catch(error){toast(error.message);}
  finally{
   if(activeStreams.get(sid)===promise)activeStreams.delete(sid);streamKeys.delete(sid);state.pending.delete(sid);
-  if(state.session?.id===sid){state.messages=await api(`/api/sessions/${sid}/messages`);renderMessages();await refreshTaskRecords();}
-  await refreshExecutionRecovery();
+  renderMessages();
+  try{
+   if(await refreshSessionMessages(sid)){renderMessages();await refreshTaskRecords();}
+   await refreshExecutionRecovery();
+  }catch(error){toast(error.message);}
  }
 }
 const priorRecoveryOpen=openSession;openSession=async function(session){recoveryPanel.hidden=true;await priorRecoveryOpen(session);await refreshExecutionRecovery();};

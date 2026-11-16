@@ -66,7 +66,7 @@ async function recoverSessionStream(session){
     activeStreams.set(session.id,promise);streamKeys.set(session.id,job.id);
     try{
         await promise;
-        if(state.session?.id===session.id)state.messages=await api('/api/sessions/'+session.id+'/messages');
+        await refreshSessionMessages(session.id);
     }catch(error){
         draft.streaming=false;
         if(state.session?.id===session.id){$('#chat-error').hidden=false;$('#chat-error').textContent=error.message;}

@@ -43,3 +43,5 @@
 @import url("ui/skins.css") layer(skins);
 
 @import url("studios.css") layer(layout);
+
+@import url("rich-chat.css") layer(layout);

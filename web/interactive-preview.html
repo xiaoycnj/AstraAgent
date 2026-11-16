@@ -1,0 +1,14 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body><script>
+// This document has an HTTP sandbox policy and no application credentials.
+window.addEventListener('message', function receive(event) {
+  if (event.source !== parent || event.origin !== location.origin ||
+      event.data?.type !== 'astra-preview-source' || typeof event.data.source !== 'string') return;
+  window.removeEventListener('message', receive);
+  document.open();
+  document.write(event.data.source);
+  document.close();
+});
+parent.postMessage({type: 'astra-preview-ready'}, '*');
+</script></body></html>

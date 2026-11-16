@@ -62,6 +62,104 @@ async function main() {
         document.querySelector(".command-launcher"),
     );
 
+    const raceChecks = await page.evaluate(async () => {
+      const original = {api, consumeDurableStream, session: state.session, messages: state.messages, settings: state.settings};
+      const check = (condition, message) => { if (!condition) throw Error(message); };
+      const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise, resolve}; };
+      try {
+        // A messages response arrives after navigation to a different session.
+        state.session = {id: 'race-a'};
+        const response = deferred();
+        api = () => response.promise;
+        const refresh = refreshSessionMessages('race-a');
+        state.session = {id: 'race-b'};
+        state.messages = [{role: 'user', content: 'Keep B'}];
+        response.resolve([{role: 'assistant', content: 'Old A'}]);
+        check(await refresh === false, 'Stale refresh was accepted');
+        check(state.messages[0].content === 'Keep B', 'Stale messages replaced B');
+
+        // Reopening the same session also invalidates the earlier view request.
+        state.session = {id: 'race-a'};
+        const reopened = deferred();
+        api = () => reopened.promise;
+        const oldView = refreshSessionMessages('race-a');
+        messageRequest++;
+        reopened.resolve([{content: 'Old view'}]);
+        check(await oldView === false, 'Reopened view accepted stale messages');
+
+        // Resume POST can finish after the user has switched sessions.
+        const resumed = deferred();
+        api = path => path.endsWith('/resume') ? resumed.promise : Promise.resolve([]);
+        consumeDurableStream = async (sid, key, payload, delta) => { delta('Recovered A'); return {}; };
+        const recovery = resumeExecution({session_id: 'race-a', request_id: 'race-request'});
+        state.session = {id: 'race-b'};
+        state.messages = [{role: 'user', content: 'Keep B'}];
+        resumed.resolve({after: 0});
+        await recovery;
+        check(state.messages.length === 1 && state.messages[0].content === 'Keep B', 'Recovery draft leaked into B');
+        check(!state.pending.has('race-a') && !activeStreams.has('race-a'), 'Recovery remained busy');
+
+        // A post-run refresh failure must still release controls.
+        state.session = {id: 'race-a'};
+        api = async path => { if (path.endsWith('/messages')) throw Error('Fixture refresh failure'); return {after: 0}; };
+        await resumeExecution({session_id: 'race-a', request_id: 'race-request'});
+        check(!state.pending.has('race-a'), 'Failed refresh kept recovery busy');
+
+        api = async () => [
+          {session_id: 'race-a', request_id: 'first', resumable: true, steps: []},
+          {session_id: 'race-a', request_id: 'second', resumable: true, steps: []}
+        ];
+        await refreshExecutionRecovery();
+        check(recoveryPanel.querySelectorAll('[data-resume-execution]').length === 2, 'Recovery hid a resumable task');
+
+        api = original.api;
+        state.settings = original.settings;
+        expandProvider('', null, 'default');
+        $('#base-url').value = 'https://example.com/v1';
+        $('#model').value = 'fixture-model';
+        const saved = deferred();
+        const started = deferred();
+        api = path => {
+          if (path === '/api/model-registry/match') return Promise.resolve({results: []});
+          started.resolve();
+          return saved.promise;
+        };
+        const payload = configForm();
+        const saving = saveProviderEditor();
+        await started.promise;
+        $('#system-prompt').value = 'Typed while saving';
+        saved.resolve({...payload, has_key: false});
+        await saving;
+        check(providerDialog.open && settingsDirty, 'Save closed over later edits: ' + JSON.stringify({open:providerDialog.open,dirty:settingsDirty,invalid:[...configFormElement.querySelectorAll(':invalid')].map(e=>e.id),feedback:$('#settings-feedback').textContent}));
+        check($('#system-prompt').value === 'Typed while saving', 'Save overwrote later edits');
+        api = async () => ({...configForm(), has_key: false});
+        await saveProviderEditor();
+        check(!providerDialog.open && !settingsDirty, 'Unchanged save did not close normally');
+        return {multiple_recoveries: true, normal_settings_save: true, session_refresh: true, reopened_session: true, recovery_switch: true, recovery_failure: true, settings_edit_during_save: true};
+      } finally {
+        api = original.api;
+        consumeDurableStream = original.consumeDurableStream;
+        state.session = original.session;
+        state.messages = original.messages;
+        state.settings = original.settings;
+        providerSaving = false;
+        await closeProvider(true);
+        state.pending.delete('race-a');
+        renderMessages();
+      }
+    });
+    assert.ok(Object.values(raceChecks).every(Boolean));
+    await page.evaluate(async () => { await loadUsage(); });
+    const usageButtons = page.locator('.token-grid button');
+    assert.ok(await usageButtons.count() > 7);
+    assert.equal(await page.locator('.token-grid button[tabindex="0"]').count(), 1);
+    // The grid itself can be outside the open settings page, so invoke focus and key handling in DOM.
+    await page.evaluate(() => {
+      const buttons = [...usageGrid.querySelectorAll('button')];
+      buttons[0].dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', bubbles: true}));
+      if (buttons[7].tabIndex !== 0 || buttons[0].tabIndex !== -1) throw Error('Token grid keyboard navigation failed');
+    });
+
     const ids = await page.evaluate(async () => {
       await newSession();
       const session = state.session;
@@ -387,6 +485,7 @@ async function main() {
     assert.deepEqual(errors, []);
     console.log(
       JSON.stringify({
+        ...raceChecks,
         creator_versions: true,
         sandbox_preview: true,
         browser_png_pdf: true,

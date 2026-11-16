@@ -30,7 +30,7 @@ function paintConversation(){
  const top=conversationList.scrollTop;const articles=Array.from(conversationList.querySelectorAll(':scope>.message'));
  const same=!changed&&conversationObjects.length===state.messages.length&&state.messages.every((message,index)=>message===conversationObjects[index]);
  if(same&&state.messages.some(message=>message.streaming)&&articles.length===state.messages.length){
-  state.messages.forEach((message,index)=>{if(!message.streaming)return;const article=articles[index];let body=article.querySelector('.markdown');if(!body){body=elem('div','markdown');article.append(body);}if(body.dataset.streamText!==message.content){body.classList.add('streaming-text');body.textContent=message.content;body.dataset.streamText=message.content;}});
+  state.messages.forEach((message,index)=>{if(!message.streaming)return;const article=articles[index];let body=article.querySelector('.markdown');if(!body){body=elem('div','markdown');article.append(body);}if(body.dataset.streamText!==message.content){updateRichStream(body,message.content);}});
  }else{
   const visible=articles.findIndex(article=>conversationTop(article)+article.offsetHeight>top);
   const offset=visible<0?0:conversationTop(articles[visible])-top;

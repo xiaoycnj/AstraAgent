@@ -28,6 +28,21 @@ const usageTotals=elem('div','token-totals');const usageScroll=elem('div','token
 const usageMonths=elem('div','token-months');usageScroll.append(usageGrid,usageMonths);const usageHint=elem('p','hint');usageHint.setAttribute('role','status');
 const usageTooltip=elem('div','token-tooltip');usageTooltip.hidden=true;usageTooltip.setAttribute('role','tooltip');usageTooltip.id='token-tooltip';usageSection.append(usageHead,usageTotals,usageScroll,usageHint,usageTooltip);$('[data-panel=profile]').append(usageSection);
 let usageData=null,usageMode='daily',usageLoading=false;
+usageGrid.addEventListener('keydown', event => {
+ const moves = {ArrowLeft: -7, ArrowRight: 7, ArrowUp: -1, ArrowDown: 1};
+ const buttons = [...usageGrid.querySelectorAll('button')];
+ const index = buttons.indexOf(event.target);
+ if (index < 0 || !(event.key in moves || event.key === 'Home' || event.key === 'End')) return;
+ event.preventDefault();
+ const delta = usageMode === 'weekly' && ['ArrowLeft', 'ArrowRight'].includes(event.key)
+  ? moves[event.key] / 7 : moves[event.key];
+ const target = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+  : Math.max(0, Math.min(buttons.length - 1, index + delta));
+ buttons[index].tabIndex = -1;
+ buttons[target].tabIndex = 0;
+ buttons[target].focus();
+});
+
 for(const [id,label] of [['daily','每天'],['weekly','每周'],['cumulative','累计总量']]){const button=actionButton(label,()=>{usageMode=id;drawUsage();},'token-mode');button.dataset.mode=id;button.setAttribute('role','tab');usageModes.append(button);}
 function localDateKey(date){return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
 async function loadUsage(){if(usageLoading)return;usageLoading=true;try{const now=new Date();usageData=await api('/api/usage?end='+localDateKey(now)+'&offset='+(-now.getTimezoneOffset()));drawUsage();}catch(error){usageHint.textContent=error.message;}finally{usageLoading=false;}}
@@ -54,7 +69,7 @@ function drawUsage(){
  cells.forEach((cell,index)=>{
   if(!cell){usageGrid.append(elem('span','token-cell empty'));return;}
   const level=cell.total===0?0:Math.max(1,Math.min(4,Math.ceil(Math.sqrt(cell.total/maximum)*4)));
-  const button=elem('button','token-cell');button.type='button';button.dataset.level=level;button.dataset.tokens=cell.total;
+  const button=elem('button','token-cell');button.type='button';button.tabIndex=usageGrid.querySelector('button')?-1:0;button.dataset.level=level;button.dataset.tokens=cell.total;
   const label=cell.day+(cell.end?' – '+cell.end:'')+' · '+(cell.calls&&cell.unreported===cell.calls&&cell.total===0?'未上报':cell.total.toLocaleString()+' Token')+' · '+cell.calls+' 次调用'+(cell.unreported?' · '+cell.unreported+' 次未返回用量':'');
   button.setAttribute('aria-label',label);button.setAttribute('aria-describedby','token-tooltip');button.onmouseenter=event=>showUsageTooltip(event,label);button.onfocus=event=>showUsageTooltip(event,label);button.onmouseleave=()=>usageTooltip.hidden=true;button.onblur=()=>usageTooltip.hidden=true;button.onclick=()=>usageHint.textContent=label;usageGrid.append(button);
   const month=cell.day.slice(0,7);if(month!==previousMonth){previousMonth=month;const mark=elem('span','',Number(cell.day.slice(5,7))+uiText('月'));mark.style.gridColumn=String(usageMode==='weekly'?index+1:Math.floor(index/7)+1);usageMonths.append(mark);}
