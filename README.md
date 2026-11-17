@@ -99,11 +99,25 @@ AstraAgent.CLI.exe chat --project C:\Projects\example --files ask --commands ask
 # 终端入口及帮助
 CLI.bat --help
 
+# 浅色终端的代码配色
+AstraAgent.CLI.exe chat --theme light
+
+# 强制彩色渲染，或输出原始 Markdown
+AstraAgent.CLI.exe chat "解释这段代码" --color always
+AstraAgent.CLI.exe chat "解释这段代码" --plain
+
+# 供脚本读取的 JSON 事件
+AstraAgent.CLI.exe chat "你好" --json
+
 # 浏览器模式，自行指定端口
 python.bat server.py --port 8788 --open
 ```
 
 GUI 启动器使用 Windows 图形子系统，CLI 启动器使用控制台子系统。标准版优先使用内置 Python，Lite 使用本机 CPython 3.14。启动异常写入 `data/logs/launcher.log`。启动器当前未签名。
+
+CLI 支持 Markdown 标题、粗体、引用、列表、表格和代码高亮，按终端宽度换行。彩色终端使用流式预览，生成结束后输出完整回答。工具进度、错误与权限确认使用独立的状态提示，交互式会话可用 `/help` 查看帮助。原生 IUI 卡片在终端展开为可读内容，提问与确认可在下一条消息中用文字回答。
+
+`--color auto|always|never` 控制颜色，默认自动检测终端并遵循 `NO_COLOR` 和 `FORCE_COLOR`，两者同时设置时优先 `NO_COLOR`。`--theme dark|light` 选择代码配色，默认深色。`--plain` 输出原始 Markdown。管道和文件重定向默认输出纯文本，`--json` 输出逐行 JSON 事件。Standard 和 Lite 都随包提供渲染依赖。
 
 默认本地端口为 `8787`。桌面启动器管理后台与 watchdog，主面板退出后关闭它所管理的服务。通过应用菜单可以新建会话、打开项目、进入设置和检查更新。
 

@@ -19,6 +19,8 @@ import task_control
 ROOT = Path(__file__).resolve().parent
 runtime_paths.configure_environment(ROOT)
 
+from cli_render import TerminalDisplay, expand_iui
+
 
 class Client:
     def __init__(self, data, port=8787):
@@ -87,7 +89,7 @@ def print_json(value):
 
 def doctor():
     release = runtime_paths.release_info(ROOT)
-    result = {'app': 'AstraAgent', 'version': '3.16.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
+    result = {'app': 'AstraAgent', 'version': '3.17.0', 'edition': release['edition'], 'python': sys.version.split()[0], 'python_path': sys.executable,
               'portable_python': (ROOT / 'runtimes/python/python.exe').is_file(),
               'webview2': bool(runtime_paths.webview_runtime(ROOT))}
     node = ROOT / 'runtimes/node/node.exe'
@@ -121,10 +123,12 @@ def project_for(client, folder):
     return project['id']
 
 
-def chat(client, session, content, options, json_output=False):
+def chat(client, session, content, options, json_output=False, display=None):
     key = uuid.uuid4().hex
     payload = {'content': content, 'stream': True, 'request_id': key, 'allow_tools': True, **options}
-    shown = ''
+    display = display or TerminalDisplay(plain=json_output)
+    if not json_output:
+        display.begin()
     try:
         with client.call('/api/sessions/' + session + '/chat', 'POST', payload, stream=True) as response:
             for raw in response:
@@ -134,22 +138,20 @@ def chat(client, session, content, options, json_output=False):
                 if json_output:
                     print_json(event)
                 elif event['type'] == 'delta':
-                    shown += event['text']
-                    print(event['text'], end='', flush=True)
-                elif event['type'] in ('tool_start', 'checkpoint', 'verification'):
-                    print('\n[' + event.get('name', event['type']) + ']', file=sys.stderr, flush=True)
+                    display.delta(event['text'])
+                else:
+                    display.event(event)
                 if event['type'] == 'approval':
                     allow = False
                     if sys.stdin.isatty() and not json_output:
-                        print('\nApproval: ' + event['name'] + '\n' + json.dumps(event['args'], ensure_ascii=False, indent=2), file=sys.stderr)
-                        allow = input('Allow once? [y/N] ').strip().lower() in ('y', 'yes')
+                        allow = display.approval(event)
                     client.call('/api/approvals', 'POST', {'id': event['id'], 'allow': allow})
                 if event['type'] in ('done', 'cancelled'):
-                    answer = event.get('content', '')
                     if not json_output:
-                        if answer.startswith(shown): print(answer[len(shown):])
-                        elif answer != shown: print('\n' + answer)
-                        else: print()
+                        answer = event.get('content', '')
+                        if display.rich:
+                            answer = expand_iui(answer, client, session)
+                        display.finish(answer)
                     return 130 if event['type'] == 'cancelled' else 0
                 if event['type'] == 'error':
                     raise ValueError(event.get('message', 'Task failed'))
@@ -160,8 +162,12 @@ def chat(client, session, content, options, json_output=False):
             if job.get('status') != 'running':
                 break
             time.sleep(.1)
-        print('\nCancelled. Existing output and project checkpoints are retained.', file=sys.stderr)
+        display.close()
+        display.notice('Cancelled. Existing output and project checkpoints are retained.', 'yellow')
         return 130
+    finally:
+        if not json_output:
+            display.close()
     raise ValueError('Stream ended before the task completed. Request ' + key)
 
 
@@ -194,6 +200,9 @@ def main(argv=None):
     prompt.add_argument('--commands',choices=['none','ask','all'],default='ask',help='Command execution permission')
     prompt.add_argument('--command-mode',choices=['sandbox','host'],default='sandbox')
     prompt.add_argument('--json', action='store_true', help='Emit JSON events. Approval requests are denied when non-interactive.')
+    prompt.add_argument('--plain', action='store_true', help='Print raw Markdown without terminal formatting')
+    prompt.add_argument('--color', choices=['auto','always','never'], default='auto', help='Control terminal colors; respects NO_COLOR and FORCE_COLOR in auto mode')
+    prompt.add_argument('--theme', choices=['dark','light'], default='dark', help='Code highlighting theme for your terminal background')
     args = parser.parse_args(argv)
     if args.command == 'doctor':
         return doctor()
@@ -214,6 +223,7 @@ def main(argv=None):
             if args.open: arguments.append('--open')
         return subprocess.call(arguments, cwd=ROOT)
     client = Client(args.data_dir.resolve())
+    display = None
     try:
         client.connect()
         if args.command == 'config':
@@ -230,6 +240,7 @@ def main(argv=None):
             return 0
         if args.command is None:
             args = parser.parse_args(['--data-dir', str(args.data_dir), 'chat'])
+        display = TerminalDisplay(plain=args.plain or args.json, color='never' if args.json else args.color, theme=args.theme)
         if args.permission in ('trusted','full'):client.call('/api/runtime','PUT',{'access_policy':args.permission})
         options = {'access_policy': args.permission,'file_permission':args.files,'command_permission':args.commands,'command_mode':args.command_mode}
         for key in ('model', 'provider'):
@@ -238,19 +249,27 @@ def main(argv=None):
         if project: options['project_id'] = project
         session = args.session or client.call('/api/sessions', 'POST', {'title': 'CLI chat'})['id']
         if args.prompt:
-            return chat(client, session, ' '.join(args.prompt), options, args.json)
-        print('AstraAgent CLI. /new starts a new chat. /quit exits. Ctrl+C stops the current task.')
+            return chat(client, session, ' '.join(args.prompt), options, args.json, display)
+        if args.json:
+            print('AstraAgent CLI. /new, /help, /quit. Ctrl+C stops the current task.', file=sys.stderr)
+        else:
+            display.welcome()
         while True:
-            try: content = input('\nastra> ').strip()
-            except (EOFError, KeyboardInterrupt): print(); return 0
+            try: content = display.prompt(args.json).strip()
+            except (EOFError, KeyboardInterrupt):
+                print(file=sys.stderr if args.json else sys.stdout)
+                return 0
             if content in ('/quit', '/exit'): return 0
-            if content == '/new':
+            if content == '/help':
+                display.notice('/new 新会话 · /quit 退出 · Ctrl+C 停止生成\n启动选项 --plain · --color auto|always|never · --theme dark|light')
+            elif content == '/new':
                 session = client.call('/api/sessions', 'POST', {'title': 'CLI chat'})['id']
             elif content:
-                try: chat(client, session, content, options, args.json)
-                except ValueError as error: print(str(error), file=sys.stderr)
+                try: chat(client, session, content, options, args.json, display)
+                except ValueError as error: display.notice(str(error), 'red')
     except (ValueError, OSError, URLError) as error:
-        print(str(error), file=sys.stderr)
+        if display: display.notice(str(error), 'red')
+        else: print(str(error), file=sys.stderr)
         return 1
     finally:
         client.close()

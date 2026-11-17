@@ -199,3 +199,8 @@ Original licenses are preserved in vendor_desktop, vendor_python, web/assets/ven
 - path-scurry 3.0.0 — BlueOak-1.0.0 — licenses/path-scurry-3.0.0.txt
 - postcss-selector-parser 7.1.7 — MIT — licenses/postcss-selector-parser-7.1.7.txt
 - undici 6.29.1 — MIT — licenses/undici-6.29.1.txt
+
+- rich 15.0.0 — MIT — licenses/rich-15.0.0.txt
+- Pygments 2.21.0 — BSD-2-Clause — licenses/pygments-2.21.0.txt
+- markdown-it-py 4.3.0 — MIT — licenses/markdown-it-py-4.3.0.txt
+- mdurl 0.1.2 — MIT — licenses/mdurl-0.1.2.txt

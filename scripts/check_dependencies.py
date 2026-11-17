@@ -6,7 +6,7 @@ import sys
 from urllib.request import Request, urlopen
 
 ROOT=Path(__file__).resolve().parents[1]
-PYPI={'bottle','cffi','clr_loader','proxy_tools','pycparser','pythonnet','pywebview','typing_extensions','pypdf'}
+PYPI={'bottle','cffi','clr_loader','proxy_tools','pycparser','pythonnet','pywebview','typing_extensions','pypdf','rich','Pygments','markdown-it-py','mdurl'}
 NPM={'Marked':'marked','DOMPurify':'dompurify','KaTeX':'katex','CodeMirror':'codemirror','LobeHub model icons':'@lobehub/icons'}
 
 

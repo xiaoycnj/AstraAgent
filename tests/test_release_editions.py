@@ -35,6 +35,8 @@ class ReleaseEditions(unittest.TestCase):
                 self.assertIn('AstraAgent/vendor_desktop/_cffi_backend.cp314-win_amd64.pyd', names)
                 self.assertIn('AstraAgent/web/assets/js/app.js', names)
                 self.assertIn('AstraAgent/CHANGELOG.md', names)
+                for name in ('cli_render.py', 'vendor_python/rich/markdown.py', 'vendor_python/pygments/lexers/python.py', 'vendor_python/markdown_it/main.py', 'vendor_python/mdurl/__init__.py'):
+                    self.assertIn('AstraAgent/' + name, names)
                 self.assertIn('AstraAgent/dlc_manager.py', names)
                 self.assertIn('AstraAgent/web/assets/js/features/dlc.js', names)
                 readme=archive.read('AstraAgent/README.md').decode('utf-8')
