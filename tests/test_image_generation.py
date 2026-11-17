@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import backend, attachments, security_core, task_control
+import usage_meter
 from modules import image_generation, image_requests, catalog
 
 PNG = base64.b64decode(
@@ -157,6 +158,14 @@ class ImageGeneration(unittest.TestCase):
         token = task_control.Token()
         config = self.config()
         config["_cancel_token"] = token
+        recorded = threading.Event()
+        original_record = usage_meter.record
+
+        def record(*args, **kwargs):
+            try:
+                return original_record(*args, **kwargs)
+            finally:
+                recorded.set()
 
         def result(*args):
             token.cancel()
@@ -164,16 +173,19 @@ class ImageGeneration(unittest.TestCase):
 
         with patch.object(
             image_generation, "request_image", side_effect=result
-        ), self.assertRaises(task_control.Cancelled):
-            image_generation.execute(
-                {"prompt": "x"},
-                config,
-                {
-                    "data": self.data,
-                    "providers": backend.profiles,
-                    "database": backend.database,
-                },
-            )
+        ), patch.object(usage_meter, "record", side_effect=record):
+            with self.assertRaises(task_control.Cancelled):
+                image_generation.execute(
+                    {"prompt": "x"},
+                    config,
+                    {
+                        "data": self.data,
+                        "providers": backend.profiles,
+                        "database": backend.database,
+                    },
+                )
+            # Cancellation releases the caller before the network worker finishes metering.
+            self.assertTrue(recorded.wait(5), "Usage worker did not finish before cleanup")
         self.assertFalse(list((self.data / "attachments").glob("**/content")))
 
     def test_provider_type_validation_and_chat_rejection(self):
