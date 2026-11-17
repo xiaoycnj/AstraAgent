@@ -51,4 +51,10 @@
 .iui-result-value {font-weight:600;font-variant-numeric:tabular-nums}
 .iui-footer {display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-top:1px solid var(--ui-divider);padding-top:16px;margin-top:20px}
 .iui-status {font-size:12px;color:var(--muted);margin-inline-end:auto}
+.intelligent-ui textarea {width:100%;box-sizing:border-box;resize:vertical;min-height:72px;max-height:220px;margin-top:4px;padding:10px 12px;border:1px solid var(--control-border);border-radius:8px;background:var(--ui-control-surface);color:var(--ink);font:400 14px/20px var(--ui-font)}
+.intelligent-ui textarea:focus-visible {outline:2px solid var(--focus-color);outline-offset:3px}
+.intelligent-ui[data-iui-purpose=question]>.iui-field,.intelligent-ui[data-iui-purpose=confirmation]>.iui-field {margin-top:20px}
+.intelligent-ui .iui-response-feedback {color:var(--status-error);font-size:13px;margin-top:8px;white-space:pre-wrap}
+.intelligent-ui .iui-primary-action {background:var(--ui-selected);border-color:var(--focus-color);color:var(--ink)}
+.intelligent-ui .iui-primary-action:hover {background:color-mix(in srgb,var(--blue) 20%,var(--ui-control-surface))}
 @media(max-width:600px) {.intelligent-ui {padding:14px;border-radius:12px}.iui-footer button {min-height:44px}.iui-option {min-height:44px}.iui-chart-row {grid-template-columns:minmax(50px,24%) minmax(0,1fr)}}

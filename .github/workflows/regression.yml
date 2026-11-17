@@ -25,7 +25,7 @@ jobs:
       - name: Core execution and security tests
         shell: pwsh
         run: |
-          foreach ($suite in @('test_agent_runtime.py','test_context_oauth.py','test_creative_workflows.py','test_durable_execution.py','test_image_generation.py','test_security.py','test_personalization.py','test_usage_meter.py','test_performance_stats.py','test_intelligent_ui.py')) {
+          foreach ($suite in @('test_agent_runtime.py','test_context_oauth.py','test_creative_workflows.py','test_durable_execution.py','test_image_generation.py','test_security.py','test_personalization.py','test_usage_meter.py','test_performance_stats.py','test_intelligent_ui.py','test_conversation_modes.py')) {
             python -m unittest discover -s tests -p $suite -q
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
@@ -52,4 +52,6 @@ jobs:
           node tests/browser_layout.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/browser_intelligent_ui.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/browser_conversation_modes.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -12,6 +12,24 @@ DEFAULTS={'access_policy':'ask','trusted_commands':[['git','status','--short'],[
 DEFAULTS.update(container_image='',container_memory_mb=512,container_network=False)
 READ_TOOLS={'list_image_models','get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
 READ_TOOLS.update(('story_context','story_read_entry'))
+CHAT_TOOLS = frozenset({'render_iui', 'image_gen', 'generate_image', 'list_image_models',
+                        'calculator', 'current_time'})
+
+
+def conversation_mode(value):
+    if value not in ('chat', 'agent'):
+        raise ValueError('对话模式需为 Chat 或 Agent')
+    return value
+
+
+def enforce_conversation_mode(config):
+    if config.get('conversation_mode', 'agent') != 'chat':
+        return
+    config['tools'] = [name for name in config.get('tools', []) if name in CHAT_TOOLS]
+    config.update(file_permission='none', command_permission='none', memory_policy='off',
+                  auto_memory=False, skill_learning=False, runtime_plugins=[], project_id='',
+                  project_root='', story_id='')
+    config.pop('_repository_context', None)
 
 def settings(data):
     path=data/'runtime.json'
@@ -40,6 +58,8 @@ def _save_settings(data,body):
     return value
 
 def authorize(name,args,c,emit,approve):
+    if c.get('conversation_mode') == 'chat' and name not in CHAT_TOOLS:
+        return False
     policy=c.get('access_policy')
     if policy is None:return True
     if policy not in ('ask','trusted','full'):return False

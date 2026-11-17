@@ -55,6 +55,8 @@ function iuiRefresh(entry) {
     if (!view.host.isConnected) { entry.views.delete(view); continue; }
     view.status.textContent = iuiText(entry.error ? '保存失败，点击重试' : entry.saving || Object.keys(entry.pending).length ? '正在保存…' : '已保存到此会话');
     view.retry.hidden = !entry.error;
+    for (const button of view.submitButtons || []) button.disabled = !!entry.responding || submitting || state.pending.has(entry.session);
+    if (view.responseFeedback) view.responseFeedback.textContent = entry.responseError || '';
     for (const control of view.controls) {
       const value = entry.pending[control.path] ?? entry.inFlight?.[control.path] ?? entry.data.state[control.path];
       if (control.input !== document.activeElement) {
@@ -80,6 +82,7 @@ function iuiRefresh(entry) {
 function iuiChange(entry, path, value) {
   entry.pending[path] = value;
   entry.error = null;
+  entry.responseError = '';
   clearTimeout(entry.timer);
   entry.timer = setTimeout(() => iuiSave(entry), 300);
   iuiRefresh(entry);
@@ -213,14 +216,47 @@ function iuiResultText(entry) {
   }
   return lines.join('\n');
 }
+async function iuiSubmitAnswer(entry, decision) {
+  if (entry.responding || submitting || state.pending.has(entry.session) || state.session?.id !== entry.session) return;
+  if (!hasModelConnection()) { showSettings(); return; }
+  entry.responding = true; entry.responseError = ''; iuiRefresh(entry);
+  try {
+    if (decision) iuiChange(entry, '$decision', decision);
+    await iuiSave(entry);
+    if (entry.error) throw entry.error;
+    const response = await fetch('/api/iui/' + entry.id + '/respond', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-App-Token': state.token},
+      body: JSON.stringify({session_id: entry.session, revision: entry.data.revision}),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      if (result.current) entry.data = result.current;
+      throw new Error(result.error || iuiText('提交失败，请重试'));
+    }
+    if (state.session?.id !== entry.session) return;
+    const sent = await sendMessage({preventDefault() {}}, result.content);
+    if (!sent) entry.responseError = iuiText('回答尚未发送，请查看消息错误后重试');
+  } catch (error) { entry.responseError = error.message; }
+  finally { entry.responding = false; iuiRefresh(entry); }
+}
 function iuiMount(host, entry) {
   const view = {host, number: ++iuiViewNumber, controls: [], outputs: new Map()};
   host.replaceChildren(); host.dataset.iuiReady = 'true';
   const document = entry.data.document, heading = elem('header', 'iui-heading');
+  const purpose = document.purpose || 'display'; host.dataset.iuiPurpose = purpose;
   heading.append(elem('h3', '', document.title)); host.append(heading);
   if (document.description) host.append(elem('p', 'iui-description', document.description));
   const blocks = elem('div', 'iui-blocks'); blocks.dataset.layout = document.layout;
   for (const block of document.blocks) blocks.append(iuiBlock(block, entry, view)); host.append(blocks);
+  if (purpose !== 'display') {
+    const reply = elem('textarea'); reply.rows = 2; reply.maxLength = 4000;
+    reply.setAttribute('aria-label', iuiText('补充回答'));
+    reply.oninput = () => iuiChange(entry, '$reply', reply.value);
+    host.append(iuiLabel(iuiText('补充回答（可选）'), reply));
+    view.controls.push({input: reply, path: '$reply'});
+    view.responseFeedback = elem('p', 'iui-response-feedback'); view.responseFeedback.setAttribute('role', 'alert');
+    host.append(view.responseFeedback);
+  }
   const footer = elem('footer', 'iui-footer');
   view.status = elem('span', 'iui-status'); view.status.setAttribute('role', 'status');
   view.retry = iuiButton('重试', () => iuiSave(entry));
@@ -232,7 +268,18 @@ function iuiMount(host, entry) {
     input.value = (previous ? previous + '\n\n' : '') + iuiResultText(entry);
     input.dispatchEvent(new Event('input', {bubbles: true})); input.focus();
   });
-  footer.append(view.status, view.retry, followup); host.append(footer); entry.views.add(view);
+  footer.append(view.status, view.retry);
+  view.submitButtons = [];
+  if (purpose === 'display') footer.append(followup);
+  else {
+    const actions = purpose === 'confirmation' ? [['取消', 'cancel'], ['确认并继续', 'confirm']] : [['提交回答', null]];
+    for (const [label, decision] of actions) {
+      const button = iuiButton(label, () => iuiSubmitAnswer(entry, decision));
+      button.classList.toggle('iui-primary-action', decision !== 'cancel');
+      view.submitButtons.push(button); footer.append(button);
+    }
+  }
+  host.append(footer); entry.views.add(view);
   // Mount happens before the Markdown fragment is inserted into the message.
   queueMicrotask(() => iuiRefresh(entry));
 }

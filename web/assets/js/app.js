@@ -28,7 +28,7 @@ async function refreshList(){const request=++listRequest,mode=state.mode;const r
 function renderList(){const rows=state.mode==='chat'?state.sessions:state.canvases;$('#item-count').textContent=rows.length;$('#item-list').replaceChildren();for(const item of rows){const selected=state.mode==='chat'?state.session?.id===item.id:state.board?.id===item.id;const b=elem('button','list-item'+(selected?' active':''));b.append(elem('i','',state.mode==='chat'?'◷':'◇'),elem('span','',item.title));if(state.mode==='chat')b.append(elem('small','',String(item.message_count||0)));b.onclick=safely(()=>state.mode==='chat'?openSession(item):openBoard(item.id));$('#item-list').append(b)}if(!rows.length)$('#item-list').append(elem('p','hint','还没有内容，点击上方按钮开始。'))}
 function updateHeader(){if(!$('#settings').hidden){$('#current-title').textContent='设置与偏好';$('#section-title').textContent='AstraAgent / 设置';return}const item=state.mode==='chat'?state.session:state.board;$('#current-title').textContent=item?.title||(state.mode==='chat'?'新的开始':'无限画布');$('#section-title').textContent=state.mode==='chat'?'AstraAgent / 对话':'AstraAgent / 画布';$('#new-item').textContent=state.mode==='chat'?'＋ 新建会话':'＋ 新建画布';$('#list-title').textContent=state.mode==='chat'?'最近会话':'我的画布';for(const name of ['rename','delete','export'])$('#'+name).disabled=!item;$('#save-status').textContent=state.mode==='chat'?'会话保存在本机':state.dirty===state.saved?'已保存到本机':'等待保存…'}
 async function switchMode(mode){if(!$('#settings').hidden&&!await closeSettingsPage())return;if(state.mode===mode)return;if(state.running.size){toast('请等待画布任务完成后再切换。');return;}if(!await flushBoard())return;state.mode=mode;$('#chat-view').hidden=mode!=='chat';$('#canvas-view').hidden=mode!=='canvas';$('#chat-tab').classList.toggle('active',mode==='chat');$('#canvas-tab').classList.toggle('active',mode==='canvas');updateHeader();await refreshList();if(mode==='canvas'){if(!state.board){if(state.canvases[0])await openBoard(state.canvases[0].id);else await createBoard(true)}else requestAnimationFrame(()=>{renderNodes();fit()})}$('#sidebar-placeholder')?.remove();$('#app .sidebar').classList.remove('open')}
-async function newSession(){const s=await api('/api/sessions','POST',{title:typeof uiText==='function'?uiText('新会话'):'新会话'});await openSession(s);await refreshList();return s}
+async function newSession(){const s=await api('/api/sessions','POST',{title:typeof uiText==='function'?uiText('新会话'):'新会话',conversation_mode:typeof getConversationMode==='function'?getConversationMode():'agent'});await openSession(s);await refreshList();return s}
 async function openSession(s){if(!$('#settings').hidden&&!await closeSettingsPage())return;state.session=s;state.messages=[];$('#chat-input').value='';$('#chat-error').hidden=true;updateHeader();renderList();$('#app .sidebar').classList.remove('open');const req=++messageRequest;const messages=await api(`/api/sessions/${s.id}/messages`);if(req!==messageRequest)return;state.messages=messages;renderMessages()}
 function markdown(text){const block=elem('div','markdown');const parts=text.split(/```/);parts.forEach((part,i)=>{if(i%2){const code=part.replace(/^[\w+-]*\n/,'');const pre=elem('pre');pre.append(elem('code','',code));block.append(pre)}else{for(const chunk of part.split(/\n\n+/)){if(!chunk.trim())continue;if(/^#{1,6}\s/.test(chunk))block.append(elem('h3','',chunk.replace(/^#{1,6}\s+/,'')));else block.append(elem('p','',chunk))}}});return block}
 function renderMessages(){const list=$('#messages');list.classList.toggle('has-streaming',state.messages.some(m=>m.streaming));list.replaceChildren();if(!state.messages.length){const w=elem('div','welcome');w.innerHTML='<h1>今天想做什么？</h1><p>输入 / 选择技能，输入 @ 加载插件。</p>';const suggestions=elem('div','suggestions');for(const t of ['帮我梳理一个创意','写一段有趣的故事','解释一个复杂概念']){const b=elem('button','',t+' ↗');b.onclick=()=>{$('#chat-input').value=t;$('#chat-input').focus()};suggestions.append(b)}w.append(suggestions);list.append(w)}for(const m of state.messages){const el=elem('article','message '+m.role);if(m.role==='user')el.textContent=m.content;else{const label={architect:'⌘ 架构师',critic:'◇ 挑错者',product:'◎ 用户视角',security:'⬡ 安全审查',synthesis:'✳ 综合结论'}[m.persona];const h=elem('div','message-header',label?`✳ ${label}`:'✦ ASTRA / ASSISTANT');if(m.persona==='synthesis')el.classList.add('synthesis-message');const b=elem('button','','复制');b.onclick=safely(async()=>{await navigator.clipboard.writeText(m.content);toast('已复制')});h.append(b);el.append(h,markdown(m.content))}list.append(el)}if(state.session&&state.pending.has(state.session.id))list.append(elem('div','pending','✦ '+(state.reviewMode?'多人格并行审查与汇总中…':'模型正在思考，请稍候…')));$('#send').disabled=!!(state.session&&state.pending.has(state.session.id));list.scrollTop=list.scrollHeight}
@@ -40,10 +40,11 @@ async function refreshSessionMessages(sid) {
   state.messages = messages;
   return true;
 }
-async function sendMessage(e) {
+async function sendMessage(e, submittedContent) {
   e.preventDefault();
   if (submitting || (typeof uploadBusy !== 'undefined' && uploadBusy)) return;
-  const content = $('#chat-input').value.trim() ||
+  const direct = typeof submittedContent === 'string';
+  const content = (direct ? submittedContent.trim() : $('#chat-input').value.trim()) ||
     (typeof pendingAttachments !== 'undefined' && pendingAttachments.length ? '请分析附件内容。' : '');
   if (!content) return;
   if (!hasModelConnection()) { showSettings(); return; }
@@ -57,8 +58,8 @@ async function sendMessage(e) {
     state.pending.add(sid);
     const first = state.messages.length === 0;
     state.messages.push({role: 'user', content});
-    $('#chat-input').value = '';
-    if (typeof beginAttachmentSend === 'function') beginAttachmentSend(sid);
+    if (!direct) $('#chat-input').value = '';
+    if (!direct && typeof beginAttachmentSend === 'function') beginAttachmentSend(sid);
     renderMessages();
     if (first && state.session.title === '新会话') {
       state.session.title = content.slice(0, 28);
@@ -66,7 +67,7 @@ async function sendMessage(e) {
       updateHeader();
       await refreshList();
     }
-    if (state.reviewMode) {
+    if (state.reviewMode && !direct) {
       const selected = $$('.persona-picks input:checked').map(i => i.value);
       if (selected.length < 2) throw new Error('多人格审查至少选择两个视角。');
       await api(`/api/sessions/${sid}/review`, 'POST', {
@@ -88,16 +89,17 @@ async function sendMessage(e) {
       $('#chat-error').textContent = error.message + ' 任务已保存，可使用继续任务恢复。';
     } else {
       state.messages = state.messages.filter(m => !(m.role === 'user' && m.content === content && m.id === undefined));
-      if (!$('#chat-input').value) $('#chat-input').value = content;
+      if (!direct && !$('#chat-input').value) $('#chat-input').value = content;
       $('#chat-error').textContent = error.message + ' 可查看任务记录。';
     }
     $('#chat-error').hidden = false;
   } finally {
-    if (typeof finishAttachmentSend === 'function') finishAttachmentSend(sid, sendSucceeded);
+    if (!direct && typeof finishAttachmentSend === 'function') finishAttachmentSend(sid, sendSucceeded);
     submitting = false;
     if (sid) state.pending.delete(sid);
     renderMessages();
   }
+  return sendSucceeded;
 }
 
 function demo(){const a=uid(),b=uid(),c=uid();return {nodes:[{id:a,type:'note',title:'一个想法，很多可能。',content:'想做一个有温度的个人空间，把散落的灵感、作品和故事收集起来。\n\n点击节点，在右侧编辑。',x:50,y:120},{id:b,type:'agent',title:'把想法变成计划',content:'根据参考资料，写一份简短的产品概念提案，包含目标、主要功能和三个执行步骤。',x:420,y:120},{id:c,type:'document',title:'欢迎来到你的画布',content:'这是示例内容。\n\n1. 添加便签或文档\n2. 点击「连线」，依次选择来源和目标\n3. 选中智能体，点击「执行任务」\n\n模型生成的结果会以新文档出现。',x:790,y:120}],edges:[{from:a,to:b}]}}

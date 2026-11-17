@@ -10,21 +10,25 @@ async function refreshApplicationPlugins(){
 }
 const beforeApplicationReload=reloadCapabilities;reloadCapabilities=async function(){await beforeApplicationReload();await refreshApplicationPlugins()};
 const beforePluginSend=sendMessage;
-sendMessage=async function(event){
- const input=$('#chat-input');if(submitting||!input.value.trim()&&!pendingAttachments.length)return beforePluginSend(event);
+sendMessage=async function(event,submittedContent){
+ const direct=typeof submittedContent==='string';
+ const input=$('#chat-input');let content=direct?submittedContent:input.value;
+ if(submitting||!content.trim()&&!pendingAttachments.length)return beforePluginSend(event,submittedContent);
  for(const hook of applicationHooks.filter(h=>h.event==='before_send')){
-  if(hook.action==='limit_length'&&input.value.length>hook.value){event.preventDefault();toast('插件限制消息长度：'+hook.value);return;}
+  if(hook.action==='limit_length'&&content.length>hook.value){event.preventDefault();toast('插件限制消息长度：'+hook.value);return;}
  }
- for(const hook of applicationHooks.filter(h=>h.event==='before_send'&&h.action==='prefix'))if(!input.value.startsWith(hook.value))input.value=hook.value+input.value;
+ for(const hook of applicationHooks.filter(h=>h.event==='before_send'&&h.action==='prefix'))if(!content.startsWith(hook.value))content=hook.value+content;
+ if(!direct)input.value=content;
  const previous=state.messages.at(-1)?.id;
- await beforePluginSend(event);
+ const sent=await beforePluginSend(event,direct?content:undefined);
  const answer=state.messages.at(-1),sid=state.session?.id;
- if(!sid||answer?.role!=='assistant'||!answer.id||answer.id===previous)return;
+ if(!sid||answer?.role!=='assistant'||!answer.id||answer.id===previous)return sent;
  for(const hook of applicationHooks.filter(h=>h.event==='after_response')){
   try{
    if(hook.action==='notify')toast(hook.value||'回复已完成');
   }catch(error){toast('插件 '+hook.plugin+'：'+error.message);}
  }
+ return sent;
 };
 $('#chat-form').onsubmit=sendMessage;
 const pluginMaker=elem('dialog','plugin-maker');pluginMaker.setAttribute('aria-label','插件制作器');

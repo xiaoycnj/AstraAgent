@@ -48,7 +48,7 @@ async function consumeDurableStream(sid,key,payload,onDelta,after=0){
 receiveStream=async function(sid,content,onDelta){
     const bootstrap=await api('/api/bootstrap');state.token=bootstrap.token;
     const key=crypto.randomUUID();
-    const payload={content,...runtimeOptions(),...(typeof attachmentOptions==='function'?attachmentOptions(sid):{}),stream:true,request_id:key};
+    const payload={content,...runtimeOptions(state.session?.id===sid?undefined:'agent'),...(typeof attachmentOptions==='function'?attachmentOptions(sid):{}),stream:true,request_id:key};
     streamKeys.set(sid,key);
     const promise=consumeDurableStream(sid,key,payload,onDelta);
     activeStreams.set(sid,promise);

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import threading
+import runtime_engine
 
 
 class Blocked(RuntimeError):
@@ -14,7 +15,7 @@ def encode(value):
 
 REQUEST_FIELDS = ('provider','model','reasoning','skill','tools','allow_tools','plugins',
                   'file_permission','command_permission','command_mode','memory_policy',
-                  'auto_memory','access_policy','project_id','story_id','auto_min_tier','iui_enabled')
+                  'auto_memory','access_policy','project_id','story_id','auto_min_tier','iui_enabled','conversation_mode')
 CONTEXT_FIELDS = ('tools','runtime_plugins','system_prompt','active_skill','_untrusted_context',
                   '_mutation_epoch','delegated_count','cross_dispatch_count','cross_dispatch_depth','_verification')
 
@@ -51,6 +52,7 @@ def create(db, key, sid, body, config):
     # Remember the effective ceiling, never provider credentials or a live approval.
     options['access_policy']=config['access_policy']
     options['model']=config['model']
+    options['conversation_mode']=config.get('conversation_mode','agent')
     if config.get('id'):options['provider']=config['id']
     if config.get('_routing_deferred'):
         options['model']='AutoRouter';options['provider']=body.get('provider','')
@@ -141,6 +143,7 @@ class State:
     def restore(self, cached, config):
         for name in CONTEXT_FIELDS:
             if name in cached['context']:config[name]=cached['context'][name]
+        runtime_engine.enforce_conversation_mode(config)
 
     def pause(self, error, cancelled=False):
         with self.lock:

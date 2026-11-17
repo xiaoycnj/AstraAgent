@@ -1781,6 +1781,20 @@
     "将结果加入输入框": "Add results to message",
     "智能界面暂时无法加载": "Unable to load interactive UI",
     "正在加载智能界面…": "Loading interactive UI…",
-    "交互状态已更新，请重试": "Interaction state changed. Retry."
+    "交互状态已更新，请重试": "Interaction state changed. Retry.",
+    "对话模式": "Conversation mode",
+    "对话、IUI 和生图": "Conversation, IUI and images",
+    "智能体工具与本地工作空间": "Agent tools and local workspace",
+    "Chat 可使用 IUI、生图、计算器和时间工具。": "Chat can use IUI, image generation, the calculator and time tools.",
+    "Agent 根据当前权限使用文件、命令与扩展工具。": "Agent uses files, commands and extensions under your permissions.",
+    "提交失败，请重试": "Could not submit. Try again.",
+    "回答尚未发送，请查看消息错误后重试": "The answer was not sent. Check the message error and retry.",
+    "补充回答": "Additional answer",
+    "补充回答（可选）": "Additional answer (optional)",
+    "确认并继续": "Confirm and continue",
+    "提交回答": "Submit answer",
+    "请先回答问题": "Answer the question first",
+    "请选择选项或填写补充回答": "Choose an option or add a written answer",
+    "请选择确认或取消": "Choose confirm or cancel"
   }
 }

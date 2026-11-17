@@ -9,6 +9,20 @@ import uuid
 from urllib.parse import parse_qs, urlsplit
 
 TYPES = ("text", "metrics", "cards", "table", "chart", "checklist", "choices", "quiz", "form")
+MODEL_INSTRUCTIONS = (
+    "Use render_iui proactively when a clarification or confirmation is genuinely needed. "
+    'For missing preferences, requirements or material ambiguities, use purpose="question" '
+    "with choices blocks or form fields. Group related questions in one card, include useful options "
+    "and mark essential fields required. The card also accepts free-text clarification. "
+    'For a decision that needs explicit user confirmation, use purpose="confirmation" and clearly '
+    "describe the proposed action and its scope. Native Confirm and Cancel buttons are provided. "
+    "After creating either card, stop and wait for the user reply. Never treat a card being displayed "
+    "as consent. A card response does not change tool permissions or the conversation mode. "
+    'Avoid questions when the user supplied enough information. Use purpose="display" for comparisons, '
+    "charts, checklists, quizzes or calculators. Prefer plain text for simple answers. "
+    "Explain data sources and assumptions. Component text is plain text. Interactive state stays local "
+    "until the user explicitly submits it. The app displays and appends markers automatically."
+)
 ITEM = {
     "type": "object",
     "properties": {
@@ -93,9 +107,10 @@ DEFINITION = {
     "type": "function",
     "function": {
         "name": "render_iui",
-        "description": "Create or update an inline Intelligent UI when comparison, charts, choices, a checklist, quiz or interactive calculator will help. Use plain text for simple answers. "
+        "description": "Proactively ask for missing information with purpose=question or request an explicit user decision with purpose=confirmation. These cards pause the turn until the user responds. "
+        "Use purpose=display for comparisons, charts, choices, checklists, quizzes and calculators. Use plain text for simple answers. "
         "Use stable block/field IDs. Forms support safe arithmetic expressions over numeric field IDs, min/max/abs/round/sqrt/sin/cos/log. No HTML or JavaScript. "
-        "Returns a markdown marker to include in your answer; users can interact locally and add selected results to their next message.",
+        "The app displays the returned marker automatically. Users can submit question answers or confirmation decisions to continue the conversation.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -106,6 +121,11 @@ DEFINITION = {
                 "title": {"type": "string"},
                 "description": {"type": "string"},
                 "layout": {"type": "string", "enum": ["stack", "columns"]},
+                "purpose": {
+                    "type": "string",
+                    "enum": ["display", "question", "confirmation"],
+                    "description": "Use question to ask for input, confirmation to request a decision. Both pause this turn until the user replies.",
+                },
                 "blocks": {"type": "array", "items": BLOCK, "maxItems": 24},
             },
             "required": ["title", "blocks"],
@@ -230,16 +250,20 @@ def validate(value):
         "description",
         "layout",
         "blocks",
+        "purpose",
     }:
         raise ValueError("IUI 文档字段无效")
     result = {
         "title": text(value.get("title"), 160, False),
         "description": text(value.get("description", ""), 1000),
         "layout": value.get("layout", "stack"),
+        "purpose": value.get("purpose", "display"),
         "blocks": [],
     }
     if result["layout"] not in ("stack", "columns"):
         raise ValueError("IUI 布局无效")
+    if result["purpose"] not in ("display", "question", "confirmation"):
+        raise ValueError("IUI 卡片用途无效")
     blocks = value.get("blocks")
     if not isinstance(blocks, list) or not 1 <= len(blocks) <= 24:
         raise ValueError("IUI 需包含 1–24 个组件")
@@ -450,6 +474,14 @@ def field_value(field, value):
 
 def state_fields(document):
     result = {}
+    if document.get("purpose", "display") != "display":
+        result["$reply"] = {"type": "text", "default": ""}
+    if document.get("purpose") == "confirmation":
+        result["$decision"] = {
+            "type": "select",
+            "options": ["", "confirm", "cancel"],
+            "default": "",
+        }
     for block in document["blocks"]:
         key = block["id"]
         kind = block["type"]
@@ -537,8 +569,9 @@ def render(db, session, args, operation):
     return {
         "iui_id": key,
         "title": document["title"],
+        "purpose": document["purpose"],
         "markdown": "[[iui:" + key + "]]",
-        "message": "Native UI created. Include the markdown marker in your answer. User interactions persist locally; user may add results to the conversation.",
+        "message": "UI created. The app displays the marker automatically. Question and confirmation cards pause the turn until the user responds.",
     }
 
 
@@ -586,9 +619,77 @@ def update(db, key, session, revision, patch):
     return get(db, key, session), None
 
 
+def answer(db, key, session, revision):
+    current = get(db, key, session)
+    if type(revision) is not int:
+        raise ValueError("IUI 状态版本无效")
+    if current["revision"] != revision:
+        return None, current
+    document, state = current["document"], current["state"]
+    purpose = document.get("purpose", "display")
+    if purpose == "display":
+        raise ValueError("此卡片用于展示，请将结果加入输入框")
+    decision = state.get("$decision", "")
+    if purpose == "confirmation" and decision not in ("confirm", "cancel"):
+        raise ValueError("请选择确认或取消")
+    lines = ["交互卡片回答 · " + document["title"]]
+    if purpose == "confirmation":
+        lines.append("决定 · " + ("确认" if decision == "confirm" else "取消"))
+    if document["description"]:
+        lines.append("卡片说明 · " + document["description"])
+    supplied = False
+    for block in document["blocks"]:
+        prefix = block["title"] or document["title"]
+        if block["text"]:
+            lines.append(prefix + " · " + block["text"])
+        if purpose == "confirmation" and block["type"] in ("cards", "metrics"):
+            for item in block["items"]:
+                lines.append(
+                    item["label"] + " · " + str(item["value"]) + " · " + item["description"]
+                )
+        if block["type"] in ("choices", "quiz"):
+            selected = next(
+                (item for item in block["items"] if item["id"] == state[block["id"]]), None
+            )
+            if selected:
+                lines.append(prefix + " · " + selected["label"])
+                supplied = True
+            elif purpose == "question" and not state.get("$reply", "").strip():
+                raise ValueError("请选择选项或填写补充回答")
+        if block["type"] == "checklist":
+            chosen = [
+                item["label"] for item in block["items"] if state[block["id"] + "/" + item["id"]]
+            ]
+            lines.append(prefix + " · " + ("、".join(chosen) if chosen else "未选择"))
+            supplied = True
+        if block["type"] == "form":
+            for field in block["fields"]:
+                value = state[block["id"] + "/" + field["id"]]
+                missing = (
+                    value == ""
+                    or (isinstance(value, str) and not value.strip())
+                    or (field["type"] == "checkbox" and not value)
+                )
+                if field.get("required") and missing and decision != "cancel":
+                    raise ValueError("请填写必填项 · " + field["label"])
+                if value != "":
+                    formatted = ("是" if value else "否") if type(value) is bool else str(value)
+                    lines.append(prefix + " / " + field["label"] + " = " + formatted)
+                    supplied = supplied or not missing
+    reply = state.get("$reply", "").strip()
+    if reply:
+        lines.append("补充回答 · " + reply)
+    if purpose == "question" and not supplied and not reply:
+        raise ValueError("请先回答问题")
+    content = "\n".join(lines)
+    if len(content) > 32000:
+        raise ValueError("回答超过消息长度限制，请精简填写内容")
+    return {"content": content, "revision": current["revision"], "purpose": purpose}, None
+
+
 def handle_request(handler, database):
     url = urlsplit(handler.path)
-    match = re.fullmatch(r"/api/iui/([a-f0-9]{32})(/state)?", url.path)
+    match = re.fullmatch(r"/api/iui/([a-f0-9]{32})(/state|/respond)?", url.path)
     if not match:
         return False
     if handler.command == "GET" and not match[2]:
@@ -598,9 +699,14 @@ def handle_request(handler, database):
     elif handler.command == "POST" and match[2]:
         body = handler.body()
         with database() as db:
-            result, conflict = update(
-                db, match[1], body.get("session_id"), body.get("revision"), body.get("patch")
-            )
+            if match[2] == "/respond":
+                result, conflict = answer(
+                    db, match[1], body.get("session_id"), body.get("revision")
+                )
+            else:
+                result, conflict = update(
+                    db, match[1], body.get("session_id"), body.get("revision"), body.get("patch")
+                )
             handler.reply(
                 409 if conflict else 200,
                 {"error": "交互状态已更新，请重试", "current": conflict} if conflict else result,
