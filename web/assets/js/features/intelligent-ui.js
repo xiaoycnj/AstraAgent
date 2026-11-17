@@ -291,3 +291,5 @@ handleAgentEvent = function(session, event) {
     for (const view of views) if (view.host.isConnected) iuiMount(view.host, entry);
   }).catch(() => {});
 };
+// Boot may have rendered history while this feature script was still loading.
+renderMessages();

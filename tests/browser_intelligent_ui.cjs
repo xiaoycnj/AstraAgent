@@ -110,7 +110,9 @@ print(json.dumps(result))
     await page.waitForFunction(()=>document.querySelector('#chat-input').value.includes('[x] 预订住宿'));
     const draft=await page.locator('#chat-input').inputValue();
     assert.ok(draft.startsWith('继续比较\n\n'));assert.ok(draft.includes('2,000 元'));assert.ok(draft.includes('[x] 预订住宿'));
+    await page.route('**/features/intelligent-ui.js',async route=>{await new Promise(resolve=>setTimeout(resolve,1500));await route.continue();});
     await page.reload();await page.waitForFunction(()=>state.token&&state.session?.id==='iui-browser');
+    await page.unroute('**/features/intelligent-ui.js');
     await ui.getByRole('checkbox',{name:'预订住宿',exact:true}).waitFor();
     assert.equal(await ui.getByRole('checkbox',{name:'预订住宿',exact:true}).isChecked(),true);
     await ui.locator('.iui-result-value').filter({hasText:'2,000 元'}).waitFor();
