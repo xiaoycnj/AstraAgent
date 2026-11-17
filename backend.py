@@ -24,6 +24,7 @@ import story_projects
 import task_scheduler
 SCHEDULER=None
 import usage_meter
+import performance_stats
 import openai_oauth
 import openai_responses
 import local_account
@@ -35,6 +36,7 @@ import agent_hub
 import stream_journal
 import execution_state
 import tool_provenance
+import intelligent_ui
 import runtime_engine
 import mcp_client
 import storage_manager
@@ -123,6 +125,7 @@ def initialize():
         db.execute("UPDATE runs SET status='interrupted' WHERE status IN ('running','waiting')")
         stream_journal.initialize(db)
         execution_state.initialize(db)
+        intelligent_ui.initialize(db)
         runtime_engine.initialize(db)
         attachments.initialize(db)
         task_evaluations.initialize(db)
@@ -273,11 +276,13 @@ def _stream_upstream(c, payload, emit):
                 data=raw[5:].strip()
                 if data==b'[DONE]': break
                 event=json.loads(data)
+                usage_meter.observe(c,event.get('model'))
                 if event.get('error'): raise ApiError(502,'模型流返回错误。')
                 if isinstance(event.get('usage'),dict):c['_reported_usage']=event['usage']
                 choices=event.get('choices',[])
                 if not choices: continue
                 delta=choices[0].get('delta',{})
+                usage_meter.observe(c,output=bool(delta.get('content') or delta.get('reasoning_content') or delta.get('reasoning_summary') or any(part.get('function',{}).get('arguments') for part in delta.get('tool_calls',[]))))
                 if isinstance(delta.get('content'),str):
                     content+=delta['content'];emit({'type':'delta','text':delta['content']})
                 if isinstance(delta.get('reasoning_content'),str):reasoning_content+=delta['reasoning_content']
@@ -351,19 +356,23 @@ def completion(c, messages, emit=None):
     if c.get('reasoning') in model_adapters.EFFORTS[1:] and model_catalog.spec(c).get('reasoning') is not False: payload['reasoning_effort'] = c['reasoning']
     execution=c.get('_execution')
     if execution:payload=execution.initial(payload,c)
-    enabled = c.get('tools', [])
+    visual_tools = ['render_iui'] if c.get('_session_id') and c.get('iui_enabled', True) and model_catalog.spec(c).get('tool_calling') is not False else []
+    if visual_tools:
+        payload['messages'].insert(0, {'role':'system', 'content':'Use render_iui when native comparisons, charts, checklists, quizzes or interactive calculators meaningfully help the current task. Prefer plain text for simple replies. Explain data sources and assumptions. Component text is plain text. UI state stays local until the user explicitly adds results to a message. The app displays and appends the returned marker automatically, so do not repeat it in prose.'})
+    enabled = c.get('tools', []) + visual_tools
     # Snapshot schemas for this run. Newly loaded tools append without moving
     # previously advertised schemas; changed MCP schemas take effect next run.
-    definitions=TOOL_DEFS+mcp_client.definitions(DATA) if enabled else []
+    definitions=TOOL_DEFS+[intelligent_ui.DEFINITION]+mcp_client.definitions(DATA) if enabled else []
     tool_catalog={t['function']['name']:json.loads(json.dumps(t,sort_keys=True)) for t in definitions}
     advertised=[]
     seen_calls={}
     call_count=0
     budget_exhausted=False
     delivered_outputs=[]
+    delivered_ui={}
     for turn in range(c.get('max_tool_rounds',c.get('tool_rounds',32))+1):
         task_control.check(c)
-        enabled=c.get('tools',[])
+        enabled=c.get('tools',[])+visual_tools
         if turn>=c.get('max_tool_rounds',c.get('tool_rounds',32)) or call_count>=c.get('tool_calls',120):budget_exhausted=True
         if budget_exhausted:
             payload.pop('tools',None)
@@ -422,6 +431,8 @@ def completion(c, messages, emit=None):
                     execution.restore(cached,c)
                     if c.get('access_policy')=='deny':c['tools']=[]
                     output=cached['result']
+                    if name == 'render_iui' and isinstance(output, dict) and output.get('iui_id'):
+                        delivered_ui[output['iui_id']] = output['markdown']
                     if name in ('generate_image','image_gen','write_file','check_creation') and isinstance(output,dict) and output.get('attachment'):delivered_outputs.append(output)
                     if name in ('generate_image','image_gen','check_creation'):image_outputs.append(output)
                     if emit:emit({'type':'step_reused','name':name,'step':step})
@@ -450,9 +461,9 @@ def completion(c, messages, emit=None):
                     if execution:execution.phase(step,'pending')
                     return allowed
                 refresh_live_permissions(c)
-                allowed=runtime_engine.authorize(name,args,c,emit,approve_step)
+                allowed=name == 'render_iui' or runtime_engine.authorize(name,args,c,emit,approve_step)
                 refresh_live_permissions(c)
-                if c.get('access_policy')=='deny':allowed=False
+                if c.get('access_policy')=='deny' and name != 'render_iui':allowed=False
                 security_audit.append(DATA,'authorization',name,args,c,operation,'approved' if allowed else 'denied')
                 if not allowed:
                     output={'error':'当前权限拒绝了此调用'}
@@ -467,7 +478,13 @@ def completion(c, messages, emit=None):
                 tool_emit=emit or (lambda event:None)
                 c['_execution_step']=step
                 if execution:execution.phase(step,'executing')
-                if name.startswith('mcp_'):
+                if name == 'render_iui':
+                    with database() as db:
+                        output = intelligent_ui.render(db, c['_session_id'], args, str(c.get('_run_id') or uuid.uuid4().hex) + ':' + step)
+                    if output['iui_id'] not in delivered_ui and emit:
+                        emit({'type':'delta', 'text':'\n\n'+output['markdown']+'\n\n'})
+                    delivered_ui[output['iui_id']] = output['markdown']
+                elif name.startswith('mcp_'):
                     output=mcp_client.call(DATA,name,args,c.get('_cancel_token'))
                 elif name=='check_creation':
                     output=browser_checks.render(ROOT,DATA,database,args['creation_id'],c,args.get('width',1440),args.get('pdf',False),args.get('version_id'))
@@ -534,7 +551,10 @@ def completion(c, messages, emit=None):
     try:
         answer = result['choices'][0]['message']['content']
         if isinstance(answer, list): answer = '\n'.join(p.get('text', '') for p in answer if isinstance(p, dict))
-        if not isinstance(answer, str) or not answer.strip(): raise ValueError()
+        if answer is None and delivered_ui: answer = ''
+        if not isinstance(answer, str) or (not answer.strip() and not delivered_ui): raise ValueError()
+        for marker in delivered_ui.values():
+            if marker not in answer: answer += '\n\n' + marker
         delivered=set()
         for output in delivered_outputs:
             key=output['attachment'].get('id')
@@ -1012,7 +1032,7 @@ def request_config(body):
     c=config()
     route=None
     routing_request=None
-    if body.get('model')==auto_router.AUTO:
+    if body.get('model') in (auto_router.AUTO, auto_router.LEGACY_AUTO):
         try:
             vision=any(attachments.meta(DATA,key)['kind']=='image' for key in body.get('attachments',[]))
             routing_request={'body':dict(body),'vision':vision} if auto_router.settings(DATA)['mode']=='ai' else None
@@ -1062,6 +1082,8 @@ def request_config(body):
         if type(body['allow_tools']) is not bool: raise ApiError(400,'Tools 开关无效。')
         enabled=list(dict.fromkeys(['calculator','current_time','get_environment','list_capabilities','load_skill','load_plugin','load_tools']+enabled)) if body['allow_tools'] else []
     c['tools']=enabled
+    if type(body.get('iui_enabled', True)) is not bool: raise ApiError(400, 'IUI 开关无效')
+    c['iui_enabled'] = body.get('iui_enabled', True)
     selected_plugins=body.get('plugins',[])
     if not isinstance(selected_plugins,list) or len(selected_plugins)>8 or any(not isinstance(x,str) for x in selected_plugins): raise ApiError(400,'插件选择无效。')
     all_catalog=extensions.catalog(ROOT,DATA,True)
@@ -1205,6 +1227,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def route(self):
         pathname = urlsplit(self.path).path
+        if pathname.startswith('/api/iui/'):
+            try:
+                if intelligent_ui.handle_request(self, database): return
+            except (ValueError, TypeError, KeyError) as error:
+                raise ApiError(400, str(error)) from None
         if pathname.startswith(('/api/appearance', '/appearance-assets/')):
             try:
                 if personalization.handle_request(self, DATA):
@@ -1559,7 +1586,7 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.14.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.15.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
         if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
@@ -1574,6 +1601,10 @@ class Handler(BaseHTTPRequestHandler):
             query=parse_qs(urlsplit(self.path).query)
             try:return self.reply(200,usage_meter.activity(DATA,query.get('end',[None])[0],int(query.get('offset',['0'])[0])))
             except (ValueError,TypeError):raise ApiError(400,'用量日期或时区参数无效') from None
+        if pathname == '/api/performance' and method=='GET':
+            from urllib.parse import parse_qs
+            try:return self.reply(200,performance_stats.dashboard(DATA,parse_qs(urlsplit(self.path).query)))
+            except (ValueError,TypeError,OverflowError):raise ApiError(400,'性能统计筛选参数无效') from None
         if pathname == '/api/profile/stats' and method=='GET':
             with database() as db:
                 counts={name:db.execute('SELECT COUNT(*) FROM '+name).fetchone()[0] for name in ['sessions','messages','canvases','runs']}
@@ -1841,6 +1872,7 @@ class Handler(BaseHTTPRequestHandler):
                             query+=' AND id'+(' < ?' if 'before_id' in branch_body else ' <= ?')
                             parameters.append(cutoff)
                         db.execute(query+' ORDER BY id',parameters)
+                        intelligent_ui.clone_session(db, sid, branch)
                         outputs='INSERT INTO session_outputs(session_id,attachment_id) SELECT ?,attachment_id FROM session_outputs WHERE session_id=?'
                         if cutoff is not None:outputs+=' AND (message_id IS NULL OR message_id'+(' < ?' if 'before_id' in branch_body else ' <= ?')+')'
                         db.execute(outputs,parameters)
@@ -2068,7 +2100,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.14.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V3.15.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     scheduler=task_scheduler.Scheduler(database,dispatch_schedule);SCHEDULER=scheduler;scheduler.start()
     try: server.serve_forever()

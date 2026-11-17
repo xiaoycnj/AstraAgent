@@ -168,6 +168,9 @@ class AutoRouting(unittest.TestCase):
             )
             self.assertEqual(config["model"], "vision")
             self.assertEqual(config["_routing"]["requested_model"], auto_router.AUTO)
+            legacy = backend.request_config({"model": "AutoModelReview", "content": "你好", "auto_min_tier": "advanced"})
+            self.assertEqual(legacy["model"], "vision")
+            self.assertEqual(legacy["_routing"]["requested_model"], "AutoRouter")
             manual = backend.request_config(
                 {"provider": "fixture", "model": "basic", "content": "全面审查代码"}
             )

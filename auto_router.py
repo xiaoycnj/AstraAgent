@@ -7,7 +7,8 @@ import security_core
 import model_catalog
 import task_control
 
-AUTO = "AutoModelReview"
+AUTO = "AutoRouter"
+LEGACY_AUTO = "AutoModelReview"
 TIERS = ("standard", "advanced", "flagship")
 LOCK = threading.RLock()
 DEFAULTS = {

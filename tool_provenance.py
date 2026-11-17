@@ -1,5 +1,5 @@
 """Server-side tool metadata. Unknown/new tools are external by default."""
-INTERNAL = frozenset({'calculator','current_time','get_environment'})
+INTERNAL = frozenset({'calculator','current_time','get_environment','render_iui'})
 
 def metadata(name):
     return {'provenance':'internal' if name in INTERNAL else 'external'}

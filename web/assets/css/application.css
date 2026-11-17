@@ -46,4 +46,13 @@
 
 @import url("rich-chat.css") layer(layout);
 
+@import url("theme-styles.css") layer(skins);
 @import url("personalization.css") layer(skins);
+
+@import url("performance.css") layer(layout);
+
+@import url("ui/typography.css") layer(layout);
+@import url("appearance-layout.css") layer(layout);
+
+@import url("layout-customization.css") layer(layout);
+@import url("intelligent-ui.css") layer(layout);

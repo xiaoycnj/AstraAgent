@@ -16,7 +16,7 @@ function enhanceUiElement(element) {
     );
     if (element.matches(".custom-select")) element.classList.add("ui-picker");
   }
-  if (tag === "INPUT" && element.type === "checkbox") {
+  if (tag === "INPUT" && element.type === "checkbox" && !element.hasAttribute("data-native-checkbox")) {
     element.classList.remove("ui-field");
     element.classList.add("ui-switch");
     element.setAttribute("role", "switch");
@@ -229,6 +229,7 @@ function enhanceUiElement(element) {
       icon: "sun",
       pages: [
         ["appearance", "主题与材质"],
+        ["layout", "布局与模组"],
         ["icons", "图标库"],
       ],
     },
@@ -247,6 +248,12 @@ function enhanceUiElement(element) {
         ["instructions", "自定义指令"],
         ["memory", "本地记忆"],
       ],
+    },
+    {
+      id: "performance",
+      title: "性能统计",
+      icon: "review",
+      pages: [["performance", "性能统计"]],
     },
     {
       id: "storage",
@@ -323,8 +330,12 @@ function enhanceUiElement(element) {
     currentSettingGroup = group.id;
     secondaryStore.append(...subnavigation.children);
     for (const [id, label] of group.pages) {
-      const button = categoryButtons.get(id);
-      if (!button) continue;
+      let button = categoryButtons.get(id);
+      if (!button) {
+        button = actionButton(label, () => selectSettingsTab(id), "secondary");
+        button.dataset.settingsTab = id;
+        categoryButtons.set(id, button);
+      }
       button.replaceChildren(elem("span", "", label));
       button.hidden = false;
       button.id = "settings-tab-" + id;

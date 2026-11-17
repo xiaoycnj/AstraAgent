@@ -1,0 +1,37 @@
+#performance-panel { min-width: 0; }
+.performance-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 12px; margin-block: 20px 12px; }
+.performance-filters label { display: grid; gap: 6px; min-width: 0; font-size: var(--ui-caption); }
+.performance-filters input,.performance-filters select { width: 100%; min-width: 0; height: 36px; }
+.performance-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.performance-actions .switch-pill { margin-left: auto; }
+.performance-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-block: 20px; }
+.performance-metric { display: flex; flex-direction: column; gap: 9px; padding: 18px; border: 1px solid var(--ui-divider); border-radius: var(--ui-card-radius); background: var(--ui-control-surface); min-width: 0; }
+.performance-metric>span { font-size: var(--ui-caption); color: var(--muted); }
+.performance-metric strong { font-size: clamp(17px,2vw,24px); font-weight: 650; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.performance-metric small { font-size: 11px; }
+.performance-section { margin-block: 28px; min-width: 0; }
+.performance-section h3 { font-size: var(--ui-section-title); }
+.performance-chart { display: flex; align-items: stretch; gap: 8px; height: 165px; overflow-x: auto; padding: 12px 4px 8px; border-bottom: 1px solid var(--ui-divider); }
+#performance-panel .performance-bar { flex: 1 0 66px; max-width: 110px; display: flex; flex-direction: column; justify-content: end; align-items: center; padding: 4px; gap: 8px; height: 100%; min-width: 66px; border: 0; background: transparent; border-radius: 4px; box-shadow: none; }
+.performance-stick { display: block; width: 70%; min-height: 3px; border-radius: 4px 4px 0 0; background: var(--blue); opacity: .75; flex-shrink: 1; }
+.performance-stick.unknown { background: var(--muted); }
+.performance-bar:hover .performance-stick,.performance-bar:focus-visible .performance-stick { opacity: 1; }
+.performance-bar small { font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+.performance-table-wrap { width: 100%; overflow: auto; border: 1px solid var(--ui-divider); border-radius: var(--ui-card-radius); }
+.performance-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; font-variant-numeric: tabular-nums; }
+.performance-table-wrap caption { padding: 14px; text-align: left; font-size: var(--ui-section-title); font-weight: 600; }
+.performance-table-wrap th,.performance-table-wrap td { padding: 11px 12px; border-top: 1px solid var(--ui-divider); vertical-align: top; white-space: nowrap; }
+.performance-table-wrap th { font-weight: 500; color: var(--muted); background: var(--ui-pane-surface); }
+.performance-model,.performance-route { display: flex; flex-direction: column; gap: 5px; align-items: start; max-width: 300px; }
+.performance-model button,.performance-route code,.performance-route span { max-width: 300px; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.performance-model small,.performance-route small,.performance-state { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; white-space: normal; overflow-wrap: anywhere; }
+.performance-badge { display: inline-block; padding: 3px 7px; border-radius: 5px; background: var(--ui-pane-surface); }
+.performance-different { color: #b6610b; }
+:root[data-theme=dark] .performance-different { color: #f8b364; }
+.performance-same { color: #23724d; }
+:root[data-theme=dark] .performance-same { color: #7ed7a4; }
+.performance-unknown { color: var(--muted); }
+.performance-pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-block: 14px; }
+.performance-method p { margin: 12px; }
+@media(max-width:700px) { .performance-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } .performance-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .performance-metric { padding: 12px; } .performance-actions .switch-pill { margin-left: 0; } }
+@media(max-width:400px) { .performance-metrics { grid-template-columns: 1fr; } }

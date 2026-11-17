@@ -56,6 +56,29 @@ class Durable(unittest.TestCase):
         state.close()
         with backend.database() as db:execution_state.initialize(db)
         c=self.config();c['_execution']=self.state();return c
+    def test_native_ui_replays_after_document_commit_without_duplication(self):
+        c = self.config()
+        state = self.state()
+        c.update(_execution=state, _run_id='stable-iui-run')
+        document = {'title': 'Checklist', 'blocks': [{'id': 'tasks', 'type': 'checklist',
+                     'items': [{'id': 'one', 'label': 'First task'}]}]}
+        with patch.object(backend, 'stream_upstream', side_effect=[call('render_iui', document, 'ui')]), \
+             patch.object(state, 'tool_done', side_effect=PowerLoss()):
+            with self.assertRaises(PowerLoss):
+                backend.completion(c, [], lambda event: None)
+        with backend.database() as db:
+            key = db.execute('SELECT id FROM iui_documents').fetchone()['id']
+        with backend.database() as db:
+            backend.intelligent_ui.update(db, key, self.sid, 0, {'tasks/one': True})
+        resumed = self.restart(state)
+        resumed['_run_id'] = 'stable-iui-run'
+        with patch.object(backend, 'stream_upstream', return_value=answer()):
+            result = backend.completion(resumed, [], lambda event: None)
+        self.assertIn('[[iui:' + key + ']]', result)
+        with backend.database() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM iui_documents').fetchone()[0], 1)
+            self.assertTrue(backend.intelligent_ui.get(db, key, self.sid)['state']['tasks/one'])
+
     def test_completed_command_and_model_steps_are_not_repeated(self):
         c=self.config();state=self.state();c['_execution']=state;commands=[]
         responses=[call('load_tools',{'names':['execute_command']},'load'),call('execute_command',{'argv':['fake']},'command'),PowerLoss()]

@@ -429,14 +429,20 @@ state.close();db.close()
     assert.equal(mediaModels.value,'8192');assert.deepEqual(mediaModels.capabilities,['chat','image','video']);
     await page.waitForFunction(()=>registrySnapshot?.providers?.length>=12);
     const routingUi=await page.evaluate(()=>{
-      renderModelChoices();const count=modelList.querySelectorAll('[data-model-id="AutoModelReview"]').length;
-      useModel('AutoModelReview');const label=strengthLabel.textContent;const maximum=slider.max;
+      renderModelChoices();const count=modelList.querySelectorAll('[data-model-id="AutoRouter"]').length;
+      useModel('AutoRouter');const label=strengthLabel.textContent;const maximum=slider.max;
       slider.value='2';slider.oninput();const floor=runtimeOptions().auto_min_tier;
+      useModel('AutoModelReview');const legacy=runtimeOptions().model;
       useModel('fixture');const manual=slider.max;
-      return {count,label,maximum,floor,manual};
+      return {count,label,maximum,floor,manual,legacy};
     });
     assert.equal(routingUi.count,1);assert.equal(routingUi.maximum,'2');assert.match(routingUi.label,/最低模型强度/);
     assert.equal(routingUi.floor,'flagship');assert.equal(routingUi.manual,'7');
+    assert.equal(routingUi.legacy,'AutoRouter');
+    await page.evaluate(()=>localStorage.setItem('astra-runtime',JSON.stringify({...runtimeOptions(),model:'AutoModelReview'})));
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#runtime-model')?.value==='AutoRouter');
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('astra-runtime')).model),'AutoRouter');
     const violations = await page.evaluate(() => window.cspViolations);
     assert.deepEqual(errors, []);
     assert.deepEqual(externalRequests, []);

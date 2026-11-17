@@ -298,7 +298,7 @@ async function main() {
     }, saved.id);
     assert.deepEqual(scopes, {
       all: "",
-      model: "AutoModelReview",
+      model: "AutoRouter",
       current: saved.id,
       manual: saved.id,
     });

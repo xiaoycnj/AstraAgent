@@ -1,8 +1,16 @@
 :root {
   --ui-font:
-    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-  --ui-body: 13px;
+    "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", -apple-system,
+    BlinkMacSystemFont, "Noto Sans CJK SC", "Microsoft YaHei UI",
+    "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --ui-body: 14px;
   --ui-caption: 12px;
+  --ui-body-leading: 20px;
+  --ui-caption-leading: 18px;
+  --ui-title-leading: 32px;
+  --ui-font-regular: 400;
+  --ui-font-strong: 600;
+  --ui-mono-font: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --ui-title: 24px;
   --ui-section-title: 16px;
   --ui-control-height: 32px;

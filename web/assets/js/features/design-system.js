@@ -40,7 +40,7 @@
 
   const routingDisclosure = disclosure(
     "自动模型路由",
-    "选择 AutoModelReview 时生效",
+    "选择 AutoRouter 时生效",
     "routing-disclosure",
   );
   routingSettings.before(routingDisclosure);

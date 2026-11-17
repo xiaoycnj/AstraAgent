@@ -151,7 +151,7 @@ async function main() {
       state.pending.add(sid);
       handleAgentEvent(sid, {
         type: "start",
-        model: "AutoModelReview",
+        model: "AutoRouter",
         time: Date.now() / 1000 - 5,
         reasoning: "high",
       });

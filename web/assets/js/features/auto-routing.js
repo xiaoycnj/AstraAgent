@@ -1,4 +1,14 @@
-const AUTO_MODEL = "AutoModelReview";
+const AUTO_MODEL = "AutoRouter";
+const LEGACY_AUTO_MODEL = "AutoModelReview";
+const beforeAutoChosenModel = chosenModel;
+chosenModel = function () {
+  const model = beforeAutoChosenModel();
+  return model === LEGACY_AUTO_MODEL ? AUTO_MODEL : model;
+};
+const beforeAutoUseModel = useModel;
+useModel = function (model) {
+  return beforeAutoUseModel(model === LEGACY_AUTO_MODEL ? AUTO_MODEL : model);
+};
 const AUTO_TIERS = ["standard", "advanced", "flagship"];
 const AUTO_LABELS = ["标准", "高级", "旗舰"];
 function hasModelConnection() {
@@ -178,7 +188,7 @@ managerTop.append(
 );
 
 const routingSettings = elem("section", "settings-group");
-routingSettings.append(elem("h3", "", "Auto Model Review"));
+routingSettings.append(elem("h3", "", "AutoRouter"));
 const routingMode = elem("select"),
   routingStrategy = elem("select"),
   routingCurrency = elem("select"),
@@ -238,7 +248,7 @@ routingSettings.append(
   elem(
     "p",
     "hint",
-    "选择 AutoModelReview 时生效。AI 路由会将任务文本发送给配置的 Judge，产生额外调用费用；判断失败时显示原因并使用规则。只从已配置且能力匹配的模型中选择。",
+    "选择 AutoRouter 时生效。AI 路由会将任务文本发送给配置的 Judge，产生额外调用费用；判断失败时显示原因并使用规则。只从已配置且能力匹配的模型中选择。",
   ),
   actionButton(
     "保存路由设置",
@@ -311,10 +321,14 @@ renderModelChoices = function () {
 };
 const beforeAutoOptions = runtimeOptions;
 runtimeOptions = function () {
-  return { ...beforeAutoOptions(), auto_min_tier: autoMinimumTier };
+  const options = beforeAutoOptions();
+  if (options.model === LEGACY_AUTO_MODEL || (!options.model && chosenModel() === AUTO_MODEL))
+    options.model = AUTO_MODEL;
+  return { ...options, auto_min_tier: autoMinimumTier };
 };
 const beforeAutoSync = syncComposerControls;
 syncComposerControls = function () {
+  if ($('#runtime-model').value === LEGACY_AUTO_MODEL) $('#runtime-model').value = AUTO_MODEL;
   beforeAutoSync();
   const automatic = chosenModel() === AUTO_MODEL;
   slider.max = automatic ? "2" : "7";
@@ -363,7 +377,13 @@ handleAgentEvent = function (sid, event) {
     modelStatus.textContent = event.resolved_model + " · " + event.reason;
 };
 studioReady
-  .then(() => loadRoutingSettings())
+  .then(() => {
+    if ($('#runtime-model').value === LEGACY_AUTO_MODEL) {
+      syncComposerControls();
+      saveRuntime();
+    }
+    return loadRoutingSettings();
+  })
   .catch((error) => {
     routingFeedback.textContent = error.message;
   });

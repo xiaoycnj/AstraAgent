@@ -1,5 +1,19 @@
 // Media lives in the local data directory. Only appearance preferences enter skin packs.
 let appearanceDraft = null;
+let appearancePreviewDraft = null;
+function effectiveAppearance() {
+  if (!appearanceDraft) return null;
+  const value = structuredClone(appearancePreviewDraft || appearanceDraft);
+  for (const mod of value.mods || []) {
+    if (!mod.enabled) continue;
+    for (const [group, patch] of Object.entries(mod.settings)) {
+      Object.assign(value[group], patch);
+      if (group === 'layout') value.layout.enabled = patch.enabled ?? true;
+      else if (Object.keys(patch).length) value.enabled = true;
+    }
+  }
+  return value;
+}
 let appearanceSequence = Promise.resolve();
 let appearanceTimer, appearanceGeneration = 0, wallpaperKey = '', loadedFontKey = '';
 let appearanceFont = null;
@@ -121,7 +135,7 @@ packActions.append(actionButton('导入 ZIP 皮肤包', () => appearancePackPick
   actionButton('恢复默认外观', async () => {
     clearTimeout(appearanceTimer);
     await appearanceSequence.catch(() => {});
-    appearanceDraft = await api('/api/appearance', 'PUT', {schema_version: 1, enabled: false});
+    appearanceDraft = await api('/api/appearance', 'PUT', {schema_version: 1, enabled: false, mods: (appearanceDraft.mods || []).map(mod => ({...mod, enabled: false}))});
     appearanceGeneration++;
     applyPersonalAppearance(); syncAppearanceControls();
     appearanceFeedback.textContent = uiText('已恢复默认外观');
@@ -203,7 +217,7 @@ function flushAppearance() {
 
 function appearanceAssetUrl(id) { return '/appearance-assets/' + id; }
 function applyPersonalAppearance() {
-  const value = appearanceDraft;
+  const value = effectiveAppearance();
   if (!value) return;
   const body = document.body, styles = value.styles, background = value.background;
   body.classList.toggle('appearance-custom', value.enabled);
@@ -240,6 +254,7 @@ function applyPersonalAppearance() {
     }
   }
   syncWallpaperPlayback(); applyPersonalIcons();
+  if (typeof applyUserLayout === 'function') applyUserLayout(value.layout);
 }
 async function applyAppearanceFont(id) {
   if (id === loadedFontKey) return;
@@ -256,11 +271,12 @@ async function applyAppearanceFont(id) {
 }
 const wallpaperMotion = matchMedia('(prefers-reduced-motion: reduce)');
 function syncWallpaperPlayback() {
-  if (!appearanceDraft) return;
-  const paused = appearanceDraft.background.paused || document.hidden || wallpaperMotion.matches || appearanceDraft.background.opacity === 0;
+  const value = effectiveAppearance();
+  if (!value) return;
+  const paused = value.background.paused || document.hidden || wallpaperMotion.matches || value.background.opacity === 0;
   const media = wallpaper.firstElementChild;
   if (media?.tagName === 'VIDEO') {
-    media.playbackRate = appearanceDraft.background.speed;
+    media.playbackRate = value.background.speed;
     if (paused) media.pause(); else media.play().catch(error => {
       if (media.isConnected && error.name !== 'AbortError') appearanceFeedback.textContent = uiText('背景无法播放，请检查文件编码或更换文件。');
     });
@@ -283,8 +299,9 @@ document.addEventListener('pointermove', event => {
 }, {passive: true});
 
 function applyPersonalIcons() {
-  if (!appearanceDraft) return;
-  const icons = appearanceDraft.enabled ? appearanceDraft.icons : {};
+  const value = effectiveAppearance();
+  if (!value) return;
+  const icons = value.enabled ? value.icons : {};
   for (const key of Object.keys(iconLabels)) {
     const selector = key === 'brand' ? '.brand img.logo' : key === 'send' ? '#send' : '#nav-' + key;
     const target = $(selector);

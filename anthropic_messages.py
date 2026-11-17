@@ -2,6 +2,7 @@
 
 import copy
 import json
+import usage_meter
 from contextlib import ExitStack
 from urllib.request import Request, HTTPRedirectHandler
 import security_net
@@ -227,6 +228,7 @@ def call(config, endpoint, payload=None, emit=None):
             if len(raw) > 8_000_000:
                 raise ValueError("Claude 响应超过限制")
             result = json.loads(raw)
+            usage_meter.observe(config,result.get('model'))
             return (
                 normalized(result["content"], result.get("usage", {}))
                 if endpoint == "/chat/completions"
@@ -251,6 +253,9 @@ def call(config, endpoint, payload=None, emit=None):
             event = json.loads("\n".join(pending))
             pending = []
             kind = event["type"]
+            usage_meter.observe(config,(event.get('message') or {}).get('model'))
+            delta=event.get('delta') or {}
+            usage_meter.observe(config,output=kind=='content_block_delta' and bool(delta.get('text') or delta.get('thinking') or delta.get('partial_json')))
             if kind == "error":
                 raise ValueError("Claude 流返回错误")
             if kind == "message_start":

@@ -14,7 +14,7 @@ def encode(value):
 
 REQUEST_FIELDS = ('provider','model','reasoning','skill','tools','allow_tools','plugins',
                   'file_permission','command_permission','command_mode','memory_policy',
-                  'auto_memory','access_policy','project_id','story_id','auto_min_tier')
+                  'auto_memory','access_policy','project_id','story_id','auto_min_tier','iui_enabled')
 CONTEXT_FIELDS = ('tools','runtime_plugins','system_prompt','active_skill','_untrusted_context',
                   '_mutation_epoch','delegated_count','cross_dispatch_count','cross_dispatch_depth','_verification')
 
@@ -40,7 +40,7 @@ def initialize(db):
       fingerprint TEXT NOT NULL, status TEXT NOT NULL, result TEXT, context TEXT,
       PRIMARY KEY(request_id,step));
     ''')
-    db.execute("UPDATE execution_steps SET status='pending' WHERE status='executing' AND name='dispatch_agents'")
+    db.execute("UPDATE execution_steps SET status='pending' WHERE status='executing' AND name IN ('dispatch_agents','render_iui')")
     db.execute("UPDATE execution_steps SET status='unknown' WHERE status='executing' AND kind!='model'")
     db.execute("UPDATE execution_steps SET status='pending' WHERE status IN ('waiting','executing')")
     db.execute("UPDATE executions SET status=CASE WHEN EXISTS(SELECT 1 FROM execution_steps s WHERE s.request_id=executions.request_id AND s.status='unknown') THEN 'blocked' ELSE 'interrupted' END WHERE status='running'")
@@ -53,7 +53,7 @@ def create(db, key, sid, body, config):
     options['model']=config['model']
     if config.get('id'):options['provider']=config['id']
     if config.get('_routing_deferred'):
-        options['model']='AutoModelReview';options['provider']=body.get('provider','')
+        options['model']='AutoRouter';options['provider']=body.get('provider','')
     for name in ('file_permission','command_permission','command_mode','memory_policy','auto_memory','container_image','container_memory_mb','container_network'):
         if name in config:options[name]=config[name]
     options['allow_tools']=bool(config.get('tools'))

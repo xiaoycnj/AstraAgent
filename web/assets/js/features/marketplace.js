@@ -578,7 +578,7 @@ navigatePage = async function (...args) {
   cancelSkinPreview();
   return beforeMarketNavigate(...args);
 };
-Promise.resolve(studioReady)
+const marketReady = Promise.resolve(studioReady)
   .then(async () => {
     const result = await api("/api/marketplace");
     marketData = result;

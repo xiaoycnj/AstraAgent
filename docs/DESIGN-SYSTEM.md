@@ -127,3 +127,19 @@
 专业资料与应用依据
 
 [Microsoft Fluent 2 Layout](https://fluent2.microsoft.design/layout) 说明空间接近关系、4px 间距和自适应布局。[Apple HIG Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars) 讨论列表详情分层及有限空间下的侧栏适配。[W3C Focus Appearance](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html) 给出 AAA 级焦点面积与对比度判定。本轮使用这些资料指导局部改进，整站符合性需要逐项独立评估。
+
+
+## 外观编辑与字体层级 · 2026-11-17
+
+高级外观按配色、材质与密度、玻璃细节组织。桌面采用标签与控件两列，控件列最多 320px，列间距 24px。在 650px 以下改为上下排列。控件组的键盘方向键、Home 和 End 调用原有选择动作。玻璃预览采用 132px 高度，保留材质比较所需的内容。
+
+自定义外观按背景与播放、对话与输入、字体与阅读、颜色、图标、皮肤文件包分组。滑杆旁提供百分比、像素或播放倍率的当前值，并同步到可访问的值描述。移动控件保留原有保存和导入导出事件，父级 fieldset 继续统一管理加载与上传时的禁用状态。
+
+排版采用 14px / 20px 的界面正文、12px / 18px 的说明、24px / 32px 的页标题，常规字重 400，强调 600。Windows 优先 Segoe UI Variable Text 和 Segoe UI，再回退到中文系统字体。其他平台通过系统字体栈回退。数字读数使用等宽数字。标题恢复正常字距，正文与代码分别使用阅读字族和等宽字族。用户选择的消息字号和导入字体继续参与内容排版。
+
+依据与适用范围
+
+- Fluent 2 提供系统字体、14px 正文、12px 说明和 4px 基础间距。本项目用统一令牌落实到控件、分组和排版。[Typography](https://fluent2.microsoft.design/typography)、[Layout](https://fluent2.microsoft.design/layout)
+- Apple HIG 强调可读字号、稳定层级、克制使用字族，以及按相关性组织设置。此处采用这些排版与设置组织原则。[Typography](https://developer.apple.com/design/human-interface-guidelines/typography)、[Settings](https://developer.apple.com/design/human-interface-guidelines/settings)
+- OpenAI 的 UI 文档面向 ChatGPT 内嵌界面。本项目参考其中的系统字体、有限字号变化和一致控件间距，保留 AstraAgent 的独立设置与主题系统。[UI guidelines](https://developers.openai.com/plugins/concepts/ui-guidelines)
+- Anthropic 官方品牌资料提供 Poppins 标题、Lora 正文及 Arial / Georgia 回退。本项目在 Anthropic 风格的内容区采用相应字族回退，结构界面使用平台字体。具体字形取决于本机已安装字体或用户导入字体。[Brand styling](https://github.com/anthropics/skills/blob/main/skills/brand-guidelines/SKILL.md)

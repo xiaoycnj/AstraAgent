@@ -1,5 +1,6 @@
 """Local appearance assets and portable, declarative ZIP skin packs."""
 import copy
+import layout_config
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -25,7 +26,7 @@ DEFAULT = {'schema_version': 1, 'name': '自定义外观', 'enabled': False,
            'styles': {'font_family': '', 'font_asset': None, 'font_size': 14,
                       'message_radius': 18, 'composer_radius': 28, 'surface_opacity': .82,
                       'message_color': '', 'composer_color': '', 'text_color': '', 'accent_color': ''},
-           'icons': {}}
+           'icons': {}, 'layout': copy.deepcopy(layout_config.DEFAULT), 'mods': []}
 
 
 def asset_path(data, ident):
@@ -160,6 +161,10 @@ def validate(data, value):
         if not MIMES[path.suffix].startswith('image/') or path.stat().st_size > 2 * 1024 * 1024:
             raise ValueError('图标需为 2 MB 以内的图像')
     result['icons'] = dict(icons)
+    result['layout'] = layout_config.validate(value.get('layout', {}))
+    result['mods'] = layout_config.modules(value.get('mods', []), lambda settings: validate(data, {'schema_version': 1, **settings}))
+    if len(json.dumps(result, ensure_ascii=False).encode('utf-8')) > 2 * 1024 * 1024:
+        raise ValueError('外观配置超过 2 MB')
     return result
 
 
@@ -186,22 +191,25 @@ def save(data, value):
 
 
 def references(value):
-    return [value['background'].get('asset'), value['styles'].get('font_asset'), *value.get('icons', {}).values()]
+    own = [value.get('background', {}).get('asset'), value.get('styles', {}).get('font_asset'), *value.get('icons', {}).values()]
+    for module in value.get('mods', []):own.extend(references(module['settings']))
+    return own
 
 
 def remap(value, mapping):
     result = copy.deepcopy(value)
     for group, key in [('background', 'asset'), ('styles', 'font_asset')]:
-        current = result.setdefault(group, {}).get(key)
+        current = result.get(group, {}).get(key)
         if current:
             if current not in mapping:
                 raise ValueError('皮肤包缺少引用资源')
             result[group][key] = mapping[current]
-    result['icons'] = {name: mapping[ident] for name, ident in result.get('icons', {}).items()}
+    if 'icons' in result:result['icons'] = {name: mapping[ident] for name, ident in result['icons'].items()}
+    for module in result.get('mods', []):module['settings'] = remap(module['settings'], mapping)
     return result
 
 
-def import_pack(data, archive):
+def import_pack(data, archive, install=False):
     try:
         with zipfile.ZipFile(archive) as pack:
             entries = pack.infolist()
@@ -212,7 +220,7 @@ def import_pack(data, archive):
                 parts = PurePosixPath(item.filename)
                 if parts.is_absolute() or '..' in parts.parts or '\\' in item.filename or ':' in item.filename or (item.external_attr >> 16) & 0o170000 == 0o120000:
                     raise ValueError('皮肤包路径无效')
-            if 'astra-skin.json' not in names or pack.getinfo('astra-skin.json').file_size > 64 * 1024:
+            if 'astra-skin.json' not in names or pack.getinfo('astra-skin.json').file_size > 2 * 1024 * 1024:
                 raise ValueError('皮肤包需包含 astra-skin.json')
             manifest = json.loads(pack.read('astra-skin.json').decode('utf-8-sig'))
             if not isinstance(manifest, dict) or any(not isinstance(manifest.get(key, {}), dict) for key in ('background', 'styles', 'icons')):
@@ -226,13 +234,30 @@ def import_pack(data, archive):
                 with pack.open(item) as stream:
                     stored = store_asset(data, stream, item.file_size, item.filename)
                 mapping[item.filename] = stored['id']
-            return save(data, remap(manifest, mapping))
+            imported = validate(data, remap(manifest, mapping))
+            if not install:return save(data, imported)
+            with LOCK:
+                current = load(data)
+                additions = imported['mods']
+                if not additions:
+                    ident = 'skin-' + hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()[:16]
+                    settings = {key: imported[key] for key in ('background', 'styles', 'icons')}
+                    if imported['layout']['enabled']:settings['layout'] = imported['layout']
+                    additions = [{'id': ident, 'name': imported['name'], 'version': '1.0.0', 'author': '', 'description': '', 'enabled': True, 'settings': settings}]
+                installed = {item['id']: item for item in current['mods']}
+                installed.update({item['id']: item for item in additions})
+                current['mods'] = list(installed.values())
+                return save(data, current)
     except (zipfile.BadZipFile, KeyError, UnicodeError, json.JSONDecodeError, RuntimeError) as error:
         raise ValueError('皮肤包无效或缺少引用资源') from error
 
 
-def export_pack(data):
+def export_pack(data, mod=None):
     value = load(data)
+    if mod:
+        found = next((item for item in value['mods'] if item['id'] == mod), None)
+        if found is None:raise ValueError('模组不存在')
+        value = {**copy.deepcopy(DEFAULT), 'name': found['name'], 'mods': [found]}
     mapping = {ident: 'assets/' + ident for ident in references(value) if ident}
     output = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
     try:
@@ -307,6 +332,8 @@ def handle_request(handler, data):
         handler.reply(200, load(data))
     elif path == '/api/appearance' and method == 'PUT':
         handler.reply(200, save(data, handler.body()))
+    elif path == '/api/appearance/validate' and method == 'POST':
+        handler.reply(200, validate(data, handler.body()))
     elif path == '/api/appearance/upload' and method == 'POST':
         name = parse_qs(url.query).get('name', [''])[0]
         size = int(handler.headers.get('Content-Length', '0'))
@@ -324,9 +351,9 @@ def handle_request(handler, data):
                 archive.write(chunk)
                 remaining -= len(chunk)
             archive.seek(0)
-            handler.reply(200, import_pack(data, archive))
+            handler.reply(200, import_pack(data, archive, parse_qs(url.query).get('install') == ['1']))
     elif path == '/api/appearance/export' and method == 'GET':
-        with export_pack(data) as archive:
+        with export_pack(data, parse_qs(url.query).get('mod', [None])[0]) as archive:
             archive.seek(0, 2)
             size = archive.tell()
             archive.seek(0)

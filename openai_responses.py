@@ -7,6 +7,7 @@ import model_adapters
 import security_net
 import openai_oauth
 import task_control
+import usage_meter
 
 def payload_for(payload):
     items=[]
@@ -68,6 +69,9 @@ def call(data,c,endpoint,payload=None,emit=None):
                 if line.startswith('data:'):buffer.append(line[5:].lstrip());continue
                 if line or not buffer:continue
                 event=json.loads('\n'.join(buffer));buffer=[];kind=event.get('type')
+                usage_meter.observe(c,(event.get('response') or {}).get('model'))
+                if isinstance((event.get('response') or {}).get('usage'),dict):c['_reported_usage']=event['response']['usage']
+                usage_meter.observe(c,output=kind in ('response.output_text.delta','response.reasoning_summary_text.delta','response.reasoning_text.delta','response.function_call_arguments.delta') and bool(event.get('delta')))
                 if kind=='response.output_text.delta':
                     delta=event.get('delta','');fragments.append(delta)
                     if emit:emit({'type':'delta','text':delta})

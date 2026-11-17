@@ -5,6 +5,7 @@ import sqlite3
 import time
 import uuid
 import model_catalog
+import task_control
 
 @contextmanager
 def database(data):
@@ -14,7 +15,9 @@ def database(data):
         db.execute('CREATE TABLE IF NOT EXISTS usage_events(id TEXT PRIMARY KEY,stamp REAL NOT NULL,model TEXT NOT NULL,source TEXT NOT NULL,status TEXT NOT NULL,input INTEGER,output INTEGER,total INTEGER,cached INTEGER)')
         db.execute('CREATE INDEX IF NOT EXISTS usage_stamp ON usage_events(stamp)')
         columns={row['name'] for row in db.execute('PRAGMA table_info(usage_events)')}
-        additions=[('provider_id','TEXT'),('currency','TEXT'),('estimated_cost','REAL'),('run_id','TEXT')]
+        additions=[('provider_id','TEXT'),('currency','TEXT'),('estimated_cost','REAL'),('run_id','TEXT'),
+                   ('requested_model','TEXT'),('response_model','TEXT'),('model_changed','INTEGER'),
+                   ('duration_ms','REAL'),('ttft_ms','REAL'),('generation_ms','REAL'),('provider_name','TEXT')]
         if any(name not in columns for name,kind in additions):
             db.execute('BEGIN IMMEDIATE')
             columns={row['name'] for row in db.execute('PRAGMA table_info(usage_events)')}
@@ -47,7 +50,26 @@ def record(data,key,model,source,status,usage,stamp=None,config=None):
     incoming,outgoing,total,cached=counts(usage)
     estimate=model_catalog.cost(config or {},incoming,outgoing,cached)
     with database(data) as db:
-        db.execute('INSERT OR IGNORE INTO usage_events(id,stamp,model,source,status,input,output,total,cached,provider_id,currency,estimated_cost,run_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(key,time.time() if stamp is None else stamp,str(model)[:200],source,status,incoming,outgoing,total,cached,(config or {}).get('id',''),estimate['currency'] if estimate else None,estimate['amount'] if estimate else None,(config or {}).get('_run_id')))
+        inserted=db.execute('INSERT OR IGNORE INTO usage_events(id,stamp,model,source,status,input,output,total,cached,provider_id,currency,estimated_cost,run_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(key,time.time() if stamp is None else stamp,str(model)[:200],source,status,incoming,outgoing,total,cached,(config or {}).get('id',''),estimate['currency'] if estimate else None,estimate['amount'] if estimate else None,(config or {}).get('_run_id'))).rowcount
+        metrics=(config or {}).get('_performance')
+        if metrics and inserted:
+            route=(config or {}).get('_routing') or {}
+            db.execute('UPDATE usage_events SET requested_model=?,response_model=?,model_changed=?,duration_ms=?,ttft_ms=?,generation_ms=?,provider_name=? WHERE id=?',
+                       (str(route.get('requested_model') or model)[:200],metrics.get('response_model'),int(bool(metrics.get('model_changed'))),metrics.get('duration_ms'),metrics.get('ttft_ms'),metrics.get('generation_ms'),str((config or {}).get('name',''))[:80],key))
+
+
+def observe(config,model=None,output=False):
+    """Observe wire metadata and nonempty generated deltas; never retain text."""
+    metrics=config.get('_performance')
+    if metrics is None:return
+    if isinstance(model,str) and model.strip():
+        model=model.strip()[:200]
+        if metrics.get('response_model') and metrics['response_model']!=model:metrics['model_changed']=True
+        metrics['response_model']=model
+    if output:
+        now=time.perf_counter()
+        metrics.setdefault('first',now)
+        metrics['output_events']=metrics.get('output_events',0)+1
 
 def task_summary(data,run_id):
     """Aggregate reported usage only. Missing statistics never fail a task."""
@@ -62,11 +84,25 @@ def task_summary(data,run_id):
 
 def metered(data,c,invoke):
     config=dict(c);result=None;status='failed'
+    started=time.perf_counter();stamp=time.time()
+    config.pop('_reported_usage',None)
+    config['_performance']={'started':started}
     try:
         result=invoke(config);status='completed';return result
+    except task_control.Cancelled:
+        status='cancelled';raise
     finally:
+        ended=time.perf_counter()
+        metrics=config['_performance']
+        observe(config,result.get('model') if isinstance(result,dict) else None)
+        metrics['duration_ms']=max(0,(ended-started)*1000)
+        if 'first' in metrics:
+            metrics['ttft_ms']=max(0,(metrics['first']-started)*1000)
+            # Single buffered output cannot establish a streaming generation window.
+            if metrics.get('output_events',0)>1 and ended>metrics['first']:
+                metrics['generation_ms']=(ended-metrics['first'])*1000
         reported=config.get('_reported_usage') or (result.get('usage') if isinstance(result,dict) else None)
-        try:record(data,uuid.uuid4().hex,c.get('model',''),c.get('auth_type','api_key'),status,reported,config=c)
+        try:record(data,uuid.uuid4().hex,c.get('model',''),c.get('auth_type','api_key'),status,reported,stamp=stamp,config=config)
         except (OSError,sqlite3.Error):print('Token usage recording unavailable',flush=True)
 
 def activity(data,end=None,offset=0):

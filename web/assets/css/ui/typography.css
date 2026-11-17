@@ -1,0 +1,22 @@
+/* Platform-native UI faces and a small, semantic type ramp. */
+body { font-weight: var(--ui-font-regular); line-height: 1.5; }
+.ui-button, .ui-field, .ui-picker {
+  font-family: var(--ui-font);
+  font-size: var(--ui-body);
+  line-height: var(--ui-body-leading);
+  font-weight: var(--ui-font-regular);
+  letter-spacing: normal;
+}
+.ui-button.primary { font-weight: var(--ui-font-strong); }
+.settings-content :is(h3, h4, legend), .settings-page-header h1 {
+  font-weight: var(--ui-font-strong);
+  letter-spacing: normal;
+}
+.settings-page-header h1 { font-size: var(--ui-title); line-height: var(--ui-title-leading); }
+.settings-content :is(.hint, .dialog-intro) { font-size: var(--ui-caption); line-height: var(--ui-caption-leading); }
+.settings-nav .settings-category-link { font-size: var(--ui-body); line-height: var(--ui-body-leading); }
+.theme-options small { font-size: var(--ui-caption); line-height: var(--ui-caption-leading); }
+.message .markdown { font-kerning: normal; overflow-wrap: anywhere; }
+.message .markdown :is(h1, h2, h3) { letter-spacing: normal; line-height: 1.4; }
+.message .markdown p { line-height: 1.8; }
+.message .markdown :is(code, pre), .CodeMirror { font-family: var(--ui-mono-font); }

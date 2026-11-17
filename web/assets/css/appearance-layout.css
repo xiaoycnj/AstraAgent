@@ -1,0 +1,129 @@
+/* One label column, one control column throughout the appearance editor. */
+.appearance-advanced .disclosure-content {
+  display: grid;
+  gap: 0;
+}
+.settings-content .appearance-subsection,
+.settings-content .appearance-subsection.ui-section {
+  min-width: 0;
+  padding: 24px 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ui-divider);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.appearance-subsection:last-child { border-bottom: 0; }
+.appearance-subsection > h3 { margin: 0 0 16px; }
+.appearance-setting-row,
+.settings-content .personalization-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  gap: 24px;
+  align-items: center;
+  min-width: 0;
+  min-height: 52px;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.appearance-setting-label,
+.settings-content .personalization-field > span:first-child {
+  float: none;
+  font-size: var(--ui-body);
+  font-weight: 400;
+  line-height: var(--ui-body-leading);
+  color: var(--ink);
+}
+.appearance-color-control {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 12px;
+  float: none;
+}
+.appearance-color-control output { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.appearance-color-control input[type=color] { width: 44px; height: 32px; padding: 3px; margin: 0; border: 1px solid var(--control-border); border-radius: 8px; }
+.appearance-subsection > button { margin-top: 12px; }
+.appearance-segmented, .appearance-advanced .glass-variants {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--ui-divider);
+  border-radius: 10px;
+  background: var(--ui-pane-surface);
+}
+.appearance-segmented > button, .appearance-advanced .glass-variant {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: var(--ui-body);
+  line-height: var(--ui-body-leading);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+}
+.appearance-segmented > button[aria-pressed=true], .appearance-advanced .glass-variant[aria-pressed=true] {
+  color: var(--ink);
+  background: var(--ui-control-surface);
+  border-color: var(--ui-divider);
+  box-shadow: var(--ui-subtle-shadow);
+}
+.appearance-advanced .glass-settings-heading { align-items: start; }
+.appearance-advanced .glass-settings-heading p { font-size: var(--ui-caption); line-height: var(--ui-caption-leading); max-width: 52ch; }
+.appearance-advanced .glass-showcase { height: 132px; border-radius: 12px; margin-block: 20px; }
+.appearance-advanced .glass-controls { min-width: 0; }
+.appearance-advanced .glass-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  gap: 24px;
+  padding-block: 16px;
+}
+.appearance-advanced .glass-control-row .switch-pill { justify-self: end; border: 0; padding: 0; margin: 0; background: transparent; }
+.appearance-advanced .glass-control-row strong { font-size: var(--ui-body); font-weight: 400; }
+.appearance-advanced .glass-control-row p,
+.appearance-advanced .glass-variant span { font-size: var(--ui-caption); line-height: var(--ui-caption-leading); }
+.appearance-advanced .glass-variants { margin-block: 16px; }
+.appearance-advanced .glass-variant strong { font-size: var(--ui-body); font-weight: 500; }
+.personalization-controls { display: block; min-width: 0; border: 0; padding: 0; margin: 16px 0 0; }
+.appearance-editor-group { min-width: 0; border: 0; border-top: 1px solid var(--ui-divider); padding: 20px 0; margin: 16px 0 0; }
+.appearance-editor-group legend { font-size: var(--ui-body); line-height: var(--ui-body-leading); font-weight: 600; padding: 0 12px 0 0; }
+.personalization-field .ui-field { width: 100%; min-width: 0; max-width: 100%; margin: 0; }
+.settings-content .personalization-field:has(input[type=checkbox]) { grid-template-columns: minmax(0, 1fr) auto; }
+.personalization-field input[type=checkbox] { justify-self: end; }
+.personalization-field select { max-width: 100%; }
+.personalization-color { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.personalization-color input[type=text] { flex: 1; min-width: 0; }
+.personalization-color input[type=color] { flex: 0 0 40px; width: 40px; height: 32px; margin: 0; padding: 3px; border-radius: 8px; border: 1px solid var(--control-border); }
+.personalization-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 12px; }
+.appearance-editor-group > p { font-size: var(--ui-caption); line-height: var(--ui-caption-leading); margin: 8px 0 16px; }
+.appearance-range-control, .appearance-advanced .glass-range-wrap { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.appearance-range-control input[type=range], .appearance-advanced .glass-range-wrap input[type=range] { flex: 1; width: 100%; min-width: 0; max-width: none; margin: 0; padding: 0; height: 32px; accent-color: var(--blue); cursor: pointer; }
+.appearance-range-control output, .appearance-advanced .glass-range-wrap output { flex: 0 0 54px; text-align: end; color: var(--muted); font: 400 12px/18px var(--ui-font); font-variant-numeric: tabular-nums; }
+.appearance-font-sample { margin-top: 16px; padding: 20px; background: var(--ui-pane-surface); border: 1px solid var(--ui-divider); border-radius: 12px; }
+.appearance-font-sample p { font-family: var(--style-prose-font, var(--ui-font)); font-size: 16px; line-height: 1.8; margin: 0; }
+body.appearance-custom .appearance-font-sample p { font-family: var(--appearance-loaded-font, var(--appearance-font)); font-size: var(--appearance-font-size); }
+@media (max-width: 650px) {
+  .appearance-setting-row, .settings-content .personalization-field { grid-template-columns: minmax(0, 1fr); gap: 8px; padding-block: 12px; }
+  .appearance-color-control { justify-content: start; }
+  .personalization-field input[type=checkbox] { justify-self: end; }
+  .appearance-segmented { width: 100%; }
+  .appearance-advanced .glass-control-row { grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: center; }
+  .appearance-advanced .glass-control-row:has(.switch-pill) { grid-template-columns: minmax(0, 1fr) auto; }
+  .appearance-advanced .glass-control-row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .appearance-advanced .glass-range-wrap { flex: 1 0 100%; }
+  .appearance-advanced .glass-variant span { display: none; }
+}
+@media (pointer: coarse) {
+  .appearance-segmented > button, .appearance-advanced .glass-variant, .personalization-actions .ui-button { min-height: 44px; }
+}
