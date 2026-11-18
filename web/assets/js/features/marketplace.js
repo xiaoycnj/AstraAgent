@@ -34,6 +34,7 @@ function restoreSkinAppearance(snapshot) {
   for (const [token, value] of Object.entries(snapshot.colors))
     document.documentElement.style.setProperty(token, value);
   document.body.classList.toggle("market-skin", snapshot.custom);
+  if (!snapshot.custom) applyColors(appearanceColors);
   applySkinExtensions(snapshot.extensions || {});
 }
 function paintMarketSkin(payload) {
@@ -61,6 +62,7 @@ function cancelSkinPreview() {
   $("#skin-preview-bar")?.remove();
 }
 function previewMarketSkin(entry) {
+  if (extensionSafety.active) return;
   cancelSkinPreview();
   skinPreview = { entry, before: captureSkinAppearance() };
   paintMarketSkin(entry.payload);
@@ -98,22 +100,7 @@ async function resetMarketSkin() {
 }
 function marketGlyph(kind) {
   const wrapper = elem("span", "market-glyph");
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 32 32");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(svg.namespaceURI, "path");
-  path.setAttribute(
-    "d",
-    kind === "skin"
-      ? "M16 4C9 4 4 9 4 16s5 12 12 12h2a3 3 0 0 0 0-6h-1a2 2 0 0 1 0-4h5c8 0 6-14-6-14Z"
-      : "M10 5h5v3a3 3 0 1 0 6 0V5h6v9h-3a3 3 0 1 0 0 6h3v7H5v-7h3a3 3 0 1 0 0-6H5V5Z",
-  );
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "2");
-  path.setAttribute("stroke-linejoin", "round");
-  svg.append(path);
-  wrapper.append(svg);
+  wrapper.append(svgIcon(kind === "skin" ? "palette" : "plugin"));
   return wrapper;
 }
 function skinThumbnail(entry) {
@@ -306,6 +293,34 @@ async function renderMarketplacePage() {
   destinationActions.replaceChildren();
   destinationTabs.replaceChildren();
   destinationBody.replaceChildren();
+  await loadExtensionSafety();
+  if (extensionSafety.active) {
+    const panel = elem('section', 'extension-recovery');
+    panel.append(elem('h2', '', '扩展安全模式'), elem('p', '', extensionSafety.reason),
+      elem('p', 'hint', '所有插件和扩展皮肤均已停载。修复或移出故障包后可重新检查。'));
+    const retry = actionButton('重新检查并恢复', async () => {
+      retry.disabled = true;
+      try {
+        const result = await api('/api/extensions/safety', 'POST', {action:'retry'});
+        if (!result.active) location.reload();
+        else { panel.querySelector('p').textContent = result.reason; retry.disabled = false; }
+      } catch (error) { toast(error.message); retry.disabled = false; }
+    }, 'primary');
+    panel.append(retry); destinationBody.append(panel);
+    try {
+      const recovery = await api('/api/marketplace');
+      for (const item of Object.values(recovery.state.installed)) {
+        const row = elem('div', 'extension-recovery-row');
+        row.append(elem('span', '', `${item.kind} · ${item.id}`), actionButton('卸载', async () => {
+          if (!await appConfirm(`卸载 ${item.id}？`)) return;
+          await api('/api/marketplace/uninstall', 'POST', {kind:item.kind, id:item.id});
+          row.remove();
+        }, 'secondary'));
+        panel.append(row);
+      }
+    } catch (error) { panel.append(elem('p', 'hint', error.message)); }
+    return;
+  }
   const search = elem("input");
   search.type = "search";
   search.placeholder = "搜索插件与皮肤";
@@ -578,8 +593,19 @@ navigatePage = async function (...args) {
   cancelSkinPreview();
   return beforeMarketNavigate(...args);
 };
+let extensionSafety = {active:true, reason:'正在检查扩展'};
+async function loadExtensionSafety() {
+  try { extensionSafety = await api('/api/extensions/safety'); }
+  catch { extensionSafety = {active:true, reason:'无法读取扩展安全状态，请检查后端连接。'}; }
+  return extensionSafety;
+}
+function flagExtensionSafety() {
+  marketMenuButton.querySelector('span:last-child').textContent = '扩展市场 · 安全模式';
+  toast('已暂停加载扩展，请在扩展市场查看原因。');
+}
 const marketReady = Promise.resolve(studioReady)
   .then(async () => {
+    if ((await loadExtensionSafety()).active) { flagExtensionSafety(); return; }
     const result = await api("/api/marketplace");
     marketData = result;
     const active = result.state.installed["skin:" + result.state.active_skin];
@@ -589,7 +615,15 @@ const marketReady = Promise.resolve(studioReady)
           "astra-market-baseline",
           JSON.stringify(captureSkinAppearance()),
         );
-      paintMarketSkin(active.payload);
+      const before = captureSkinAppearance();
+      try { paintMarketSkin(active.payload); }
+      catch (error) {
+        extensionSafety = {active:true, reason:'皮肤加载失败：' + active.id};
+        restoreSkinAppearance(before);
+        flagExtensionSafety();
+        const result = await api('/api/extensions/safety','POST',{action:'skin_error',id:active.id});
+        if (result.active) location.reload();
+      }
     }
   })
   .catch((error) => console.warn("Marketplace initialization", error.message));
@@ -599,21 +633,17 @@ async function releaseMarketAppearance() {
   if (!marketData?.state.active_skin) return;
   cancelSkinPreview();
   marketData.state = await api("/api/marketplace/skin", "PUT", { id: null });
-  for (const token of skinTokens.filter(
-    (token) =>
-      !["--theme-color", "--blue", "--accent-color", "--glass-blur"].includes(
-        token,
-      ),
-  ))
-    document.documentElement.style.removeProperty(token);
+  let baseline;
+  try { baseline = JSON.parse(localStorage.getItem("astra-market-baseline")); } catch {}
+  const rootStyle = document.documentElement.style;
+  for (const token of skinTokens) rootStyle.removeProperty(token);
+  if (baseline?.colors?.["--glass-blur"])
+    rootStyle.setProperty("--glass-blur", baseline.colors["--glass-blur"]);
+  applyColors(appearanceColors);
   document.body.classList.remove("market-skin");
   applySkinExtensions({});
   localStorage.removeItem("astra-market-baseline");
 }
-for (const input of [$("#theme-color"), $("#accent-color")].filter(Boolean))
-  input.addEventListener("input", () =>
-    releaseMarketAppearance().catch((error) => toast(error.message)),
-  );
 document
   .querySelectorAll("[data-theme-choice]")
   .forEach((button) =>

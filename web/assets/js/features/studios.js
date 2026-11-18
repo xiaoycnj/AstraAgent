@@ -886,7 +886,6 @@ async function renderSchedulePage() {
   enabled.type = "checkbox";
   const toggle = elem("label", "switch-pill");
   toggle.append(elem("span", "", "启用自动执行"), enabled);
-  upgradeSwitches(toggle);
   const fields = elem("div", "creative-controls");
   const period = studioField("间隔（秒）", interval),
     clock = studioField("本机时间", daily),

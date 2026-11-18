@@ -9,12 +9,14 @@ import security_server
 import hmac
 from http.cookies import SimpleCookie
 import extensions
+import extension_safety
 import model_adapters
 import model_catalog
 import model_registry
 import auto_router
 import anthropic_messages
 import marketplace
+import marketplace_author
 import personalization
 import application_plugins
 import task_evaluations
@@ -100,6 +102,19 @@ def initialize():
     DATA.mkdir(parents=True, exist_ok=True)
     security_core.prepare_directory(DATA)
     security_core.PRIVATE_ROOTS.add(DATA.resolve())
+    extension_safety.check(ROOT, DATA)
+    onboarding_path = DATA / 'onboarding.json'
+    if not onboarding_path.exists():
+        had_data = any((DATA / name).is_file() for name in (
+            'workspace.sqlite3', 'settings.json', 'providers.json', 'profile.json',
+            'tts.json', 'stt.json', 'security-audit.jsonl',
+        ))
+        if DATA == ROOT / 'data':
+            had_data = had_data or (ROOT / 'workspace.sqlite3').is_file() or any(
+                note.is_file() and note.name.lower() != 'readme.md'
+                for note in (ROOT / 'memory').glob('*.md')
+            )
+        security_core.write_config(onboarding_path, {'required': not had_data})
     for filename, default in [("settings.json", {}), ("providers.json", []), ("tts.json", {}), ("stt.json", {})]:
         security_core.read_config(DATA / filename, default)
     old = ROOT / 'workspace.sqlite3'
@@ -116,6 +131,7 @@ def initialize():
         ''')
         if 'attachments' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}: db.execute("ALTER TABLE messages ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]'")
         if 'model' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}: db.execute("ALTER TABLE messages ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+        if 'generated_attachment_ids' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}: db.execute("ALTER TABLE messages ADD COLUMN generated_attachment_ids TEXT NOT NULL DEFAULT '[]'")
         if 'liked' not in {r['name'] for r in db.execute('PRAGMA table_info(messages)')}: db.execute('ALTER TABLE messages ADD COLUMN liked INTEGER NOT NULL DEFAULT 0')
         if 'project_id' not in {r['name'] for r in db.execute('PRAGMA table_info(sessions)')}:db.execute("ALTER TABLE sessions ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
         if 'pinned' not in {r['name'] for r in db.execute('PRAGMA table_info(sessions)')}:db.execute('ALTER TABLE sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0')
@@ -141,6 +157,31 @@ def initialize():
             db.execute('ALTER TABLE messages ADD COLUMN persona TEXT')
     with agent_hub.database(DATA) as db:
         db.execute("UPDATE jobs SET status='interrupted',result='服务已重启，请重新派发此任务' WHERE status='running'")
+
+def onboarding_status():
+    value = security_core.read_config(DATA / 'onboarding.json', {})
+    return {'required': bool(value.get('required', False)) and value.get('accepted_version') != 1, 'auto_review_delivered': bool(value.get('auto_review_delivered', False))}
+
+def accept_onboarding(body):
+    if body.get('accepted') is not True or body.get('version') != 1 or type(body.get('auto_review_delivered')) is not bool:
+        raise ApiError(400, '请先阅读并接受隐私说明与使用条款。')
+    with CONFIG_LOCK:
+        path = DATA / 'onboarding.json'
+        value = security_core.read_config(path, {})
+        security_core.write_config(path, {**value, 'required': False, 'accepted_version': 1, 'auto_review_delivered': body['auto_review_delivered'], 'accepted_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+        return {'ok': True, 'onboarding': onboarding_status()}
+
+def update_onboarding_preferences(body):
+    auto_review = body.get('auto_review_delivered')
+    if type(auto_review) is not bool:
+        raise ApiError(400, '自动审查开关无效。')
+    with CONFIG_LOCK:
+        if onboarding_status()['required']:
+            raise ApiError(409, '请先完成首次设置。')
+        path = DATA / 'onboarding.json'
+        value = security_core.read_config(path, {})
+        security_core.write_config(path, {**value, 'auto_review_delivered': auto_review})
+        return onboarding_status()
 
 def config():
     with CONFIG_LOCK:
@@ -308,6 +349,20 @@ def mark_untrusted(c):
         c['_provenance_persisted']=sid
 
 
+def record_generated_image(c, name, output):
+    if name not in ('generate_image', 'image_gen') or not isinstance(output, dict) or not output.get('ok'): return
+    item = output.get('attachment')
+    if not isinstance(item, dict) or item.get('kind') != 'image': return
+    key = item.get('id')
+    if not isinstance(key, str) or not re.fullmatch('[a-f0-9]{32}', key): return
+    ids = c.setdefault('_generated_attachment_ids', [])
+    if key not in ids: ids.append(key)
+
+
+def save_generated_images(db, c, message_id):
+    db.execute('UPDATE messages SET generated_attachment_ids=? WHERE id=?', (json.dumps(c.get('_generated_attachment_ids', [])), message_id))
+
+
 def completion(c, messages, emit=None):
     runtime_engine.enforce_conversation_mode(c)
     c.pop('_waiting_for_user', None)
@@ -379,6 +434,10 @@ def completion(c, messages, emit=None):
     for turn in range(c.get('max_tool_rounds',c.get('tool_rounds',32))+1):
         task_control.check(c)
         runtime_engine.enforce_conversation_mode(c)
+        blocked = recovery_blocked_tools(c)
+        if blocked:
+            c['runtime_plugins'] = []
+            c['tools'] = [tool for tool in c.get('tools', []) if tool not in blocked]
         enabled=c.get('tools',[])+visual_tools
         if turn>=c.get('max_tool_rounds',c.get('tool_rounds',32)) or call_count>=c.get('tool_calls',120):budget_exhausted=True
         if budget_exhausted:
@@ -434,6 +493,7 @@ def completion(c, messages, emit=None):
             step=None
             try:
                 operation=None
+                if name in recovery_blocked_tools(c): raise ValueError('扩展安全模式下插件不可用。')
                 args={}
                 args=json.loads(call['function'].get('arguments','{}'))
                 if not isinstance(args,dict):raise ValueError('工具参数必须为对象')
@@ -454,14 +514,15 @@ def completion(c, messages, emit=None):
                             break
                     if name in ('generate_image','image_gen','write_file','check_creation') and isinstance(output,dict) and output.get('attachment'):delivered_outputs.append(output)
                     if name in ('generate_image','image_gen','check_creation'):image_outputs.append(output)
-                    if emit:emit({'type':'step_reused','name':name,'step':step})
+                    record_generated_image(c,name,output)
+                    if emit:emit({'type':'step_reused','name':name,'step':step,'tool_call_id':call['id'],**({'result':output} if name in ('generate_image','image_gen') else {})})
                     payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
                     continue
-                if emit: emit({'type':'tool_start','name':name})
+                if emit: emit({'type':'tool_start','name':name,'tool_call_id':call['id']})
                 if call_count>=c.get('tool_calls',120):
                     budget_exhausted=True
                     output={'error':'本轮预算已用尽，此调用未执行'}
-                    if emit:emit({'type':'tool','name':name,'result':output})
+                    if emit:emit({'type':'tool','name':name,'tool_call_id':call['id'],'result':output})
                     payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
                     continue
                 call_count+=1
@@ -470,7 +531,7 @@ def completion(c, messages, emit=None):
                 if seen_calls[signature]>=3:
                     budget_exhausted=True
                     output={'error':'已阻止第三次完全相同的重复调用，开始收尾'}
-                    if emit:emit({'type':'tool','name':name,'result':output})
+                    if emit:emit({'type':'tool','name':name,'tool_call_id':call['id'],'result':output})
                     payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
                     continue
                 operation=security_audit.append(DATA,'attempt',name,args,c)
@@ -487,7 +548,7 @@ def completion(c, messages, emit=None):
                 if not allowed:
                     output={'error':'当前权限拒绝了此调用'}
                     if execution:execution.tool_done(step,output,c)
-                    if emit:emit({'type':'tool','name':name,'result':output})
+                    if emit:emit({'type':'tool','name':name,'tool_call_id':call['id'],'result':output})
                     payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
                     continue
                 if c.get('access_policy'):c['_authorized_tool']=name
@@ -506,6 +567,8 @@ def completion(c, messages, emit=None):
                     waiting_for_user = output.get('purpose') in ('question', 'confirmation')
                 elif name.startswith('mcp_'):
                     output=mcp_client.call(DATA,name,args,c.get('_cancel_token'))
+                elif name==marketplace_author.NAME:
+                    output=marketplace_author.execute(ROOT,DATA,args,c)
                 elif name=='check_creation':
                     output=browser_checks.render(ROOT,DATA,database,args['creation_id'],c,args.get('width',1440),args.get('pdf',False),args.get('version_id'))
                     if emit:emit({'type':'file_generated','name':name,'result':output})
@@ -521,7 +584,8 @@ def completion(c, messages, emit=None):
                             output=story_projects.save(db,c['story_id'],args)
                 elif name in ('generate_image','image_gen','list_image_models'):
                     output=feature_modules.execute(name,args,c,{'data':DATA,'providers':profiles,'database':database})
-                    if emit and name!='list_image_models':emit({'type':'image_generated','name':name,'result':output})
+                    record_generated_image(c,name,output)
+                    if emit and name!='list_image_models':emit({'type':'image_generated','name':name,'tool_call_id':call['id'],'result':output})
                 elif name=='get_project':
                     output={'project':project_workspace.get(DATA,c['project_id']),'instructions':project_workspace.instructions(project_workspace.get(DATA,c['project_id']))} if c.get('project_id') else {'error':'当前会话未绑定项目'}
                 elif name=='project_diff':
@@ -545,6 +609,7 @@ def completion(c, messages, emit=None):
                 elif name in ('list_capabilities','load_skill','load_plugin','load_tools','create_skill'):
                     output=capability_tool(name,args,c,emit)
                 elif name in agent_hub.NAMES:
+                    extension_safety.require_normal(DATA)
                     output=agent_hub.execute(ROOT,DATA,name,args,c,emit,dispatch_agents)
                 elif name in feature_modules.TOOL_MODULES:
                     output=feature_modules.execute(name,args,c,{'data':DATA,'emit':emit,'approve':approve_tool,'file_tool':run_file_tool,'database':database})
@@ -552,12 +617,12 @@ def completion(c, messages, emit=None):
             except (ValueError, TypeError, KeyError, ArithmeticError, RecursionError, OSError) as error:output={'error':str(error)[:300] or '工具参数无效或执行失败'}
             finally:c.pop('_authorized_tool',None)
             security_audit.append(DATA,'outcome',name,args,c,operation,'error' if isinstance(output,dict) and output.get('error') else 'completed')
-            if name in ('write_file','replace_in_file','copy_file','move_file','create_directory') and isinstance(output,dict) and not output.get('error'):
+            if name in ('create_file','write_file','replace_in_file','copy_file','move_file','create_directory') and isinstance(output,dict) and not output.get('error'):
                 c['_mutation_epoch']=c.get('_mutation_epoch',0)+1
                 workbench.invalidate_files(c.get('project_root') or DATA/'files')
             if name=='execute_command':workbench.invalidate_files(c.get('project_root') or DATA/'files')
             if execution and step:execution.tool_done(step,output,c)
-            if emit: emit({'type':'tool','name':name,'result':output})
+            if emit: emit({'type':'tool','name':name,'tool_call_id':call['id'],'result':output})
             payload['messages'].append({'role':'tool','tool_call_id':call['id'],'content':json.dumps(output,ensure_ascii=False)})
             if waiting_for_user: break
             if name in ('generate_image','image_gen','check_creation'):image_outputs.append(output)
@@ -619,6 +684,7 @@ def validate_canvas(data):
 TOOL_DEFS = feature_modules.definitions()
 
 TOOL_DEFS.extend(agent_hub.DEFINITIONS)
+TOOL_DEFS.append(marketplace_author.DEFINITION)
 for tool_name,description,properties,required in [
  ('get_project','获取当前项目路径、根目录指令、验证命令和快照排除项',{},[]),
  ('project_diff','查看当前任务检查点与项目当前状态的文件差异',{'checkpoint_id':{'type':'string'}},[]),
@@ -645,6 +711,22 @@ def file_target(value,project_root=None):
     return target
 def run_file_tool(name,args,project_root=None):
     try:
+        if name=='create_file':
+            root=Path(project_root) if project_root else DATA/'files'
+            content=args['content']
+            limit=500_000 if project_root else workspace_tools.LIMIT
+            if not isinstance(content,str) or len(content)>limit:return {'error':f'最多保存 {limit//1000} KB 文本'}
+            raw=content.encode('utf-8')
+            if len(raw)>limit:return {'error':f'最多保存 {limit//1000} KB 文本'}
+            with project_workspace.LOCK if project_root else workspace_tools.LOCK:
+                if project_root:project_workspace.target(root,args['path'])
+                target=workspace_tools.target(root,args['path'])
+                target.parent.mkdir(parents=True,exist_ok=True)
+                try:
+                    with target.open('xb') as stream:stream.write(raw)
+                except FileExistsError:return {'error':'目标已存在，未覆盖','code':'conflict'}
+                workbench.invalidate_files(root)
+            return {'ok':True,'created':True,'path':args['path'],'bytes':len(raw)}
         if project_root:
             if name=='list_files':return {'files':[entry['path'] for entry in workbench.files(DATA,project_root)]}
             project_workspace.target(Path(project_root),args['path'])
@@ -708,16 +790,32 @@ def approve_tool(name,args,emit,token=None):
 
 agent_environment.approve_memory=approve_tool
 
+def recovery_blocked_tools(c):
+    if not extension_safety.status(DATA)['active']:
+        return set()
+    blocked = set(agent_hub.TOOL_OWNERS) | {'load_plugin', 'create_skill'}
+    if c.get('conversation_mode') == 'chat':
+        blocked -= runtime_engine.CHAT_TOOLS
+    if c.get('story_id'):
+        blocked -= {'story_context', 'story_read_entry', 'story_save_entry'}
+    return blocked
+
+
 def capability_tool(name,args,c,emit):
+    if name in recovery_blocked_tools(c):
+        return {'error':'扩展安全模式下插件不可用。'}
     if c.get('conversation_mode') == 'chat':
         return {'error': 'Chat 模式仅开放 IUI、生图、计算器和时间工具'}
     catalog=extensions.catalog(ROOT,DATA,True)
     if name=='list_capabilities':
-        return {'skills':[{'id':key,'name':value['name'],'source':value['source']} for key,value in catalog['skills'].items()], 'plugins':catalog['plugins'],'tools':c['tools'],'available_tools':[{'name':t['function']['name'],'description':t['function']['description'][:160],**tool_provenance.metadata(t['function']['name'])} for t in TOOL_DEFS+mcp_client.definitions(DATA)]}
+        return {'skills':[{'id':key,'name':value['name'],'source':value['source']} for key,value in catalog['skills'].items()], 'plugins':catalog['plugins'],'tools':c['tools'],'available_tools':[{'name':t['function']['name'],'description':t['function']['description'][:160],**tool_provenance.metadata(t['function']['name'])} for t in TOOL_DEFS+mcp_client.definitions(DATA) if t['function']['name'] not in recovery_blocked_tools(c)]}
     if name=='load_tools':
         names=args.get('names')
         available={t['function']['name'] for t in TOOL_DEFS if t['function']['name'] not in agent_hub.NAMES and t['function']['name'] not in ('generate_image','image_gen','list_image_models')}
+        available -= recovery_blocked_tools(c)
         available-={n for n in feature_modules.TOOL_MODULES if n not in feature_modules.available_tools(DATA)}
+        if not c.get('_allow_package_authoring') or c.get('file_permission','none')=='none':
+            available.discard(marketplace_author.NAME)
         if not isinstance(names,list) or not 1<=len(names)<=10 or any(not isinstance(n,str) or n not in available for n in names):return {'error':'工具不存在、属于插件或模块已关闭；请按能力目录加载插件'}
         c['tools'].extend(n for n in names if n not in c['tools'])
         return {'loaded_tools':names}
@@ -833,7 +931,9 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
         journal.publish(event)
     def save_answer(answer):
         message_id=execution.save_answer(sid,content,attachment_ids,answer,c['model'])
-        with database() as db:model_adapters.save_state(db,c,message_id)
+        with database() as db:
+            model_adapters.save_state(db,c,message_id)
+            save_generated_images(db,c,message_id)
         return message_id
     def work():
         saved_id=None
@@ -902,7 +1002,7 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
             application_plugins.after_response(ROOT,DATA,database,sid,saved_id,emit)
             execution.finish()
             evaluation=evaluate('done')
-            emit({'type':'done','content':answer,'message_id':saved_id,'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id'),'usage':usage_meter.task_summary(DATA,run_id),'evaluation':evaluation})
+            emit({'type':'done','content':answer,'message_id':saved_id,'generated_attachment_ids':c.get('_generated_attachment_ids',[]),'verdict':verdict,'checkpoint_id':c.get('_checkpoint_id'),'usage':usage_meter.task_summary(DATA,run_id),'evaluation':evaluation})
         except Exception as error:
             execution.pause(error,isinstance(error,task_control.Cancelled) or token.event.is_set())
             if isinstance(error,task_control.Cancelled) or token.event.is_set():
@@ -911,13 +1011,13 @@ def start_durable_chat(key,sid,body,c,messages,content,attachment_ids,resume=Fal
                     cancelled=(cancelled+'\n\n任务已取消。已发生的项目变更可检查并回退。').strip()
                     saved_id=save_answer(cancelled)
                 evaluate('cancelled')
-                emit({'type':'cancelled','content':cancelled,'message_id':saved_id,'message':'任务已取消','checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
+                emit({'type':'cancelled','content':cancelled,'message_id':saved_id,'generated_attachment_ids':c.get('_generated_attachment_ids',[]),'message':'任务已取消','checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
             else:
                 message=error.message if isinstance(error,ApiError) else str(error)[:300] or '生成中断，可以重新发起任务。'
-                if not saved_id and (partial or c.get('_checkpoint_id')):
+                if not saved_id and (partial or c.get('_checkpoint_id') or c.get('_generated_attachment_ids')):
                     saved_id=save_answer((''.join(partial)[-60000:]+'\n\n任务中断 · '+message).strip())
                 evaluate('error')
-                emit({'type':'error','message':message,'message_id':saved_id,'checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
+                emit({'type':'error','message':message,'message_id':saved_id,'generated_attachment_ids':c.get('_generated_attachment_ids',[]),'checkpoint_id':c.get('_checkpoint_id'),'project_id':project_id,'usage':usage_meter.task_summary(DATA,run_id)})
         finally:
             execution.close()
             journal.close()
@@ -1059,6 +1159,25 @@ def dispatch_agents(args,c,emit):
 def profiles():
     path=DATA/'providers.json'
     return security_core.read_config(path, [])
+def prompt_capability_tags(content, skills, plugins):
+    """Resolve explicit tags in the current user message against the local catalog."""
+    selected = {'@': {}, '/': {}}
+    entries = {'@': {item['id']: item for item in plugins}, '/': skills}
+    for prefix, label in re.findall(r'(?<!\\)\[([@/])([^\[\]\r\n]{1,160})\](?!\()', content):
+        candidates = entries[prefix]
+        if label in candidates:
+            identifier = label
+        else:
+            matches = [key for key, item in candidates.items() if item['name'].lower() == label.lower()]
+            if len(matches) != 1:
+                continue
+            identifier = matches[0]
+        selected[prefix][identifier] = label
+    if any(len(group) > 8 for group in selected.values()):
+        raise ApiError(400, '每条消息最多可添加 8 个插件和 8 个 Skill 标签。')
+    return selected
+
+
 def request_config(body):
     try: mode = runtime_engine.conversation_mode(body.get('conversation_mode', 'agent'))
     except ValueError as error: raise ApiError(400, str(error)) from None
@@ -1102,10 +1221,13 @@ def request_config(body):
     if c['active_skill'] not in ('general','engineer','planner','study','writer'):c['_untrusted_context']=True
     skill=body.get('skill','general')
     skills={'general': {'prompt': '帮助用户进行对话、解释、创作和学习。', 'source': 'builtin'}} if mode == 'chat' else extensions.catalog(ROOT,DATA)['skills']
+    safe_boot = extension_safety.status(DATA)['active']
+    if safe_boot and isinstance(skill, str) and '__' in skill and skill not in skills:
+        skill = c['active_skill'] = 'general'
     if skill not in skills: raise ApiError(400,'Skill 不存在。')
     c['system_prompt']+='\n'+skills[skill]['prompt']
     enabled=body.get('tools',[])
-    if not isinstance(enabled,list) or len(enabled)>5 or any(t not in ('calculator','current_time','read_file','write_file','list_files') for t in enabled): raise ApiError(400,'工具选择无效。')
+    if not isinstance(enabled,list) or len(enabled)>6 or any(t not in ('calculator','current_time','read_file','write_file','create_file','list_files') for t in enabled): raise ApiError(400,'工具选择无效。')
     permission=body.get('file_permission','none')
     if permission not in ('none','ask','read','all'): raise ApiError(400,'文件权限无效。')
     c['file_permission']=permission
@@ -1123,9 +1245,28 @@ def request_config(body):
         c['tools'] = enabled
     if type(body.get('iui_enabled', True)) is not bool: raise ApiError(400, 'IUI 开关无效')
     c['iui_enabled'] = body.get('iui_enabled', True)
-    selected_plugins=body.get('plugins',[])
+    selected_plugins=[] if safe_boot else body.get('plugins',[])
     if not isinstance(selected_plugins,list) or len(selected_plugins)>8 or any(not isinstance(x,str) for x in selected_plugins): raise ApiError(400,'插件选择无效。')
     all_catalog={'plugins': [], 'skills': skills} if mode == 'chat' else extensions.catalog(ROOT,DATA,True)
+    if mode == 'agent' and isinstance(body.get('content'), str):
+        tags = prompt_capability_tags(body['content'], skills, all_catalog['plugins'])
+        selected_plugins = list(dict.fromkeys([*selected_plugins, *tags['@']]))
+        if len(selected_plugins) > 8:
+            raise ApiError(400, '插件选择无效。')
+        references = [f'[@{label}] = 插件 {pid}' for pid, label in tags['@'].items()]
+        for skill_id, label in tags['/'].items():
+            tagged_skill = skills[skill_id]
+            references.append(f'[/{label}] = Skill {skill_id}')
+            if skill_id != skill:
+                c['system_prompt'] += '\n' + tagged_skill['prompt']
+            if tagged_skill['source'].startswith('plugin:'):
+                selected_plugins.append(tagged_skill['source'].split(':', 1)[1])
+            if tagged_skill['source'] != 'builtin' and skill_id not in ('general','engineer','planner','study','writer'):
+                c['_untrusted_context'] = True
+        if len(set(selected_plugins)) > 8:
+            raise ApiError(400, '插件选择无效。')
+        if references:
+            c['system_prompt'] += '\n用户在本条消息中显式选择了以下能力。按任务使用已加载的 Skill 指令和可用的插件工具，并遵守当前工具权限。\n' + '\n'.join(references)
     c['runtime_plugins']=[]
     for pid in sorted(set(selected_plugins)):
         plugin=next((p for p in all_catalog['plugins'] if p['id']==pid and p['supported']),None)
@@ -1133,7 +1274,6 @@ def request_config(body):
         if not plugin['enabled']:raise ApiError(400,'插件已关闭，请先在设置中启用：'+pid)
         c['runtime_plugins'].append(pid)
         c['system_prompt']+='\n'+'\n'.join(v['prompt'] for v in all_catalog['skills'].values() if v['source']=='plugin:'+pid)
-    active_plugins={p['id'] for p in all_catalog['plugins'] if p['enabled']}
     if set(c['runtime_plugins'])-set(agent_hub.PLUGINS)-{'skill-creator'}:c['_untrusted_context']=True
     if skills[skill].get('source','').startswith('plugin:'):
         pid=skills[skill]['source'].split(':',1)[1]
@@ -1178,6 +1318,12 @@ def request_config(body):
         if c.get('memory_policy')=='auto':c['memory_policy']='ask'
     c['_permission_preferences']={key:c[key] for key in ('file_permission','command_permission','command_mode')}
     if policy=='full':c.update(file_permission='all',command_permission='all',command_mode='container' if command_mode=='container' else 'host')
+    if (mode=='agent' and body.get('allow_tools') is True and policy!='deny'
+            and c['file_permission'] in ('ask','read','all') and 'create_file' not in c['tools']):
+        c['tools'].append('create_file')
+    c['_allow_package_authoring'] = mode == 'agent' and body.get('allow_tools') is True and policy != 'deny'
+    if c['_allow_package_authoring'] and c['file_permission'] in ('ask','read','all'):
+        c['tools'].append(marketplace_author.NAME)
     module_tools=feature_modules.available_tools(DATA)
     c['tools']=[name for name in c['tools'] if name not in feature_modules.TOOL_MODULES or name in module_tools]
     if mode == 'chat' and model_spec.get('tool_calling') is False: c['tools'] = []
@@ -1629,8 +1775,15 @@ class Handler(BaseHTTPRequestHandler):
             with agent_hub.database(DATA) as db:page=db.execute('SELECT * FROM pages WHERE id=?',(pathname.rsplit('/',1)[-1],)).fetchone()
             if not page:raise ApiError(404,'网页不存在')
             return self.reply(200,{**dict(page),'page_id':page['id'],'links':json.loads(page['links'])})
-        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': '3.18.0', 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
-        if pathname == '/api/bootstrap' and method == 'GET': return self.reply(200, {'token': TOKEN, 'settings': public_config(config())})
+        if pathname == '/api/health' and method == 'GET': return self.reply(200, {'app': APP_ID, 'version': runtime_paths.APP_VERSION, 'status': 'ok', 'workspace_id':runtime_paths.workspace_id(DATA)})
+        if pathname == '/api/bootstrap' and method == 'GET':
+            onboarding=onboarding_status()
+            return self.reply(200, {'token': TOKEN, 'settings': {**public_config(config()), 'onboarding': onboarding}, 'onboarding': onboarding})
+        if pathname == '/api/onboarding/accept' and method == 'POST':
+            try:return self.reply(200, accept_onboarding(self.body()))
+            except ValueError as error:raise ApiError(400,str(error)) from None
+        if pathname == '/api/onboarding/preferences' and method == 'PUT':
+            return self.reply(200, update_onboarding_preferences(self.body()))
         if pathname == '/api/library' and method == 'GET':
             with database() as db:return self.reply(200,attachments.library(db,DATA))
         if pathname == '/api/profile':
@@ -1791,6 +1944,19 @@ class Handler(BaseHTTPRequestHandler):
             try: extensions.save_skill(ROOT,pathname.rsplit('/',1)[-1],body)
             except ValueError as e: raise ApiError(400,str(e)) from None
             return self.reply(200,{'ok':True})
+        if pathname == '/api/extensions/safety':
+            if method == 'GET': return self.reply(200, extension_safety.status(DATA))
+            if method == 'POST':
+                body = self.body() if self.headers.get('Content-Length', '0') != '0' else {}
+                action = body.get('action', 'retry')
+                with CONFIG_LOCK:
+                    try:
+                        if action == 'retry': result = extension_safety.check(ROOT, DATA, retry=True)
+                        elif action == 'skin_error': result = extension_safety.skin_error(DATA, body.get('id'))
+                        elif action == 'plugin_error': result = extension_safety.plugin_error(ROOT, DATA, body.get('id'))
+                        else: raise ValueError('未知恢复操作。')
+                    except ValueError as error: raise ApiError(400, str(error)) from None
+                return self.reply(200, result)
         if pathname.startswith('/api/marketplace'):
             try:
                 if pathname=='/api/marketplace/refresh' and method=='POST':return self.reply(200,marketplace.refresh(ROOT,DATA))
@@ -1806,7 +1972,10 @@ class Handler(BaseHTTPRequestHandler):
                     if pathname=='/api/marketplace/skin' and method=='PUT':return self.reply(200,marketplace.activate(DATA,self.body().get('id')))
             except (ValueError,OSError) as error:raise ApiError(400,str(error)) from None
         if pathname=='/api/plugins/install' and method=='POST':
-            try:return self.reply(201,application_plugins.install(ROOT,self.body()))
+            try:
+                with CONFIG_LOCK:
+                    extension_safety.require_normal(DATA)
+                    return self.reply(201,application_plugins.install(ROOT,self.body()))
             except ValueError as error:raise ApiError(400,str(error)) from None
         if pathname.startswith('/api/plugins/') and method == 'PUT':
             body=self.body()
@@ -1814,7 +1983,7 @@ class Handler(BaseHTTPRequestHandler):
                 with CONFIG_LOCK: extensions.toggle_plugin(ROOT,DATA,pathname.rsplit('/',1)[-1],body.get('enabled') is True)
             except ValueError as e: raise ApiError(400,str(e)) from None
             return self.reply(200,{'ok':True})
-        if pathname == '/api/capabilities' and method == 'GET': return self.reply(200, {**extensions.catalog(ROOT,DATA),'all_skills':extensions.catalog(ROOT,DATA,True)['skills'],'tools':TOOL_DEFS+mcp_client.definitions(DATA)})
+        if pathname == '/api/capabilities' and method == 'GET': return self.reply(200, {**extensions.catalog(ROOT,DATA),'all_skills':extensions.catalog(ROOT,DATA,True)['skills'],'tools':[t for t in TOOL_DEFS+mcp_client.definitions(DATA) if t['function']['name'] not in recovery_blocked_tools({'conversation_mode':'chat'})]})
         if pathname == '/api/model-registry' and method == 'GET':return self.reply(200,model_registry.catalog())
         if pathname == '/api/model-registry/match' and method == 'POST':
             body=self.body()
@@ -1919,7 +2088,7 @@ class Handler(BaseHTTPRequestHandler):
                         title=(source['title']+' · 分支')[:200]
                         db.execute('INSERT INTO sessions(id,title,project,parent_id,project_id,untrusted_context,story_id) VALUES(?,?,?,?,?,?,?)',(branch,title,source['project'],sid,source['project_id'],source['untrusted_context'],source['story_id']))
                         db.execute('UPDATE sessions SET conversation_mode=? WHERE id=?', (source['conversation_mode'], branch))
-                        query='INSERT INTO messages(session_id,role,content,persona,attachments,model,liked) SELECT ?,role,content,persona,attachments,model,liked FROM messages WHERE session_id=?'
+                        query='INSERT INTO messages(session_id,role,content,persona,attachments,model,liked,generated_attachment_ids) SELECT ?,role,content,persona,attachments,model,liked,generated_attachment_ids FROM messages WHERE session_id=?'
                         parameters=[branch,sid]
                         if cutoff is not None:
                             query+=' AND id'+(' < ?' if 'before_id' in branch_body else ' <= ?')
@@ -1961,7 +2130,10 @@ class Handler(BaseHTTPRequestHandler):
                         try:item=attachments.save_output(db,DATA,sid,body)
                         except ValueError as error:raise ApiError(400,str(error)) from None
                         return self.reply(201,item)
-                if path[3:] == ['messages'] and method == 'GET': return self.reply(200, [dict(r) for r in db.execute('SELECT * FROM messages WHERE session_id=? ORDER BY id', (sid,))])
+                if path[3:] == ['messages'] and method == 'GET':
+                    rows=[dict(r) for r in db.execute('SELECT * FROM messages WHERE session_id=? ORDER BY id', (sid,))]
+                    for row in rows: row['generated_attachment_ids']=json.loads(row['generated_attachment_ids'])
+                    return self.reply(200, rows)
             if path[3:] == ['chat'] and method == 'POST':
                 request_body = self.body()
                 request_key=request_body.get('request_id') if request_body.get('stream') is True else None
@@ -2033,12 +2205,13 @@ class Handler(BaseHTTPRequestHandler):
                         db.execute('INSERT INTO messages(session_id,role,content,attachments) VALUES(?,?,?,?)',(sid,'user',content,json.dumps(attachment_ids)))
                         message_id=db.execute('INSERT INTO messages(session_id,role,content,model) VALUES(?,?,?,?)',(sid,'assistant',answer,c['model'])).lastrowid
                         model_adapters.save_state(db,c,message_id)
+                        save_generated_images(db,c,message_id)
                     application_plugins.after_response(ROOT,DATA,database,sid,message_id,emit if streaming else lambda event:None)
                     if streaming:
                         with database() as db: message_id=db.execute("SELECT MAX(id) FROM messages WHERE session_id=? AND role='assistant'",(sid,)).fetchone()[0]
                         if not c.get('_waiting_for_user'): agent_environment.auto_memory(ROOT,DATA,c,content,answer,emit,upstream)
-                        emit({'type':'done','content':answer,'message_id':message_id,'usage':usage_meter.task_summary(DATA,runid)});return
-                    return self.reply(200, {'role': 'assistant', 'content': answer})
+                        emit({'type':'done','content':answer,'message_id':message_id,'generated_attachment_ids':c.get('_generated_attachment_ids',[]),'usage':usage_meter.task_summary(DATA,runid)});return
+                    return self.reply(200, {'role': 'assistant', 'content': answer, 'generated_attachment_ids': c.get('_generated_attachment_ids',[])})
                 finally:
                     if not detached:
                         if 'journal' in locals():journal.close()
@@ -2066,9 +2239,12 @@ class Handler(BaseHTTPRequestHandler):
                     if sid in BUSY: raise ApiError(409, '此会话已有请求正在生成，请稍后。')
                     BUSY.add(sid)
                 try:
-                    with database() as db:
-                        history = [dict(r) for r in db.execute('SELECT role,content,attachments FROM (SELECT id,role,content,attachments FROM messages WHERE session_id=? ORDER BY id DESC LIMIT 12) ORDER BY id', (sid,))]
-                    history=[{'role':m['role'],'content':attachments.assemble(DATA,m['content'],json.loads(m.get('attachments','[]')))} for m in history]
+                    if request_body.get('isolated') is True:
+                        history=[]
+                    else:
+                        with database() as db:
+                            history = [dict(r) for r in db.execute('SELECT role,content,attachments FROM (SELECT id,role,content,attachments FROM messages WHERE session_id=? ORDER BY id DESC LIMIT 12) ORDER BY id', (sid,))]
+                        history=[{'role':m['role'],'content':attachments.assemble(DATA,m['content'],json.loads(m.get('attachments','[]')))} for m in history]
                     c = request_config(request_body)
                     def review_one(persona):
                         name, role = prompts[persona]
@@ -2156,7 +2332,7 @@ def main():
         raise SystemExit(f'Port {args.port} is occupied. Try: py -3 server.py --port 8788 --open')
     security_core.save_capability(DATA,TOKEN)
     url = f'http://127.0.0.1:{server.server_port}'
-    print(f'\nAstraAgent — Personal Agent Workspace / V3.18.0\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
+    print(f'\nAstraAgent — Personal Agent Workspace / V{runtime_paths.APP_VERSION}\n{url}\nData: {DATA}\nPress Ctrl+C to stop.\n', flush=True)
     if args.open: threading.Timer(0.5, lambda: webbrowser.open(security_core.launch_url(url,DATA))).start()
     scheduler=task_scheduler.Scheduler(database,dispatch_schedule);SCHEDULER=scheduler;scheduler.start()
     try: server.serve_forever()

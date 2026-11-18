@@ -1,0 +1,16 @@
+/* Shared by the workspace and the offline Windows windows. */
+:root {
+  --lr-rose: #f3a9c6;
+  --lr-peach: #f2bd8b;
+  --lr-gold: #e9dc85;
+  --lr-mint: #9edbb7;
+  --lr-sky: #a5ccf8;
+  --lr-violet: #c8b6fa;
+  --lr-accent-light: #5545ab;
+  --lr-accent-dark: #b7a9ff;
+  --lr-strong-light: var(--lr-accent-light);
+  --lr-strong-dark: var(--lr-accent-dark);
+  --lr-on-light: #ffffff;
+  --lr-on-dark: #241947;
+  --lr-band: linear-gradient(100deg, var(--lr-rose), var(--lr-peach), var(--lr-gold), var(--lr-mint), var(--lr-sky), var(--lr-violet));
+}

@@ -44,10 +44,10 @@ renderList=function(){
         for(const item of items){
             const row=elem('div','session-list-row');
             const button=elem('button','list-item'+(state.session?.id===item.id?' active':''));
-            button.append(svgIcon(item.parent_id?'review':'chat'),elem('span','',item.title),elem('small','',String(item.message_count||0)));
+            button.append(sidebarIcon(item.parent_id?'review':'chat'),elem('span','',item.title),elem('small','',String(item.message_count||0)));
             button.onclick=safely(()=>openSession(item));
             row.oncontextmenu=event=>{event.preventDefault();showSessionMenu(item,event.clientX,event.clientY)};
-            const more=elem('button','session-more');more.type='button';more.setAttribute('aria-label','会话操作 '+item.title);more.append(svgIcon('settings'));more.onclick=()=>{const rect=more.getBoundingClientRect();showSessionMenu(item,rect.right,rect.bottom)};
+            const more=elem('button','session-more');more.type='button';more.setAttribute('aria-label','会话操作 '+item.title);more.append(sidebarIcon('settings'));more.onclick=()=>{const rect=more.getBoundingClientRect();showSessionMenu(item,rect.right,rect.bottom)};
             row.append(button,more);$('#item-list').append(row);
         }
     }
@@ -102,7 +102,7 @@ const archivePanel=settingPanel('archives','已归档的聊天','搜索、恢复
 const archiveNav=elem('button');
 archiveNav.type='button';
 archiveNav.dataset.settingsTab='archives';
-archiveNav.append(svgIcon('note'),elem('span','','已归档的聊天'));
+archiveNav.append(sidebarIcon('note'),elem('span','','已归档的聊天'));
 settingsNav.insertBefore(archiveNav,$('[data-settings-tab=voice]'));
 archiveNav.onclick=()=>selectSettingsTab('archives');
 let archivedSessions=[];

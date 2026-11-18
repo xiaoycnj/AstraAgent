@@ -6,10 +6,26 @@ const os = require("node:os");
 const { spawn, execFileSync } = require("node:child_process");
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 
+async function renderedFonts(cdp, selector) {
+  const {root: {nodeId}} = await cdp.send('DOM.getDocument');
+  const {nodeId: target} = await cdp.send('DOM.querySelector', {nodeId, selector});
+  assert.ok(target, selector);
+  const {fonts} = await cdp.send('CSS.getPlatformFontsForNode', {nodeId: target});
+  return fonts.filter(font => font.glyphCount > 0);
+}
+
+async function assertEditorialFont(cdp, selector) {
+  const fonts = await renderedFonts(cdp, selector);
+  assert.ok(fonts.length && fonts.every(font => font.isCustomFont && /Noto Serif SC/i.test(font.familyName)),
+    `${selector}: ${JSON.stringify(fonts)}`);
+}
+
 async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-shared-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python =
     process.env.ASTRA_TEST_PYTHON ||
     path.join(root, "runtimes/python/python.exe");
@@ -53,6 +69,9 @@ async function main() {
       reducedMotion: 'reduce',
       viewport: { width: 1440, height: 1000 },
     });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('DOM.enable');
+    await cdp.send('CSS.enable');
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(url + "/#access=" + token);
@@ -65,8 +84,38 @@ async function main() {
 
 
 
+    const shellReady = () => state.token && state.settings && document.querySelector('.command-launcher');
+    // Old boots wrote the default pair even without a user edit.
+    await page.evaluate(() => localStorage.setItem('astra-colors', JSON.stringify({theme:'#8582b8',accent:'#77a1ff'})));
+    await page.reload();
+    await page.waitForFunction(shellReady);
+    assert.deepEqual(await page.evaluate(() => [document.documentElement.dataset.uiStyle, localStorage.getItem('astra-colors')]), ['light-rainbow', null]);
+    // An explicit edit keeps even the old preset values; it is not a migration candidate.
+    await page.evaluate(() => localStorage.setItem('astra-colors', JSON.stringify({theme:'#8582b8',accent:'#77a1ff',custom:true})));
+    await page.reload();
+    await page.waitForFunction(shellReady);
+    assert.equal(await page.locator('html').getAttribute('data-custom-colors'),'');
+    assert.equal(await page.locator('#accent-color-picker').inputValue(),'#77a1ff');
     await page.waitForFunction(() => typeof appearanceDraft !== 'undefined' && appearanceDraft && !appearanceControls.disabled);
-    await page.evaluate(() => { showSettings(); selectSettingsTab('appearance'); });
+    const previewColors = await page.evaluate(async () => {
+      await marketReady;
+      const root = document.documentElement;
+      const accent = () => getComputedStyle(root).getPropertyValue('--accent-color').trim();
+      const before = accent();
+      const saved = localStorage.getItem('astra-colors');
+      const skin = marketData.entries.find(entry => entry.kind === 'skin');
+      previewMarketSkin(skin);
+      const previewed = document.body.classList.contains('market-skin');
+      cancelSkinPreview();
+      const restored = accent();
+      showSettings();
+      selectSettingsTab('appearance');
+      return { before, previewed, restored, settings: accent(), unchanged: localStorage.getItem('astra-colors') === saved };
+    });
+    assert.deepEqual(previewColors,{before:'#77a1ff',previewed:true,restored:'#77a1ff',settings:'#77a1ff',unchanged:true});
+    await page.evaluate(() => resetColors.click());
+    await page.waitForFunction(() => !document.documentElement.hasAttribute('data-custom-colors'));
+    assert.equal(await page.evaluate(() => localStorage.getItem('astra-colors')),null);
 
 
     const advanced=page.locator('#advanced-appearance');
@@ -80,14 +129,17 @@ async function main() {
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.material),'quiet');
     await page.keyboard.press('ArrowRight');
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.material),'glass');
-    assert.equal(await page.locator('#theme-color-picker').evaluate(input=>input.parentElement.querySelector('output').value),'#8582B8');
+    await page.evaluate(() => applyTheme('light'));
+    assert.equal(await page.locator('#theme-color-picker').evaluate(input=>input.parentElement.querySelector('output').value),'#D8CCF2');
     await advanced.scrollIntoViewIfNeeded();
     await page.screenshot({path:path.join(root,'work/advanced-appearance-light.png')});
     await advanced.locator(':scope > summary').click();
     const builtin = page.locator('#builtin-theme-styles');
-    assert.equal(await builtin.locator('[data-builtin-style]').count(),3);
+    assert.equal(await builtin.locator('[data-builtin-style]').count(),6);
+    assert.equal(await builtin.getByRole('button',{name:'LightRainbow',exact:true}).getAttribute('aria-pressed'),'true');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('astra-colors')),null);
     const styles=[];
-    for (const name of ['Anthropic','OpenAI','AstraAgent']) {
+    for (const name of ['LightRainbow','Anthropic','OpenAI','Fluent3','朱峰Agent','AstraAgent']) {
       await builtin.getByRole('button',{name,exact:true}).click();
       await page.waitForFunction(()=>!document.querySelector('[data-builtin-style]').disabled);
       const selected=await page.evaluate(()=>document.documentElement.dataset.uiStyle);
@@ -102,19 +154,65 @@ async function main() {
           selectionColor:getComputedStyle(document.querySelector('[data-settings-group=appearance]')).color
         }));
         assert.equal(values.theme,mode);
-        if(name==='Anthropic')assert.equal(values.surface,mode==='light'?'#faf8f3':'#2c2823');
+        if(name==='LightRainbow') {
+          assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()),mode==='light'?'#5545ab':'#b7a9ff');
+          assert.equal(await page.locator('#theme-color-picker').inputValue(),mode==='light'?'#d8ccf2':'#655689');
+        }
+        if(name==='Anthropic')assert.equal(values.surface,mode==='light'?'#f5f4ed':'#262623');
         if(name==='OpenAI')assert.equal(values.surface,mode==='light'?'#ffffff':'#212124');
         await page.screenshot({path:path.join(root,'work/theme-'+selected+'-'+mode+'.png')});
         styles.push(values);
       }
       assert.equal(await builtin.getByRole('button',{name,exact:true}).getAttribute('aria-pressed'),'true');
     }
+    // Restart preserves each new layout and its scheme-specific preset colors.
+    for (const [id, accent] of [['fluent3', '#60cdff'], ['zhufeng', '#85bee6']]) {
+      const choice = builtin.locator(`[data-builtin-style=${id}]`);
+      await choice.click();
+      await page.waitForFunction(() => !document.querySelector('[data-builtin-style]').disabled);
+      await page.reload();
+      await page.waitForFunction(shellReady);
+      assert.equal(await page.locator('html').getAttribute('data-ui-style'), id);
+      assert.equal(await choice.getAttribute('aria-pressed'), 'true');
+      await page.evaluate(() => applyTheme('dark'));
+      assert.equal(await page.locator('#accent-color-picker').inputValue(), accent);
+      await page.evaluate(async () => { await closeSettingsPage(); await newSession(); });
+      for (const [mode, width, height] of [['light',1440,1000],['dark',1440,1000],['dark',390,844],['light',320,800]]) {
+        await page.setViewportSize({width, height});
+        await page.evaluate(mode => applyTheme(mode), mode);
+        await page.locator('#chat-input').fill('主题布局测试');
+        const overflow = await page.evaluate(() => {
+          const messages = document.querySelector('#messages');
+          return Math.max(document.documentElement.scrollWidth - innerWidth, messages.scrollWidth - messages.clientWidth);
+        });
+        assert.ok(overflow <= 1, `${id} ${width}: horizontal overflow ${overflow}px`);
+        const composer = await page.locator('#chat-form').boundingBox();
+        assert.ok(composer && composer.x >= 0 && composer.y >= 0 && composer.x + composer.width <= width + 1 && composer.y + composer.height <= height + 1,
+          `${id} ${width}: ${JSON.stringify(composer)}`);
+        if (id === 'fluent3') {
+          const rail = await page.locator('.app-rail').boundingBox();
+          assert.ok(width === 1440 ? rail.width >= 150 : rail.width < 80, JSON.stringify({width, rail}));
+          const welcome = await page.locator('.welcome').evaluate(node => {
+            const heading = node.querySelector('h1');
+            const subtitle = node.querySelector(':scope > p');
+            const cards = [...node.querySelectorAll('.starter-card')].map(card => card.getBoundingClientRect());
+            return {left: [heading.getBoundingClientRect().left, subtitle.getBoundingClientRect().left, cards[0].left],
+              align: [getComputedStyle(heading).textAlign, getComputedStyle(subtitle).textAlign],
+              cardRows: new Set(cards.map(card => card.top)).size};
+          });
+          assert.ok(welcome.align.every(value => value === 'start' || value === 'left'), JSON.stringify(welcome));
+          assert.ok(Math.max(...welcome.left) - Math.min(...welcome.left) <= 1, JSON.stringify(welcome));
+          assert.equal(welcome.cardRows, width === 1440 ? 1 : 3);
+        }
+        await page.locator('#chat-input').clear();
+        await page.locator('#chat-input').blur();
+        await page.screenshot({path: path.join(root, `work/theme-${id}-home-${width === 1440 ? mode : width}.png`)});
+      }
+      await page.setViewportSize({width:1440,height:1000});
+      await page.evaluate(() => { showSettings(); selectSettingsTab('appearance'); });
+    }
     await builtin.getByRole('button',{name:'Anthropic',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('[data-builtin-style]').disabled);
-    await page.reload();
-    await page.waitForFunction(()=>document.documentElement.dataset.uiStyle==='anthropic' && state.token && state.settings);
-    await page.evaluate(()=>{showSettings();selectSettingsTab('appearance');});
-    assert.equal(await builtin.getByRole('button',{name:'Anthropic',exact:true}).getAttribute('aria-pressed'),'true');
 
     await page.emulateMedia({colorScheme:'dark'});
     await page.evaluate(()=>applyTheme('system'));
@@ -139,24 +237,85 @@ async function main() {
     assert.equal(await page.evaluate(()=>document.body.classList.contains('market-skin')),false);
     await builtin.getByRole('button',{name:'Anthropic',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('[data-builtin-style]').disabled);
+    await page.evaluate(async()=>{ closeSettingsPage(); await newSession(); });
+    for (const [mode, width, height, label] of [
+      ['light', 1440, 1000, 'light'], ['dark', 1440, 1000, 'dark'], ['dark', 390, 844, 'mobile'], ['light', 320, 800, 'small'],
+    ]) {
+      await page.setViewportSize({width, height});
+      await page.evaluate(mode=>applyTheme(mode),mode);
+      const view=await page.evaluate(()=>{
+        const style=selector=>getComputedStyle(document.querySelector(selector));
+        const area=document.querySelector('#messages');
+        return {title:style('.welcome h1').fontFamily, action:style('#send').backgroundColor,
+          panel:style('#app > main').backgroundColor, grid:style('.welcome .starter-grid').display, body:document.body.className,
+          overflow: Math.max(document.documentElement.scrollWidth-innerWidth, area.scrollWidth-area.clientWidth)};
+      });
+      assert.match(view.title,/Astra Editorial Serif/);
+      assert.equal(view.grid,'flex');
+      await page.evaluate(() => document.fonts.ready);
+      await assertEditorialFont(cdp, '.welcome h1');
+      const [welcome, form] = await Promise.all([
+        page.locator('.welcome').boundingBox(), page.locator('#chat-form').boundingBox(),
+      ]);
+      assert.ok(form.y - (welcome.y + welcome.height) >= 0 && form.y - (welcome.y + welcome.height) <= 32,
+        JSON.stringify({welcome, form}));
+      assert.equal(view.action,mode==='light'?'rgb(166, 77, 51)':'rgb(225, 147, 119)',JSON.stringify(view));
+      assert.equal(view.panel,mode==='light'?'rgb(245, 244, 237)':'rgb(38, 38, 35)');
+      assert.equal(view.overflow,0);
+      await page.screenshot({path:path.join(root,'work/theme-anthropic-home-'+label+'.png')});
+    }
+    await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(()=>applyTheme('light'));
     await page.evaluate(async()=>{
       await newSession();
       state.messages=[{id:101,role:'user',content:'帮我整理一下今天的想法。'},{id:102,role:'assistant',content:'## 从一个想法开始\n\n先把最重要的事情写下来，再逐步展开。\n\n- 清晰的目标\n- 舒服的阅读节奏\n\nA calm space for your next idea.'}];
       renderMessages();
     });
-    for(const name of ['Anthropic','OpenAI','AstraAgent']) {
+    for(const name of ['Anthropic','OpenAI','Fluent3','朱峰Agent','AstraAgent']) {
       await page.evaluate(()=>{showSettings();selectSettingsTab('appearance');});
       await builtin.getByRole('button',{name,exact:true}).click();
       await page.waitForFunction(()=>!document.querySelector('[data-builtin-style]').disabled);
       await page.evaluate(()=>closeSettingsPage());
       await page.screenshot({path:path.join(root,'work/theme-chat-'+name+'.png')});
       const font=await page.locator('.message.assistant .markdown').evaluate(node=>getComputedStyle(node).fontFamily);
-      if(name==='Anthropic')assert.ok(font.includes('Georgia'));
-      if(name==='OpenAI')assert.ok(!font.includes('Georgia'));
-      const bubble=await page.locator('.message.user').evaluate(node=>getComputedStyle(node).backgroundColor);
-      if(name==='Anthropic')assert.equal(bubble,'rgb(234, 228, 217)');
+      if(name==='Anthropic') {
+        assert.match(font,/Astra Editorial Serif/);
+        await page.evaluate(() => document.fonts.ready);
+        await assertEditorialFont(cdp, '.message.assistant .markdown h2');
+        await assertEditorialFont(cdp, '.message.assistant .markdown p:first-of-type');
+        await assertEditorialFont(cdp, '.message.assistant .markdown p:last-of-type');
+      }
+      if(name==='OpenAI')assert.ok(!font.includes('Astra Editorial Serif'));
+      const bubble=await page.locator('.message.user > .markdown').evaluate(node=>getComputedStyle(node).backgroundColor);
+      if(name==='Anthropic')assert.equal(bubble,'rgb(235, 233, 223)');
       if(name==='OpenAI')assert.equal(bubble,'rgb(240, 240, 241)');
+      if (name === '朱峰Agent') {
+        const card = page.locator('#messages > .message.assistant');
+        assert.equal(await card.evaluate(node => getComputedStyle(node).outlineStyle), 'solid');
+        const rail = page.getByRole('navigation', {name: '主导航'});
+        await rail.getByRole('button', {name: '更多', exact: true}).click();
+        await page.getByRole('menuitem', {name: '无限画布', exact: true}).click();
+        const canvas = page.locator('#canvas-view');
+        await canvas.locator('.canvas-toolbar [data-add=note]').click();
+        await canvas.locator('#node-title').fill('产品构思');
+        await canvas.locator('#node-content').fill('先把最重要的事情写下来，再逐步展开。');
+        await canvas.locator('.canvas-toolbar [data-add=document]').click();
+        await canvas.locator('#node-title').fill('下一步计划');
+        await canvas.locator('#node-content').fill('整理目标、约束和验收标准。');
+        await canvas.locator('#fit').click();
+        await page.evaluate(() => applyTheme('dark'));
+        const grid = await canvas.locator('.viewport').evaluate(node => {
+          const style = getComputedStyle(node);
+          return {image: style.backgroundImage, size: style.backgroundSize, scale: state.scale};
+        });
+        assert.match(grid.image, /^linear-gradient/);
+        assert.ok(grid.size.split(' ').every(size => Math.abs(parseFloat(size) - 22 * grid.scale) < 0.01), JSON.stringify(grid));
+        assert.equal(await canvas.locator('.node.selected').evaluate(node => getComputedStyle(node).outlineColor), 'rgb(133, 190, 230)');
+        await page.screenshot({path: path.join(root, 'work/theme-zhufeng-canvas-dark.png')});
+        await rail.getByRole('button', {name: '主页', exact: true}).click();
+        await page.locator('#chat-view').waitFor();
+        await page.evaluate(() => applyTheme('light'));
+      }
     }
     await page.evaluate(()=>{showSettings();selectSettingsTab('appearance');});
     await page.emulateMedia({reducedMotion:'no-preference'});
@@ -247,14 +406,15 @@ async function main() {
     assert.equal(await page.evaluate(()=>appearanceDraft.styles.message_radius),28);
     await page.reload();
     await page.waitForFunction(()=>appearanceDraft?.background.asset && appearanceDraft?.icons.home);
-    assert.equal(await page.locator('#nav-home > .personal-icon').count(),1);
+    assert.equal(await page.evaluate(()=>appearanceDraft.enabled),true);
+    await page.locator('#nav-home > .personal-icon').waitFor({state:'attached'});
     await page.evaluate(()=>{
       state.messages=[{role:'user',content:'Personalized user message'},{role:'assistant',content:'## Personal appearance\n\nBackground, fonts, colors and icons.'}];renderMessages();
     });
     assert.equal(await page.locator('.message.assistant').evaluate(el=>getComputedStyle(el).borderRadius),'28px');
     assert.equal(await page.locator('.message.assistant').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 34, 51)');
     assert.equal(await page.locator('#chat-form').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(34, 51, 68)');
-    assert.equal(await page.locator('.message.user').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 34, 51)');
+    assert.equal(await page.locator('.message.user > .markdown').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 34, 51)');
     assert.equal(await page.locator('.message.assistant .markdown').evaluate(el=>getComputedStyle(el).color),'rgb(255, 255, 255)');
     await page.screenshot({path:path.join(root,'work/personalization-desktop.png')});
 

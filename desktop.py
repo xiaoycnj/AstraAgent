@@ -111,11 +111,12 @@ def main():
         for window in list(webview.windows):
             window.destroy()
 
-    def set_status(text, failed=False):
+    def set_status(phase, text):
         if transitioning.is_set() or closing.is_set():
             return
         try:
-            splash.evaluate_js("document.getElementById('status').textContent=" + json.dumps(translate(text)) + ";document.body.classList.toggle('failed'," + str(failed).lower() + ');')
+            args = json.dumps([phase, translate(text)])
+            splash.evaluate_js(f'setStartupState(...{args})')
         except Exception:
             pass
 
@@ -177,13 +178,14 @@ def main():
         if not connecting.acquire(blocking=False):
             return
         try:
+            set_status('waiting', '正在唤醒工作空间')
             for _ in range(120):
                 if closing.is_set():
                     return
                 try:
                     value = json.loads(state_file.read_text(encoding='utf-8'))
                     if value['status'] == 'ready' and value['url'].startswith('http://127.0.0.1:'):
-                        set_status('正在载入你的工作空间')
+                        set_status('loading', '正在载入你的工作空间')
                         if main_window is None:
                             main_window = webview.create_window(
                                 'AstraAgent', url=security_core.launch_url(value['url'],data), js_api=bridge,
@@ -199,9 +201,9 @@ def main():
                 except (OSError, ValueError, KeyError):
                     pass
                 time.sleep(.5)
-            set_status('连接尚未就绪，请重新连接', failed=True)
         finally:
             connecting.release()
+        set_status('failed', '连接尚未就绪，请重新连接')
 
     class Bridge:
         def __init__(self):
@@ -281,8 +283,8 @@ def main():
     splash = webview.create_window(
         'AstraAgent · Starting', url=str(ROOT / 'web/assets/startup/splash.html'),
         js_api=bridge, width=560, height=350, min_size=(560, 350),
-        frameless=True, resizable=False, easy_drag=True, shadow=True,
-        on_top=True, background_color='#fcfcfd',
+        frameless=True, resizable=False, easy_drag=False, shadow=True,
+        on_top=True, background_color='#faf9fc',
     )
 
     def splash_shown():
@@ -294,13 +296,17 @@ def main():
     def splash_loaded():
         if transitioning.is_set() or closing.is_set():
             return
-        set_status('正在唤醒工作空间')
         try:
-            labels = {'cancel': translate('取消启动'), 'retry': translate('重新连接')}
-            splash.evaluate_js("(()=>{const labels=" + json.dumps(labels) + ";const close=document.querySelector('.close');close.title=labels.cancel;close.setAttribute('aria-label',labels.cancel);document.querySelector('.retry').textContent=labels.retry;})()")
+            labels = {key: translate(text) for key, text in {
+                'caption': '启动', 'subtitle': '正在准备工作空间', 'close': '取消启动',
+                'retry': '重新连接', 'progress': '启动进度',
+            }.items()}
+            labels['version'] = 'VERSION ' + runtime_paths.release_info(ROOT)['version']
+            splash.evaluate_js(f'configureWindow({json.dumps(labels)})')
             splash_metrics['cancel_label'] = splash.evaluate_js("document.querySelector('.close').getAttribute('aria-label')")
         except Exception:
             pass
+        connect()
 
     def splash_closed():
         if not transitioning.is_set():
@@ -310,7 +316,7 @@ def main():
     splash.events.loaded += splash_loaded
     splash.events.closed += splash_closed
     try:
-        webview.start(connect, gui='edgechromium', icon=str(ICON), private_mode=False, storage_path=str(data / 'webview'))
+        webview.start(gui='edgechromium', icon=str(ICON), private_mode=False, storage_path=str(data / 'webview'))
     finally:
         shutdown()
         try:

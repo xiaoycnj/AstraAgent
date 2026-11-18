@@ -3,8 +3,15 @@ const conversationList=$('#messages');conversationList.tabIndex=0;
 const previousConversationRender=renderMessages;
 function conversationTop(article){return article.getBoundingClientRect().top-conversationList.getBoundingClientRect().top+conversationList.scrollTop;}
 let conversationObjects=[],conversationSession=null,conversationFrame=0,conversationFollowing=true;
-const conversationStop=actionButton('停止生成',stopConversation,'conversation-stop');conversationStop.id='stop-generation';conversationStop.hidden=true;const stopGlyph=document.createElementNS('http://www.w3.org/2000/svg','svg');stopGlyph.setAttribute('viewBox','0 0 20 20');stopGlyph.setAttribute('aria-hidden','true');const stopSquare=document.createElementNS('http://www.w3.org/2000/svg','rect');for(const [key,value] of Object.entries({x:5,y:5,width:10,height:10,rx:2,fill:'currentColor'}))stopSquare.setAttribute(key,value);stopGlyph.append(stopSquare);conversationStop.prepend(stopGlyph);
-$('#send').before(conversationStop);
+const conversationSend = $('#send');
+const conversationStop = actionButton('', stopConversation, 'conversation-stop');
+conversationStop.id = 'stop-generation';
+conversationStop.hidden = true;
+const stopIcon = svgIcon('stop');
+stopIcon.setAttribute('fill', 'currentColor');
+stopIcon.setAttribute('stroke', 'none');
+conversationStop.append(stopIcon);
+conversationSend.before(conversationStop);
 const conversationStopping=new Set();
 async function stopConversation(){
  const sid=state.session?.id;if(!sid||conversationStopping.has(sid))return;
@@ -19,7 +26,19 @@ async function stopConversation(){
   throw new Error('停止请求尚未确认，请重试');
  }catch(error){toast(error.message);}finally{conversationStopping.delete(sid);syncConversationStop();}
 }
-function syncConversationStop(){const sid=state.session?.id;conversationStop.hidden=!sid||!state.pending.has(sid)||state.reviewMode;conversationStop.disabled=conversationStopping.has(sid);const label=conversationStopping.has(sid)?'stopping':'ready';if(conversationStop.dataset.label!==label){conversationStop.dataset.label=label;conversationStop.lastChild.textContent=label==='stopping'?'正在停止…':'停止生成';}}
+function syncConversationStop() {
+ const sid = state.session?.id;
+ const visible = !!sid && state.pending.has(sid) && !state.reviewMode;
+ const stopping = conversationStopping.has(sid);
+ if (conversationStop.hidden === visible) conversationStop.hidden = !visible;
+ if (conversationSend.hidden !== visible) conversationSend.hidden = visible;
+ if (conversationStop.disabled !== stopping) conversationStop.disabled = stopping;
+ const label = stopping ? '正在停止…' : '停止生成';
+ if (conversationStop.title !== label) {
+  conversationStop.title = label;
+  conversationStop.setAttribute('aria-label', label);
+ }
+}
 let conversationAnchor = null, conversationLastTop = 0, conversationScrollDirection = null;
 function captureConversationAnchor() {
  if (!conversationList.clientHeight) return;
@@ -97,6 +116,10 @@ function paintConversation(){
  }else{
   previousConversationRender();
   conversationObjects=state.messages.slice();conversationSession=sid;
+ }
+ if(typeof renderInlineImages==='function'){
+  const rendered=conversationList.querySelectorAll(':scope>.message');
+  state.messages.forEach((message,index)=>{if(rendered[index])renderInlineImages(rendered[index],message);});
  }
  conversationFollowing=follow;
  restoreConversationPosition();

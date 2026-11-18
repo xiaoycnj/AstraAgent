@@ -10,7 +10,7 @@ for(const [key,label,type] of [['base_url','STT Base URL','url'],['api_key','STT
     sttForm.append(item.label);
 }
 const sttClear=elem('input');
-sttClear.type='checkbox';sttClear.id='stt-clear-key';sttClear.setAttribute('role','switch');
+sttClear.type='checkbox';sttClear.id='stt-clear-key';
 const sttClearLabel=elem('label','toggle-line');
 sttClearLabel.append(sttClear,document.createTextNode('清除已保存的 STT 密钥'));
 const sttHint=elem('p','hint');
@@ -51,8 +51,6 @@ const voiceInsert=actionButton('插入转写文本',()=>insertVoiceDraft(),'seco
 voiceInsert.hidden=true;
 voiceStatus.append(voiceLabel,voiceInsert);$('#chat-form').prepend(voiceStatus);
 let voiceRun=null,voiceDraft=null,voiceStatusTimer=0,voiceIgnoreClick=false;
-const voiceMicPath='M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0V5Zm-3 6v1a6 6 0 0 0 12 0v-1M12 18v4m-4 0h8';
-const voiceSendPath='M12 20V4m-6 6 6-6 6 6';
 function voiceSendable(){return !!speechInput.value.trim()||pendingAttachments.length>0;}
 function voiceMessage(text){
     clearTimeout(voiceStatusTimer);voiceLabel.textContent=uiText(text);voiceStatus.hidden=!text;
@@ -64,7 +62,7 @@ function syncVoiceButton(){
     if(speechButton.dataset.voiceMode!==mode){
         speechButton.dataset.voiceMode=mode;
         const icon=svgIcon('note');
-        icon.querySelector('path').setAttribute('d',mode==='send'?voiceSendPath:voiceMicPath);
+        icon.querySelector('path').setAttribute('d',mode==='send'?iconPaths.send:iconPaths.mic);
         speechButton.replaceChildren(icon);
     }
     speechButton.type=sendable&&!voiceRun?'submit':'button';

@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-shared-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python =
     process.env.ASTRA_TEST_PYTHON ||
     path.join(root, "runtimes/python/python.exe");
@@ -67,6 +69,20 @@ async function main() {
 
 
     await page.waitForFunction(()=>typeof appearanceDraft!=='undefined' && appearanceDraft && !layoutControls.disabled);
+    assert.match(await page.locator('#nav-home .glyph-outline').getAttribute('src'), /navigation\/home-outline\.svg$/);
+    for (const selector of ['#history-back', '#sidebar-toggle', '.command-launcher', '#send', '#conversation-more']) {
+      const glyph = page.locator(selector + ' > svg');
+      assert.equal(await glyph.getAttribute('stroke'), 'currentColor', selector);
+      assert.equal(await glyph.getAttribute('stroke-linecap'), 'round', selector);
+      assert.equal(await glyph.getAttribute('aria-hidden'), 'true', selector);
+    }
+    await page.evaluate(async () => {showSettings(); selectSettingsTab('icons'); await loadIconLibrary();});
+    assert.equal(await page.locator('.icon-library-item').count(), 48);
+    const icon = page.locator('.icon-library-item .color-icon').first();
+    assert.match(await icon.evaluate(node => getComputedStyle(node).maskImage), /icons\/library\/goals\.svg/);
+    const iconResponse = await page.request.get(url + '/assets/icons/library/goals.svg');
+    assert.ok(iconResponse.ok());
+    assert.match(await iconResponse.text(), /stroke="currentColor"/);
     await page.evaluate(()=>{showSettings();selectSettingsTab('appearance');});
     await page.getByRole('tab',{name:'布局与模组',exact:true}).click();
     const panel=page.locator('#layout-customization');
@@ -78,8 +94,19 @@ async function main() {
     await panel.getByRole('combobox',{name:'输入框位置',exact:true}).selectOption('center');
     await panel.locator('[data-layout-block=hint]').getByRole('switch',{name:'显示',exact:true}).uncheck();
     await panel.locator('[data-layout-block=starters]').getByRole('button',{name:'上移',exact:true}).click();
-    await panel.locator('[data-layout-block=greeting]').dragTo(panel.locator('[data-layout-block=shortcuts]'));
-    assert.notEqual(await page.evaluate(()=>appearanceDraft.layout.home_order[0]),'greeting');
+    // Keep both rows in view; Chromium needs a move over the target after drag starts.
+    const source = panel.locator('[data-layout-block=greeting] > strong');
+    const target = panel.locator('[data-layout-block=shortcuts] > strong');
+    await source.evaluate(node => node.closest('.layout-order-list').scrollIntoView({block: 'center', behavior: 'instant'}));
+    const start = await source.boundingBox(), end = await target.boundingBox();
+    assert.ok(start && end);
+    const x = end.x + 16, y = end.y + end.height / 2;
+    await page.mouse.move(start.x + 16, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, y, {steps: 12});
+    await page.mouse.move(x + 2, y);
+    await page.mouse.up();
+    await page.waitForFunction(() => appearanceDraft.layout.home_order[0] !== 'greeting', null, {timeout: 4000});
     await panel.locator('[data-layout-nav=schedule]').getByRole('switch',{name:'固定',exact:true}).check();
     await page.waitForFunction(()=>document.querySelector('#nav-schedule').parentElement===railTop);
     await panel.getByRole('switch',{name:'侧栏显示文字',exact:true}).check();

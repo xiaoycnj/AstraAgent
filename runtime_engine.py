@@ -60,14 +60,21 @@ def _save_settings(data,body):
 def authorize(name,args,c,emit,approve):
     if c.get('conversation_mode') == 'chat' and name not in CHAT_TOOLS:
         return False
+    if name=='create_marketplace_package' and not (
+            c.get('conversation_mode')=='agent' and c.get('_allow_package_authoring') is True
+            and name in c.get('tools',[]) and c.get('access_policy') in ('ask','trusted','full')
+            and c.get('file_permission') in ('ask','read','all')):
+        return False
     policy=c.get('access_policy')
     if policy is None:return True
     if policy not in ('ask','trusted','full'):return False
+    # Image edits use the generation aliases with session-scoped reference IDs.
+    if name in ('image_gen','generate_image','list_image_models'):return True
     needs_confirmation=False
-    if name in workspace_tools.NAMES|{'read_file','write_file','list_files','read_csv','inspect_json'}:
+    if name in workspace_tools.NAMES|{'read_file','write_file','create_file','create_marketplace_package','list_files','read_csv','inspect_json'}:
         permission=c.get('file_permission','all')
         if permission=='none':return False
-        needs_confirmation=permission=='ask' or (permission=='read' and name in workspace_tools.WRITES|{'write_file'})
+        needs_confirmation=permission=='ask' or (permission=='read' and name in workspace_tools.WRITES|{'write_file','create_file','create_marketplace_package'})
     if name=='execute_command':
         permission=c.get('command_permission','all')
         if permission=='none':return False

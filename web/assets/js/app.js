@@ -1,7 +1,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
-const state = {token:'', settings:{}, mode:'chat', sessions:[], canvases:[], session:null, messages:[], pending:new Set(), reviewMode:false, board:null, selected:null, dirty:0, saved:0, savePromise:null, history:[], redo:[], scale:1, x:0, y:0, connecting:false, source:null, running:new Set()};
+const state = {token:'', settings:{}, onboarding:{}, mode:'chat', sessions:[], canvases:[], session:null, messages:[], pending:new Set(), reviewMode:false, board:null, selected:null, dirty:0, saved:0, savePromise:null, history:[], redo:[], scale:1, x:0, y:0, connecting:false, source:null, running:new Set()};
 let listRequest=0, messageRequest=0, saveTimer, toastTimer, drag=null, submitting=false;
 const clone = o => structuredClone(o);
 const uid = () => crypto.randomUUID();
@@ -23,13 +23,130 @@ function updateSettings(){const c=state.settings;$('#config-dot').textContent=c.
 function showSettings(){if(!$('#settings').hidden)return;const c=state.settings;$('#base-url').value=c.base_url||'';$('#model').value=c.model||'';$('#api-key').value='';$('#clear-key').checked=false;$('#system-prompt').value=c.system_prompt||'';$('#timeout').value=c.timeout||90;$('#key-status').textContent=c.has_key?'已保存，留空则保留':'可留空用于本地服务';$('#api-key').placeholder=c.has_key?'已保存 · 输入新密钥可替换':'输入你的密钥';$('#settings-feedback').textContent='';openSettingsPage()}
 function configForm(){return {provider:$('#provider-edit')?.value||'',base_url:$('#base-url').value.trim(),model:$('#model').value.trim(),api_key:$('#api-key').value,clear_key:$('#clear-key').checked,system_prompt:$('#system-prompt').value,timeout:Number($('#timeout').value)}}
 async function configAction(kind,button){busyButton(button,true);$('#settings-feedback').classList.remove('error');$('#settings-feedback').textContent='正在连接…';try{const data=configForm();if(kind==='save'){state.settings=await api('/api/settings','PUT',data);updateSettings();$('#api-key').value='';$('#clear-key').checked=false;$('#key-status').textContent=state.settings.has_key?'已保存，留空则保留':'未保存密钥';settingsDirty=false;$('#settings-feedback').textContent='设置已保存，新的对话请求将使用此配置。';toast('接口设置已保存在本机')}else if(kind==='models'){const r=await api('/api/settings/models','POST',data);$('#models').replaceChildren(...r.models.map(m=>{const o=document.createElement('option');o.value=m;return o}));$('#settings-feedback').textContent=`已读取 ${r.models.length} 个模型，可在模型输入框选择。`;if(!$('#model').value&&r.models[0])$('#model').value=r.models[0]}else{const r=await api('/api/settings/test','POST',data);$('#settings-feedback').textContent=`连接成功 · 模型回复正常 · ${r.latency_ms} ms。记得保存设置。`}}catch(e){$('#settings-feedback').classList.add('error');$('#settings-feedback').textContent=e.message}finally{busyButton(button,false)}}
+let firstRunStep=1,firstRunActive=false,firstRunPreview=false;
+let firstRunPreviewSnapshot=null,firstRunBackground=null,firstRunRenderedStep=0,firstRunSaving=false;
+const firstRunAnimations=new Set();
+const firstRunMotionQuery=matchMedia('(prefers-reduced-motion: reduce)');
+const firstRunPreviewExit=elem('button','secondary','退出预览');firstRunPreviewExit.type='button';firstRunPreviewExit.hidden=true;firstRunPreviewExit.id='first-run-preview-exit';$('#first-run .first-run-brand').append(firstRunPreviewExit);
+const firstRunScenes=[
+  ['A SPACE FOR YOUR IDEAS','灵感，从这里展开。','属于你的空间。由你定义的可能。','隐私说明'],
+  ['CONFIDENCE BY DESIGN','每一个选择，都由你。','了解边界，安心探索。','使用条款'],
+  ['MAKE IT YOURS','为独一无二的你。','从你的名字，到你的下一次创造。','个人资料'],
+  ['CONNECT YOUR POSSIBILITIES','让想法，连接可能。','选择你的模型，开启新的旅程。','连接模型'],
+  ['YOUR NEXT CHAPTER','现在，轮到你的灵感。','从这里出发，创造下一种可能。','设置完成']
+];
+function firstRunReduced(){return firstRunMotionQuery.matches||document.documentElement.dataset.motion==='reduced'||$('#first-run').dataset.reducedMotion==='true'}
+function cancelFirstRunAnimations(){for(const a of firstRunAnimations)a.cancel();firstRunAnimations.clear()}
+function animateFirstRun(node,frames,options){if(firstRunReduced())return;const a=node.animate(frames,options);firstRunAnimations.add(a);const clean=()=>firstRunAnimations.delete(a);a.onfinish=clean;a.oncancel=clean;}
+function updateFirstRunMotion(){const reduced=firstRunReduced();$('#first-run-motion').setAttribute('aria-pressed',String(reduced));$('#first-run-motion').textContent=reduced?'动态效果已减少':'减少动态效果';if(reduced)cancelFirstRunAnimations()}
+$('#first-run-motion').onclick=()=>{$('#first-run').dataset.reducedMotion=String($('#first-run').dataset.reducedMotion!=='true');updateFirstRunMotion()};
+firstRunMotionQuery.addEventListener('change',updateFirstRunMotion);
+new MutationObserver(updateFirstRunMotion).observe(document.documentElement,{attributes:true,attributeFilter:['data-motion']});
+function isolateFirstRun(){if(firstRunBackground)return;firstRunBackground=[...document.body.children].filter(n=>!n.contains($('#first-run'))).map(node=>({node,inert:node.inert}));for(const {node} of firstRunBackground)node.inert=true;}
+function releaseFirstRun(){if(!firstRunBackground)return;for(const {node,inert} of firstRunBackground)node.inert=inert;firstRunBackground=null;}
+function previewFirstRun(returnFocus=document.activeElement){
+  if(firstRunActive)return;
+  firstRunPreviewSnapshot={focus:returnFocus,step:firstRunStep,finish:$('#first-run-finish').textContent,fields:[...$('#first-run-form').elements].filter(x=>x.matches('input,textarea,select')).map(x=>({node:x,value:x.value,checked:x.checked}))};
+  $('#first-run-form').reset();firstRunPreview=true;firstRunActive=true;firstRunStep=1;firstRunRenderedStep=0;$('#first-run-error').hidden=true;$('#first-provider-key').value='';$('#first-run-finish').textContent='预览完成体验';firstRunPreviewExit.hidden=false;$('#first-run-preview-label').hidden=false;renderFirstRunStep();
+  for(const dialog of document.querySelectorAll('.command-palette:not([open])'))for(const animation of dialog.getAnimations({subtree:true}))animation.cancel();
+}
+function closeFirstRunPreview(){
+  if(!firstRunPreview)return;
+  const snapshot=firstRunPreviewSnapshot;firstRunPreview=false;firstRunActive=false;firstRunStep=snapshot.step;$('#first-run-finish').textContent=snapshot.finish;
+  for(const field of snapshot.fields){field.node.value=field.value;field.node.checked=field.checked;}
+  $('#first-provider-key').value='';firstRunPreviewExit.hidden=true;$('#first-run-preview-label').hidden=true;firstRunPreviewSnapshot=null;renderFirstRunStep();
+  (snapshot.focus?.isConnected&&!snapshot.focus.closest('dialog:not([open])')?snapshot.focus:$('#chat-input'))?.focus({preventScroll:true});
+}
+firstRunPreviewExit.onclick=closeFirstRunPreview;
+window.addEventListener('keydown',event=>{if(firstRunActive&&(event.ctrlKey||event.metaKey)&&['s','k','p',','].includes(event.key.toLowerCase())){event.preventDefault();event.stopImmediatePropagation();}},true);
+$('#first-run').addEventListener('keydown',event=>{
+  if(!firstRunActive)return;
+  if(event.key==='Escape'&&firstRunPreview){event.preventDefault();event.stopPropagation();closeFirstRunPreview();return;}
+  if(event.key==='Tab'){
+    const controls=[...$('#first-run').querySelectorAll('input,button,select,textarea,a[href],[tabindex="0"]')].filter(x=>!x.disabled&&x.getClientRects().length);
+    const first=controls[0],last=controls.at(-1);
+    if(event.shiftKey&&(document.activeElement===first||!controls.includes(document.activeElement))){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  }
+});
+function renderFirstRunStep(){
+  cancelFirstRunAnimations();const host=$('#first-run'),previous=firstRunRenderedStep;
+  host.hidden=!firstRunActive;document.body.classList.toggle('first-run-open',firstRunActive);
+  if(!firstRunActive){releaseFirstRun();firstRunRenderedStep=0;return}
+  isolateFirstRun();updateFirstRunMotion();host.dataset.step=String(firstRunStep);
+  $$('[data-first-step]').forEach(x=>x.hidden=Number(x.dataset.firstStep)!==firstRunStep);
+  $$('[data-step-dot]').forEach(x=>{const step=Number(x.dataset.stepDot);x.classList.toggle('active',step===firstRunStep);x.classList.toggle('complete',step<firstRunStep);if(step===firstRunStep)x.setAttribute('aria-current','step');else x.removeAttribute('aria-current');x.setAttribute('aria-label',step+' · '+firstRunScenes[step-1][3]);});
+  const [kicker,title,detail,label]=firstRunScenes[firstRunStep-1];$('#oobe-art-kicker').textContent=kicker;$('#oobe-art-title').textContent=title;$('#oobe-art-detail').textContent=detail;$('#oobe-art-number').textContent=String(Math.min(firstRunStep,4)).padStart(2,'0');$('#first-run-step-count').textContent=firstRunStep===5?'准备就绪':String(firstRunStep).padStart(2,'0')+' / 04';
+  $('#first-run-announcement').textContent=firstRunStep===5?'设置完成':`第 ${firstRunStep} 步，共 4 步：${label}`;
+  const section=host.querySelector(`[data-first-step="${firstRunStep}"]`),heading=section.querySelector('h1');heading.tabIndex=-1;heading.focus({preventScroll:true});
+  if(previous!==firstRunStep){const direction=previous>firstRunStep?-1:1;host.scrollTo({top:0,behavior:'instant'});const ease='cubic-bezier(.16,1,.3,1)';animateFirstRun(section,[{opacity:0,transform:`translateX(${direction*36}px) translateY(10px)`},{opacity:1,transform:'none'}],{duration:620,easing:ease});[...section.children].filter(n=>!n.hidden).forEach((n,i)=>animateFirstRun(n,[{opacity:0,transform:'translateY(16px)'},{opacity:1,transform:'none'}],{duration:520,delay:Math.min(i*45,225),easing:ease,fill:'backwards'}));animateFirstRun($('.oobe-art-caption'),[{opacity:0,transform:'translateY(12px)'},{opacity:1,transform:'none'}],{duration:700,easing:ease});if(!previous)animateFirstRun($('.oobe-sculpture'),[{opacity:0,scale:'.7',rotate:'-18deg'},{opacity:1,scale:'1',rotate:'0deg'}],{duration:1200,easing:ease});}
+  if(previous && previous!==firstRunStep && !firstRunReduced()){
+    const from=host.querySelector(`[data-step-dot="${previous}"]`),to=host.querySelector(`[data-step-dot="${firstRunStep}"]`);
+    if(from && to){
+      const dx=from.getBoundingClientRect().left-to.getBoundingClientRect().left;
+      animateFirstRun(to,[
+        {transform:`translateX(${dx}px) scale(.94,1.04)`},
+        {offset:.37,transform:`translateX(${dx*.32}px) scale(1.32,.84)`},
+        {offset:.68,transform:`translateX(${-dx*.05}px) scale(.93,1.08)`},
+        {transform:'none'}
+      ],{duration:470,easing:'cubic-bezier(.25,.72,.32,1)'});
+    }
+  }
+  firstRunRenderedStep=firstRunStep;
+}
+function firstRunMove(delta){if(firstRunSaving)return;const required=firstRunStep===1?$('#first-run-privacy'):firstRunStep===2?$('#first-run-terms'):null;if(delta>0&&required&&!required.checked){const section=$('[data-first-step="'+firstRunStep+'"]');let message=section.querySelector('.first-run-validation');if(!message){message=elem('p','inline-error first-run-validation');message.setAttribute('role','alert');message.id='first-run-validation-'+firstRunStep;section.append(message);required.setAttribute('aria-describedby',message.id)}message.textContent=firstRunStep===1?'请先阅读并确认隐私说明。':'请先阅读并接受使用条款。';required.focus();return}firstRunStep=Math.max(1,Math.min(4,firstRunStep+delta));renderFirstRunStep();}
+$('#first-run-privacy').addEventListener('change',()=>{const message=$('[data-first-step="1"] .first-run-validation');if(message)message.remove();$('#first-run-privacy').removeAttribute('aria-describedby')});$('#first-run-terms').addEventListener('change',()=>{const message=$('[data-first-step="2"] .first-run-validation');if(message)message.remove();$('#first-run-terms').removeAttribute('aria-describedby')});$$('[data-first-next]').forEach(b=>b.onclick=()=>firstRunMove(1));$$('[data-first-back]').forEach(b=>b.onclick=()=>firstRunMove(-1));
+function showFirstRunComplete(){firstRunStep=5;$('#first-provider-key').value='';$('#first-run-complete-copy').textContent=firstRunPreview?'这就是开始的样子。预览中的资料和连接信息不会保存。':'你的工作空间已准备好。从一个问题、一个想法开始。';$('#first-run-enter').textContent=firstRunPreview?'结束预览 →':'进入工作空间 →';renderFirstRunStep();}
+$('#first-run-enter').onclick=()=>{if(firstRunPreview){closeFirstRunPreview();return}firstRunActive=false;renderFirstRunStep();$('#chat-input')?.focus();};
+async function finishFirstRun(event){
+  event.preventDefault();if(firstRunStep!==4||firstRunSaving)return;
+  const error=$('#first-run-error'),button=$('#first-run-finish');error.hidden=true;
+  if(!$('#first-run-privacy').checked||!$('#first-run-terms').checked){firstRunStep=!$('#first-run-privacy').checked?1:2;renderFirstRunStep();return}
+  if(firstRunPreview){showFirstRunComplete();return}
+  const name=$('#first-profile-name').value.trim(),role=$('#first-profile-role').value.trim(),url=$('#first-provider-url').value.trim(),model=$('#first-provider-model').value.trim(),key=$('#first-provider-key').value;
+  if((url||model||key)&&(!url||!model)){error.textContent='请同时填写接口地址和模型 ID，或选择跳过。';error.hidden=false;return}
+  firstRunSaving=true;busyButton(button,true,'正在准备你的空间…');$$('#first-run [data-first-back],#first-run-skip').forEach(b=>b.disabled=true);
+  try{
+    await api('/api/profile','PUT',{...(name||role?{display_name:name||'本地用户',role}:{}),inject_profile:$('#first-profile-inject').checked,use_memory:$('#first-profile-memory').checked});
+    if(url||model||key){state.settings=await api('/api/settings','PUT',{base_url:url,model,api_key:key,timeout:90,system_prompt:'你是一个认真、清晰、可靠的 AI 助手。'});updateSettings();}
+    const acceptance=await api('/api/onboarding/accept','POST',{accepted:true,version:1,auto_review_delivered:$('#first-run-review').checked});
+    state.onboarding=acceptance.onboarding;
+    showFirstRunComplete();await refreshList();updateHeader();renderMessages();
+  }catch(e){error.textContent=e.message;error.hidden=false;error.setAttribute('role','alert');error.scrollIntoView({block:'nearest'});}
+  finally{firstRunSaving=false;busyButton(button,false);$$('#first-run [data-first-back],#first-run-skip').forEach(b=>b.disabled=false);}
+}
+$('#first-run-form').addEventListener('submit',finishFirstRun);$('#first-run-skip').onclick=()=>{if(firstRunSaving)return;$('#first-provider-url').value='';$('#first-provider-model').value='';$('#first-provider-key').value='';$('#first-run-form').requestSubmit()};
+
 
 async function refreshList(){const request=++listRequest,mode=state.mode;const rows=await api(mode==='chat'?'/api/sessions':'/api/canvases');if(request!==listRequest||mode!==state.mode)return;state[mode==='chat'?'sessions':'canvases']=rows;renderList()}
 function renderList(){const rows=state.mode==='chat'?state.sessions:state.canvases;$('#item-count').textContent=rows.length;$('#item-list').replaceChildren();for(const item of rows){const selected=state.mode==='chat'?state.session?.id===item.id:state.board?.id===item.id;const b=elem('button','list-item'+(selected?' active':''));b.append(elem('i','',state.mode==='chat'?'◷':'◇'),elem('span','',item.title));if(state.mode==='chat')b.append(elem('small','',String(item.message_count||0)));b.onclick=safely(()=>state.mode==='chat'?openSession(item):openBoard(item.id));$('#item-list').append(b)}if(!rows.length)$('#item-list').append(elem('p','hint','还没有内容，点击上方按钮开始。'))}
 function updateHeader(){if(!$('#settings').hidden){$('#current-title').textContent='设置与偏好';$('#section-title').textContent='AstraAgent / 设置';return}const item=state.mode==='chat'?state.session:state.board;$('#current-title').textContent=item?.title||(state.mode==='chat'?'新的开始':'无限画布');$('#section-title').textContent=state.mode==='chat'?'AstraAgent / 对话':'AstraAgent / 画布';$('#new-item').textContent=state.mode==='chat'?'＋ 新建会话':'＋ 新建画布';$('#list-title').textContent=state.mode==='chat'?'最近会话':'我的画布';for(const name of ['rename','delete','export'])$('#'+name).disabled=!item;$('#save-status').textContent=state.mode==='chat'?'会话保存在本机':state.dirty===state.saved?'已保存到本机':'等待保存…'}
 async function switchMode(mode){if(!$('#settings').hidden&&!await closeSettingsPage())return;if(state.mode===mode)return;if(state.running.size){toast('请等待画布任务完成后再切换。');return;}if(!await flushBoard())return;state.mode=mode;$('#chat-view').hidden=mode!=='chat';$('#canvas-view').hidden=mode!=='canvas';$('#chat-tab').classList.toggle('active',mode==='chat');$('#canvas-tab').classList.toggle('active',mode==='canvas');updateHeader();await refreshList();if(mode==='canvas'){if(!state.board){if(state.canvases[0])await openBoard(state.canvases[0].id);else await createBoard(true)}else requestAnimationFrame(()=>{renderNodes();fit()})}$('#sidebar-placeholder')?.remove();$('#app .sidebar').classList.remove('open')}
 async function newSession(){const s=await api('/api/sessions','POST',{title:typeof uiText==='function'?uiText('新会话'):'新会话',conversation_mode:typeof getConversationMode==='function'?getConversationMode():'agent'});await openSession(s);await refreshList();return s}
-async function openSession(s){if(!$('#settings').hidden&&!await closeSettingsPage())return;state.session=s;state.messages=[];$('#chat-input').value='';$('#chat-error').hidden=true;updateHeader();renderList();$('#app .sidebar').classList.remove('open');const req=++messageRequest;const messages=await api(`/api/sessions/${s.id}/messages`);if(req!==messageRequest)return;state.messages=messages;renderMessages()}
+const composerDrafts = new Map();
+async function openSession(session) {
+  if (!$('#settings').hidden && !await closeSettingsPage()) return;
+  const input = $('#chat-input'), previous = state.session?.id ?? null;
+  state.session = session;
+  if (previous !== session.id) {
+    if (input.value) composerDrafts.set(previous, {text: input.value, start: input.selectionStart, end: input.selectionEnd});
+    else composerDrafts.delete(previous);
+    const draft = composerDrafts.get(session.id);
+    input.value = draft?.text ?? '';
+    if (draft) input.setSelectionRange(draft.start, draft.end);
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+  }
+  state.messages = [];
+  $('#chat-error').hidden = true;
+  updateHeader();
+  renderList();
+  $('#app .sidebar').classList.remove('open');
+  const request = ++messageRequest;
+  const messages = await api(`/api/sessions/${session.id}/messages`);
+  if (request !== messageRequest) return;
+  state.messages = messages;
+  renderMessages();
+}
 function markdown(text){const block=elem('div','markdown');const parts=text.split(/```/);parts.forEach((part,i)=>{if(i%2){const code=part.replace(/^[\w+-]*\n/,'');const pre=elem('pre');pre.append(elem('code','',code));block.append(pre)}else{for(const chunk of part.split(/\n\n+/)){if(!chunk.trim())continue;if(/^#{1,6}\s/.test(chunk))block.append(elem('h3','',chunk.replace(/^#{1,6}\s+/,'')));else block.append(elem('p','',chunk))}}});return block}
 // Keep message DOM, focus, media and native card state across stream updates.
 const messageViews = new WeakMap();
@@ -71,7 +188,7 @@ function renderMessages() {
         messageViews.set(article, {message, content: null});
         if (message.role !== 'user') {
           const label = {architect: '⌘ 架构师', critic: '◇ 挑错者', product: '◎ 用户视角', security: '⬡ 安全审查', synthesis: '✳ 综合结论'}[message.persona];
-          article.append(elem('div', 'message-header', label ? '✳ ' + label : '✦ ASTRA / ASSISTANT'));
+          article.append(elem('div', 'message-header', label || 'AstraAgent'));
         }
       }
       const view = messageViews.get(article);
@@ -80,6 +197,7 @@ function renderMessages() {
       if (view.content !== message.content || view.renderer !== markdown) {
         const body = article.querySelector(':scope > .markdown');
         const next = markdown(message.content);
+        if (message.role === 'user' && typeof decoratePromptTags === 'function') decoratePromptTags(next);
         if (body) body.replaceWith(next); else article.append(next);
         view.content = message.content;
         view.renderer = markdown;
@@ -106,7 +224,7 @@ async function refreshSessionMessages(sid) {
   state.messages = messages;
   return true;
 }
-async function sendMessage(e, submittedContent) {
+async function sendMessage(e, submittedContent, submittedAttachments) {
   e.preventDefault();
   if (submitting || (typeof uploadBusy !== 'undefined' && uploadBusy)) return;
   const direct = typeof submittedContent === 'string';
@@ -118,14 +236,23 @@ async function sendMessage(e, submittedContent) {
   let sid, sendSucceeded = false;
   submitting = true;
   try {
-    if (!state.session) await newSession();
+    if (!state.session) {
+      const input = $('#chat-input');
+      const preservedDraft = submittedAttachments ? input.value : '';
+      await newSession();
+      composerDrafts.delete(null);
+      if (preservedDraft && !input.value) {
+        input.value = preservedDraft;
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+      }
+    }
     sid = state.session.id;
     if (state.pending.has(sid)) return;
     state.pending.add(sid);
     const first = state.messages.length === 0;
     state.messages.push({role: 'user', content});
     if (!direct) $('#chat-input').value = '';
-    if (!direct && typeof beginAttachmentSend === 'function') beginAttachmentSend(sid);
+    if ((!direct || submittedAttachments) && typeof beginAttachmentSend === 'function') beginAttachmentSend(sid, submittedAttachments);
     renderMessages();
     if (first && state.session.title === '新会话') {
       state.session.title = content.slice(0, 28);
@@ -160,7 +287,7 @@ async function sendMessage(e, submittedContent) {
     }
     $('#chat-error').hidden = false;
   } finally {
-    if (!direct && typeof finishAttachmentSend === 'function') finishAttachmentSend(sid, sendSucceeded);
+    if ((!direct || submittedAttachments) && typeof finishAttachmentSend === 'function') finishAttachmentSend(sid, sendSucceeded);
     submitting = false;
     if (sid) state.pending.delete(sid);
     renderMessages();
@@ -199,7 +326,13 @@ $('#connect').onclick=()=>{state.connecting=!state.connecting;state.source=null;
 $('#undo').onclick=()=>{if(!state.history.length)return;state.redo.push(clone(state.board.data));state.board.data=state.history.pop();state.selected=null;changed();renderNodes()};$('#redo').onclick=()=>{if(!state.redo.length)return;state.history.push(clone(state.board.data));state.board.data=state.redo.pop();state.selected=null;changed();renderNodes()};
 $$('[data-add]').forEach(b=>b.onclick=()=>addNode(b.dataset.add));$('#remove-node').onclick=removeNode;$('#duplicate-node').onclick=()=>{const n=selectedNode();if(!n)return;record();const copy={...clone(n),id:uid(),x:n.x+40,y:n.y+40};state.board.data.nodes.push(copy);state.selected=copy.id;changed();renderNodes()};$('#run-node').onclick=safely(runNode);
 $('#zoom-in').onclick=()=>zoom(1.2);$('#zoom-out').onclick=()=>zoom(1/1.2);$('#fit').onclick=fit;
-$('#chat-form').onsubmit=sendMessage;$('#chat-input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(!$('#send').disabled)$('#chat-form').requestSubmit()}};
+$('#chat-form').onsubmit = sendMessage;
+$('#chat-input').onkeydown = event => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  const send = $('#send');
+  if (!send.disabled && !send.hidden) $('#chat-form').requestSubmit();
+};
 $('#review-toggle').onclick=()=>{state.reviewMode=!state.reviewMode;$('#review-toggle').classList.toggle('active',state.reviewMode);$('#review-toggle').setAttribute('aria-pressed',String(state.reviewMode));$('#review-panel').hidden=!state.reviewMode;$('#chat-input').placeholder=state.reviewMode?'写下要评审的方案、代码或想法…':'写下你的问题…';$('#send').setAttribute('aria-label',state.reviewMode?'开始多人格审查':'发送消息')};
 let themePreference='light', settingsDirty=false;
 const systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
@@ -224,4 +357,4 @@ $('#import').onclick=()=>$('#import-file').click();$('#import-file').onchange=sa
 $('#open-side').onclick=()=>$('#app .sidebar').classList.add('open');$('#close-side').onclick=()=>$('#app .sidebar').classList.remove('open');
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#settings').hidden){closeSettingsPage();return}state.connecting=false;state.source=null;$('#connect').classList.remove('active');$('#app .sidebar').classList.remove('open')}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(!$('#settings').hidden){$('#settings-form').requestSubmit();return}flushBoard()}if(state.mode!=='canvas'||!$('#settings').hidden||['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;if(e.key==='Delete')removeNode();if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();(e.shiftKey?$('#redo'):$('#undo')).click()}});
 window.addEventListener('beforeunload',e=>{if(settingsDirty||state.dirty!==state.saved||state.pending.size||state.running.size){e.preventDefault();e.returnValue=''}});
-async function boot(){try{const access=new URLSearchParams(location.hash.slice(1)).get('access');if(access){state.token=access;history.replaceState(null,'',location.pathname+location.search)}let theme='light';try{theme=localStorage.getItem('astra-theme')||'light'}catch(e){}applyTheme(theme);const b=await api('/api/bootstrap');state.token=b.token;state.settings=b.settings;updateSettings();await refreshList();updateHeader();renderMessages();if(state.sessions[0])await openSession(state.sessions[0])}catch(e){$('#chat-error').textContent=e.message;$('#chat-error').hidden=false;toast(e.message)}}boot();
+async function boot(){try{const access=new URLSearchParams(location.hash.slice(1)).get('access');if(access){state.token=access;history.replaceState(null,'',location.pathname+location.search)}let theme='light';try{theme=localStorage.getItem('astra-theme')||'light'}catch(e){}applyTheme(theme);const b=await api('/api/bootstrap');state.token=b.token;state.settings=b.settings;state.onboarding=b.onboarding||{};updateSettings();await refreshList();updateHeader();renderMessages();if(b.onboarding?.required){firstRunActive=true;firstRunStep=1;renderFirstRunStep();return}if(state.sessions[0])await openSession(state.sessions[0])}catch(e){$('#chat-error').textContent=e.message;$('#chat-error').hidden=false;toast(e.message)}}boot();

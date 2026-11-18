@@ -2,14 +2,49 @@
 const allowToolsLabel=elem('label','allow-tools-switch');const allowTools=elem('input');allowTools.type='checkbox';allowTools.id='allow-tools';allowTools.setAttribute('role','switch');try{const saved=localStorage.getItem('astra-allow-tools');allowTools.checked=saved===null?(JSON.parse(localStorage.getItem('astra-runtime')||'{}').tools||[]).length>0:saved==='true'}catch(e){}allowToolsLabel.append(allowTools,elem('span','','允许智能体使用 Tools'));$('.tool-picks').before(allowToolsLabel);$('.tool-picks').hidden=true;allowTools.onchange=()=>{try{localStorage.setItem('astra-allow-tools',String(allowTools.checked))}catch(e){}saveRuntime()};permissionSelect.append(new Option('全部允许','all'));permissionSelect._refresh?.();
 let runtimePlugins=[];const previousRuntimeOptions=runtimeOptions;runtimeOptions=function(){return {...previousRuntimeOptions(),tools:[],allow_tools:allowTools.checked,plugins:runtimePlugins.slice()}};
 const pluginChips=elem('div','plugin-chips');$('#chat-form').prepend(pluginChips);function syncPluginChips(){pluginChips.replaceChildren();for(const id of runtimePlugins){const chip=elem('span','command-badge');chip.append(elem('span','','@ '+(capabilityCatalog.plugins.find(p=>p.id===id)?.name||id)));const remove=elem('button');remove.type='button';remove.setAttribute('aria-label','移除插件 '+id);remove.append(svgIcon('close'));remove.onclick=()=>{runtimePlugins=runtimePlugins.filter(p=>p!==id);syncPluginChips()};chip.append(remove);pluginChips.append(chip)}}
-const previousChooseCommand=chooseCommand;chooseCommand=function(index){const entry=commandRows[index];if(entry?.type!=='plugin'){previousChooseCommand(index);return}if(!entry.supported){toast('该插件需要尚未支持的工具适配器');return}if(!runtimePlugins.includes(entry.id))runtimePlugins.push(entry.id);commandInput.value='';hideCommands();syncPluginChips();commandInput.focus();toast('已为当前对话加载 '+entry.name)};
-const previousGetCommandEntries=getCommandEntries;getCommandEntries=function(type){return previousGetCommandEntries(type).map(e=>e.type==='plugin'?{...e,description:(e.description||'').replace(' · 未启用，选择后前往设置启用','')+' · 可在当前对话加载'}:e)};
 // Plugin selection is scoped to the current conversation, not persisted as a global permission.
 const conversationPlugins=new Map();const previousPluginOpenSession=openSession;openSession=async function(session){if(state.session)conversationPlugins.set(state.session.id,runtimePlugins.slice());await previousPluginOpenSession(session);runtimePlugins=conversationPlugins.get(session.id)||[];syncPluginChips()};const previousPluginNewSession=newSession;newSession=async function(){const pending=runtimePlugins.slice(),hadSession=!!state.session;if(state.session)conversationPlugins.set(state.session.id,pending);await previousPluginNewSession();runtimePlugins=hadSession?[]:pending;syncPluginChips()};
 // Appearance colors, saved only in the current browser.
-const colorSection=elem('section','color-settings');colorSection.append(elem('h3','','主题色与强调色'));const themeColor=elem('input'),accentColor=elem('input');for(const [input,id,name,value] of [[themeColor,'theme-color-picker','主题色','#8582b8'],[accentColor,'accent-color-picker','强调色','#77a1ff']]){input.type='color';input.id=id;input.setAttribute('aria-label',name);input.value=value;const label=elem('label','color-row',name);label.append(input);colorSection.append(label)}const resetColors=elem('button','secondary','恢复默认颜色');resetColors.type='button';colorSection.append(resetColors);$('[data-panel=appearance]').append(colorSection);
-function applyColors(){const root=document.documentElement;root.style.setProperty('--theme-color',themeColor.value);root.style.setProperty('--blue',accentColor.value);root.style.setProperty('--accent-color',accentColor.value);try{localStorage.setItem('astra-colors',JSON.stringify({theme:themeColor.value,accent:accentColor.value}))}catch(e){}}
-try{const colors=JSON.parse(localStorage.getItem('astra-colors')||'{}');if(/^#[0-9a-f]{6}$/i.test(colors.theme))themeColor.value=colors.theme;if(/^#[0-9a-f]{6}$/i.test(colors.accent))accentColor.value=colors.accent}catch(e){}themeColor.oninput=applyColors;accentColor.oninput=applyColors;resetColors.onclick=()=>{themeColor.value='#8582b8';accentColor.value='#77a1ff';applyColors()};applyColors();
+const colorSection = elem('section', 'color-settings');
+colorSection.append(elem('h3', '', '主题色与强调色'));
+const themeColor = elem('input'), accentColor = elem('input');
+for (const [input, id, name] of [[themeColor, 'theme-color-picker', '主题色'], [accentColor, 'accent-color-picker', '强调色']]) {
+  input.type = 'color';
+  input.id = id;
+  input.setAttribute('aria-label', name);
+  const label = elem('label', 'color-row', name);
+  label.append(input);
+  colorSection.append(label);
+}
+const resetColors = elem('button', 'secondary', '恢复默认颜色');
+resetColors.type = 'button';
+colorSection.append(resetColors);
+$('[data-panel=appearance]').append(colorSection);
+const appearanceColorTokens = {'--theme-color': 'theme', '--blue': 'accent', '--accent-color': 'accent'};
+let appearanceColors = null;
+function applyColors(colors) {
+  appearanceColors = colors;
+  const root = document.documentElement;
+  root.toggleAttribute('data-custom-colors', !!colors);
+  for (const [token, key] of Object.entries(appearanceColorTokens)) {
+    if (colors?.[key]) root.style.setProperty(token, colors[key]);
+    else root.style.removeProperty(token);
+  }
+}
+function saveColors(colors) {
+  try {
+    if (colors) localStorage.setItem('astra-colors', JSON.stringify({ ...colors, custom: true }));
+    else localStorage.removeItem('astra-colors');
+  } catch {}
+  applyColors(colors);
+}
+function readAppearanceColors() {
+  try {
+    const colors = JSON.parse(localStorage.getItem('astra-colors') || '{}');
+    return Object.fromEntries(Object.entries(colors).filter(([key, value]) =>
+      key === 'custom' ? value === true : ['theme', 'accent'].includes(key) && /^#[0-9a-f]{6}$/i.test(value)));
+  } catch { return {}; }
+}
 // Fold each completed execution into one summary attached to its actual assistant message.
 function executionSummary(run){const events=run.events,start=events.find(e=>e.type==='start'),end=events.at(-1);const seconds=start&&end?Math.max(0,Math.round(end.time-start.time)):0;const toolCount=events.filter(e=>e.type==='tool_start').length,loaded=events.filter(e=>e.type==='capability').length;return ({complete:'任务完成',failed:'任务失败',interrupted:'任务中断',cancelled:'已取消',waiting:'等待授权',running:'执行中'}[run.status]||run.status)+' · '+seconds+'秒'+(toolCount?' · '+toolCount+' 次工具调用':'')+(loaded?' · '+loaded+' 项能力':'')+(end?.usage?.reported?' · '+end.usage.total.toLocaleString()+' Token':'')}
 function renderRunSummaries() {

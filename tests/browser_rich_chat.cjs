@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-shared-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python =
     process.env.ASTRA_TEST_PYTHON ||
     path.join(root, "runtimes/python/python.exe");
@@ -96,10 +98,11 @@ async function main() {
     await block.getByRole('button', {name: '交互预览', exact: true}).click();
     const preview = page.frameLocator('.interactive-preview-frame');
     await preview.locator('#counter').waitFor();
+    const previewFrame = page.frames().find(frame => frame.url().endsWith('/interactive-preview'));
+    await previewFrame.waitForFunction(() => typeof document.querySelector('#counter')?.onclick === 'function');
     await preview.locator('#counter').click();
     assert.equal(await preview.locator('#counter').textContent(), '1');
     await page.waitForFunction(() => !document.body.dataset.previewEscaped);
-    const previewFrame = page.frames().find(frame => frame.url().endsWith('/interactive-preview'));
     assert.equal(await previewFrame.evaluate(() => window.parentBlocked), true);
     await previewFrame.waitForFunction(() => window.requestBlocked === true);
     const policy = (await page.request.get(url + '/interactive-preview')).headers()['content-security-policy'];

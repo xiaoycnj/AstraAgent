@@ -1,7 +1,4 @@
 // Original conversation treatment inspired by the supplied visual references.
-const polishSend=$('#send');
-function syncPolishSend(){const stopped=!conversationStop.hidden;polishSend.hidden=stopped;conversationStop.setAttribute('aria-label',conversationStopping.has(state.session?.id)?'正在停止…':'停止生成');conversationStop.title='停止生成';}
-new MutationObserver(syncPolishSend).observe(conversationStop,{attributes:true,attributeFilter:['hidden','disabled']});syncPolishSend();
 let thinkingFrame=0;
 function scheduleThinking(){if(!thinkingFrame)thinkingFrame=requestAnimationFrame(drawThinking);}
 function drawThinking(){
@@ -9,7 +6,7 @@ function drawThinking(){
  if(index<0){conversationList.querySelectorAll('.thinking-process').forEach(node=>node.remove());return;}
  const article=articles[index];if(!article)return;
  let detail=article.querySelector('.thinking-process');
- if(!detail){detail=elem('details','thinking-process');const summary=elem('summary');const mark=elem('span','thinking-orbit');mark.setAttribute('aria-hidden','true');summary.append(mark,elem('span','thinking-label',''),svgIcon('chevron'));summary.querySelector('svg path').setAttribute('d','m6 9 6 6 6-6');detail.append(summary,elem('div','thinking-content'));article.insertBefore(detail,article.querySelector('.markdown'));}
+ if(!detail){detail=elem('details','thinking-process');const summary=elem('summary');const mark=elem('span','thinking-orbit');mark.setAttribute('aria-hidden','true');summary.append(mark,elem('span','thinking-label',''),svgIcon('chevron'));detail.append(summary,elem('div','thinking-content'));article.insertBefore(detail,article.querySelector('.markdown'));}
  const events=activeRunSession===state.session?.id?currentTaskEvents:[];
  const latest=events.filter(event=>event.type!=='delta').at(-1);
  const label=latest?.type==='tool_start'?'正在使用工具':state.messages[index].content?'正在生成':'正在思考';
@@ -18,6 +15,12 @@ function drawThinking(){
  const content=detail.querySelector('.thinking-content');if(summaries)content.dataset.i18nIgnore='';else delete content.dataset.i18nIgnore;const value=summaries||uiText('等待模型提供可显示的思考摘要。');if(content.textContent!==value)content.textContent=value;
 }
 const previousThinkingEvent=handleAgentEvent;handleAgentEvent=function(sid,event){previousThinkingEvent(sid,event);if(sid===state.session?.id)scheduleThinking();};
+const renderBeforeThinking = renderMessages;
+renderMessages = function (...args) {
+ const result = renderBeforeThinking(...args);
+ scheduleThinking();
+ return result;
+};
 new MutationObserver(scheduleThinking).observe(conversationList,{childList:true});
 
 // Usage is collected only from reported API counts; missing counts stay explicit.

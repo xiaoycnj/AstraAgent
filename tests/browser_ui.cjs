@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-shared-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python = path.join(root, "runtimes/python/python.exe");
   const server = spawn(
     python,
@@ -54,7 +56,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         state.token &&
-        state.settings &&
+        state.onboarding.required === false &&
         document.querySelector(".command-launcher"),
     );
 
@@ -76,22 +78,16 @@ async function main() {
     assert.equal(await page.locator(".pane-backdrop").isVisible(), false);
     assert.equal(await page.locator("#open-side").isVisible(), false);
     assert.equal(await page.locator(".rail-top .rail-button").count(), 4);
-    assert.equal(
-      await page.locator(".settings-nav [data-settings-group]").count(),
-      6,
-    );
+    assert.equal(await page.locator(".settings-nav [data-settings-group=performance]").count(), 1);
     assert.doesNotMatch(
       await page.locator("#toast").textContent(),
       /not defined/,
     );
     assert.equal(await page.locator(".composer-shelf").isVisible(), false);
-    assert.equal(
-      await page.locator(".composer-tools > button:visible").count(),
-      3,
-    );
+    assert.equal(await page.locator('#model-pill').isVisible(), true);
     await page.locator(".composer-options > summary").click();
     assert.equal(await page.locator("#attachment-add").isVisible(), true);
-    assert.equal(await page.locator(".shelf-project").isVisible(), true);
+    assert.equal(await page.locator(".shelf-project").isVisible(), false);
     await page.keyboard.press("Escape");
     assert.ok((await page.locator("#chat-form").boundingBox()).height < 125);
     assert.ok((await page.locator("#messages").boundingBox()).height > 700);

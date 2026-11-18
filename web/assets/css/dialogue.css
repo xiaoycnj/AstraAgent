@@ -34,3 +34,34 @@
 .chat-view:not([hidden]){display:flex;flex-direction:column;overflow:hidden}.chat-view>.messages{flex:1 1 0;min-height:0}.chat-view>:not(.messages){flex-shrink:0}
 @media(max-width:700px){#chat-form{margin-bottom:8px}#chat-input{max-height:130px}.chat-view>.composer-footer{display:none}.composer-options-panel{position:fixed;left:12px;right:12px;bottom:180px;min-width:0}}
 @media(max-width:700px){#app>main{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}#app>main>.topbar{flex:none}#app>main>.view:not([hidden]){flex:1;min-height:0}.composer-tools{flex-wrap:nowrap}#model-pill{max-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#send{flex-shrink:0;width:36px;height:36px}.composer-tools>button,.composer-tools>details{flex-shrink:0}}
+.prompt-tag-field { position: relative; }
+.prompt-tag-field > #chat-input { display: block; }
+.prompt-tag-mirror {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.prompt-tag-field.has-prompt-tags .prompt-tag-mirror { display: block; }
+.prompt-tag-field.has-prompt-tags #chat-input {
+  position: relative;
+  background: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: currentColor;
+}
+.prompt-tag-field.has-prompt-tags #chat-input::selection {
+  -webkit-text-fill-color: var(--selection-ink, #fff);
+}
+.prompt-tag {
+  color: #1757ad;
+  background: #dceaff;
+  border-radius: 4px;
+  box-decoration-break: clone;
+}
+:root[data-theme=dark] .prompt-tag { color: #bad6ff; background: #233d60; }
+@media (forced-colors: active) {
+  .prompt-tag { color: LinkText; background: Canvas; }
+  .prompt-tag-field.has-prompt-tags .prompt-tag-mirror { display: none; }
+  .prompt-tag-field.has-prompt-tags #chat-input { -webkit-text-fill-color: currentColor; }
+}

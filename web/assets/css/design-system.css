@@ -84,55 +84,6 @@ button.primary {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.settings-disclosure {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-  margin: 12px 0;
-  min-width: 0;
-}
-.settings-disclosure > summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  min-height: 48px;
-  cursor: pointer;
-  list-style: none;
-  font-size: 13px;
-  border-radius: inherit;
-}
-.settings-disclosure > summary::-webkit-details-marker {
-  display: none;
-}
-.settings-disclosure > summary .hint {
-  flex: 1;
-  margin: 0;
-  font-size: 12px;
-}
-.settings-disclosure > summary .chevron {
-  width: 16px;
-  height: 16px;
-  margin-left: auto;
-  flex: none;
-  transition: transform var(--motion-enter) var(--motion-ease);
-}
-.settings-disclosure[open] > summary .chevron {
-  transform: rotate(180deg);
-}
-.settings-disclosure[open] > summary {
-  border-bottom: 1px solid var(--line);
-  border-radius: 16px 16px 0 0;
-}
-.settings-disclosure > :not(summary) {
-  margin: 16px;
-}
-.settings-disclosure > label {
-  display: block;
-}
-.settings-disclosure .settings-group {
-  border: 0;
-  padding: 0;
-}
 .provider-dialog {
   max-height: calc(100dvh - 48px);
   overflow: auto;
@@ -282,6 +233,11 @@ dialog[open] > .select-menu {
   color: var(--text-primary);
   overflow: auto;
 }
+/* OOBE replaces the palette immediately, without its top-layer exit transition. */
+.first-run-open .command-palette:not([open]) {
+  display: none;
+  transition: none;
+}
 .command-palette::backdrop {
   background: rgb(0 0 0 / 0.35);
 }
@@ -343,14 +299,6 @@ dialog[open] > .select-menu {
     grid-template-columns: 1fr;
     padding: 12px;
     margin: 10px;
-  }
-  .settings-disclosure > summary {
-    flex-wrap: wrap;
-    gap: 4px 8px;
-  }
-  .settings-disclosure > summary .hint {
-    flex-basis: 70%;
-    font-size: 11px;
   }
   .provider-dialog {
     max-width: calc(100vw - 20px);

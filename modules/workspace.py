@@ -7,12 +7,13 @@ import base64
 import task_control
 import sqlite3
 import creation_store
-NAMES=workspace_tools.NAMES|{'read_file','write_file','list_files'}
+NAMES=workspace_tools.NAMES|{'read_file','write_file','create_file','list_files'}
 DEFINITIONS=workspace_tools.DEFINITIONS+[
  {'type':'function','function':{'name':name,'description':description,'parameters':{'type':'object','properties':properties,'required':required,'additionalProperties':False}}}
  for name,description,properties,required in [
  ('read_file','读取工作区 UTF-8 文件',{'path':{'type':'string'}},['path']),
  ('write_file','写入工作区 UTF-8 文件。用户要求直接交付文件时设 deliver=true，返回真实下载链接并保存至会话产物，适用于 HTML、SVG、Markdown、代码及数据文件。',{'path':{'type':'string'},'content':{'type':'string'},'revision':{'type':['string','null']},'deliver':{'type':'boolean'}},['path','content']),
+ ('create_file','在工作区或绑定项目内新建 UTF-8 文本文件，可创建父目录。已有目标不会被覆盖。',{'path':{'type':'string'},'content':{'type':'string'}},['path','content']),
  ('list_files','列出工作区文件',{},[])]]
 
 def execute(args,config,context,name):
@@ -24,7 +25,7 @@ def execute(args,config,context,name):
             if name=='replace_in_file' and not args.get('sha256'):raise ValueError('项目替换需提供 SHA-256')
         return workspace_tools.invoke(context['data'],name,args,config,(emit or (lambda event:None)) if config.get('access_policy') else emit,approve)
     if (not emit and not config.get('_authorized_tool')) or config.get('file_permission','none')=='none':return {'error':'文件访问未授权'}
-    needs_approval=config['file_permission']=='ask' or (name=='write_file' and config['file_permission']!='all')
+    needs_approval=config['file_permission']=='ask' or (name in ('create_file','write_file') and config['file_permission']!='all')
     allowed=config.get('_authorized_tool')==name or not needs_approval or approve(name,args,emit)
     if not allowed:return {'error':'用户拒绝或授权已过期'}
     if name=='write_file' and 'deliver' in args and type(args['deliver']) is not bool:

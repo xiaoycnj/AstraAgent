@@ -1,7 +1,4 @@
 /* Declarative user appearance has the final normal cascade layer. */
-.has-navigation-rail #messages .message.user {
-  background: color-mix(in srgb, var(--blue) 7%, var(--glass-reading));
-}
 .market-skin #chat-form,
 .market-skin .settings-group {
   border-radius: var(--market-radius, 20px);

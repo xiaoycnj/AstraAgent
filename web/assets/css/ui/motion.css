@@ -2,25 +2,79 @@
 :root {
   --motion-feedback: 100ms;
   --motion-control: 140ms;
-  --motion-panel: 180ms;
-  --motion-page: 220ms;
+  --motion-panel: 320ms;
+  --motion-page: 280ms;
+  --motion-exit: 155ms;
   --motion-ease: cubic-bezier(.2, .8, .2, 1);
+  --motion-spatial: cubic-bezier(.18, .8, .2, 1);
+  --motion-spring: cubic-bezier(.24, 1.26, .5, 1);
+  --motion-release: 290ms;
+}
+@supports (animation-timing-function: linear(0, 1)) {
+  :root {
+    /* Damped step response with a short overshoot and a smaller return. */
+    --motion-spring: linear(0, .15 9%, .48 18%, .79 27%, .98 36%, 1.064 47%,
+      1.069 53%, 1.038 65%, 1.006 77%, .996 89%, 1);
+  }
 }
 :where(button, [role="button"], summary, a[href], input, textarea, select, [tabindex="0"]) {
   transition-property: background-color, border-color, color, box-shadow, opacity, outline-color, filter, transform, translate, scale;
   transition-duration: var(--motion-control);
   transition-timing-function: var(--motion-ease);
 }
+/* A subtle spring return for existing press feedback; individual scale preserves transforms. */
+:where(button, [role="button"], summary):not(:disabled):not([aria-disabled="true"]) {
+  transition-property: background-color, border-color, color, box-shadow, opacity, outline-color, filter, transform, translate, scale;
+  transition-duration: var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-control), var(--motion-release);
+  transition-timing-function: var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-ease), var(--motion-spring);
+}
 :where(button, [role="button"], summary):active:not(:disabled):not([aria-disabled="true"]) {
   scale: .98;
   transition-duration: var(--motion-feedback);
 }
+/* Return from a slightly compressed shape while preserving positioning transforms. */
+:is(.ui-button, .app-menu-button, .conversation-latest, .iui-choice, .model-choice, .command-launcher, .custom-select):not(:disabled):not([aria-disabled="true"]) {
+  transition: background-color var(--motion-control) var(--motion-ease),
+    border-color var(--motion-control) var(--motion-ease), color var(--motion-control) var(--motion-ease),
+    box-shadow var(--motion-control) var(--motion-ease), opacity var(--motion-control) var(--motion-ease),
+    scale var(--motion-release) var(--motion-spring);
+}
+:is(.ui-button, .app-menu-button, .conversation-latest, .iui-choice, .model-choice, .command-launcher, .custom-select):active:not(:disabled):not([aria-disabled="true"]) {
+  scale: .98 .94;
+  transition-duration: var(--motion-feedback);
+  transition-timing-function: var(--motion-ease);
+}
 :where(button, [role="button"], summary):disabled,
 [aria-disabled="true"] { scale: 1; }
 :where(a[href]):hover { text-decoration-color: currentColor; }
-:where(.ui-switch::before, .settings-disclosure > summary .chevron) {
-  transition-duration: var(--motion-control);
-  transition-timing-function: var(--motion-ease);
+/* The thumb stretches while held; its checked position remains component-owned. */
+.ui-switch::before {
+  transition: transform var(--motion-release) var(--motion-spring),
+    scale var(--motion-release) var(--motion-spring);
+}
+.ui-switch:active:not(:disabled)::before { scale: 1.12 .92; }
+.settings-disclosure > summary .chevron {
+  transition: transform var(--motion-release) var(--motion-spring), color var(--motion-control) var(--motion-ease);
+}
+/* Animate the reveal only; closing stays native so hidden fields cannot receive focus. */
+.settings-disclosure[open]::details-content {
+  animation: disclosure-reveal var(--motion-control) var(--motion-spatial) both;
+}
+@keyframes disclosure-reveal {
+  from { opacity: 0; translate: 0 -3px; }
+  to { opacity: 1; translate: 0 0; }
+}
+/* Avoid even a one-frame shape change when spatial feedback is disabled. */
+:root[data-motion="reduced"] {
+  --motion-feedback: 0ms; --motion-control: 0ms; --motion-panel: 0ms; --motion-page: 0ms; --motion-release: 0ms;
+}
+:root[data-motion="reduced"] :is(button, [role="button"], summary):active,
+:root[data-motion="reduced"] .ui-switch:active::before { scale: none !important; }
+:root[data-motion="reduced"] :where(button, [role="button"], summary, a[href], input, textarea, select, [tabindex="0"]) { transition-duration: 0ms !important; }
+@media (prefers-reduced-motion: reduce) {
+  :is(button, [role="button"], summary):active, .ui-switch:active::before { scale: none !important; }
+  :root { --motion-feedback: 0ms; --motion-control: 0ms; --motion-panel: 0ms; --motion-page: 0ms; --motion-release: 0ms; }
+  :where(button, [role="button"], summary, a[href], input, textarea, select, [tabindex="0"]) { transition-duration: 0ms !important; }
 }
 :is(.asset-card, .market-card, .provider-card, .starter-card, .layout-home-shortcut,
     .skin-module-row, .iui-choice, .iui-block, .model-choice, .settings-nav button) {
@@ -31,6 +85,89 @@
     transform var(--motion-control) var(--motion-ease),
     scale var(--motion-control) var(--motion-ease);
 }
+/* Menus take their shape from the edge closest to their trigger. */
+#conversation-menu { --menu-x: 0px; --menu-y: -7px; transform-origin: top right; }
+:is(#model-picker, #reasoning-popover) { --menu-x: 0px; --menu-y: 9px; transform-origin: bottom right; }
+.rail-menu { --menu-x: -9px; --menu-y: 0px; --menu-scale: .86 .96; transform-origin: left top; }
+.select-menu { --menu-x: 0px; --menu-y: -6px; transform-origin: top left; }
+.select-menu[data-above] { --menu-y: 6px; transform-origin: bottom left; }
+@supports (interactivity: inert) {
+  :is(#conversation-menu, #model-picker, #reasoning-popover, .rail-menu, .select-menu) {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+    transition:
+      opacity 160ms var(--motion-ease),
+      translate var(--motion-panel) var(--motion-spring),
+      scale var(--motion-panel) var(--motion-spring),
+      display var(--motion-exit) allow-discrete;
+  }
+  :is(#conversation-menu, #model-picker, #reasoning-popover, .rail-menu, .select-menu)[hidden] {
+    /* The outgoing surface can paint, but cannot receive pointer or keyboard focus. */
+    interactivity: inert;
+    pointer-events: none;
+    opacity: 0;
+    translate: var(--menu-x) var(--menu-y);
+    scale: var(--menu-scale, .96 .86);
+    transition:
+      opacity 120ms ease-in,
+      translate var(--motion-exit) var(--motion-spatial),
+      scale var(--motion-exit) var(--motion-spatial),
+      display var(--motion-exit) allow-discrete;
+  }
+  @starting-style {
+    :is(#conversation-menu, #model-picker, #reasoning-popover, .rail-menu, .select-menu):not([hidden]) {
+      opacity: 0;
+      translate: var(--menu-x) var(--menu-y);
+      scale: var(--menu-scale, .96 .86);
+    }
+  }
+}
+
+/* The rail marker is an overlay; no button geometry moves as selection changes. */
+.app-rail { position: relative; }
+.rail-motion-marker {
+  position: absolute;
+  inset: 0 auto auto 3px;
+  width: 3px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--blue);
+  pointer-events: none;
+  z-index: 1;
+}
+.app-rail:has(> .rail-motion-marker:not([hidden])) .rail-button.active::before { visibility: hidden; }
+@media (forced-colors: active) {
+  .rail-motion-marker { background: Highlight; forced-color-adjust: none; }
+}
+/* Narrow panes slide over the viewport without resizing the reader. The pane's
+   existing inert state handles focus throughout both directions of travel. */
+@media (max-width: 760px) {
+  .has-navigation-rail:not(.layout-navigation-custom) #conversation-sidebar {
+    transform: translateX(0);
+    transition: transform 350ms var(--motion-spring), opacity 180ms var(--motion-ease), visibility 350ms;
+  }
+  .has-navigation-rail.conversation-collapsed:not(.layout-navigation-custom) #conversation-sidebar {
+    transform: translateX(-110%);
+    transition: transform 220ms var(--motion-spatial), opacity 180ms ease-in, visibility 220ms;
+  }
+}
+
+/* Native popovers animate in the top layer. */
+[popover] {
+  opacity: 0;
+  translate: 0 4px;
+  scale: .99 .97;
+  transition: opacity var(--motion-panel) var(--motion-ease),
+    translate var(--motion-panel) var(--motion-spring),
+    scale var(--motion-panel) var(--motion-spring),
+    display var(--motion-panel) allow-discrete,
+    overlay var(--motion-panel) allow-discrete;
+}
+[popover]:popover-open { opacity: 1; translate: 0 0; scale: 1; }
+@starting-style {
+  [popover]:popover-open { opacity: 0; translate: 0 4px; scale: .99 .97; }
+}
 /* These surfaces use the shared visibility lifecycle in motion.js. */
 :is(.view, [data-panel], .floating-control, .command-menu, .session-context-menu,
     .workbench-drawer, .resource-panel, .integration-pane, .provider-expanded,
@@ -38,26 +175,28 @@
 #messages > .message { animation: none; }
 .messages { scroll-behavior: auto; overflow-anchor: none; overscroll-behavior-y: contain; }
 .message .markdown { overflow-anchor: none; }
-dialog {
+dialog:not(.image-preview) {
   animation: none;
   opacity: 0;
   translate: 0 6px;
+  scale: .99 .965;
   transition: opacity var(--motion-panel) var(--motion-ease),
-    translate var(--motion-panel) var(--motion-ease),
+    translate var(--motion-panel) var(--motion-spring),
+    scale var(--motion-panel) var(--motion-spring),
     display var(--motion-panel) allow-discrete,
     overlay var(--motion-panel) allow-discrete;
 }
-dialog[open] { opacity: 1; translate: 0 0; }
-dialog::backdrop {
+dialog:not(.image-preview)[open] { opacity: 1; translate: 0 0; scale: 1; }
+dialog:not(.image-preview)::backdrop {
   opacity: 0;
   transition: opacity var(--motion-panel) var(--motion-ease),
     display var(--motion-panel) allow-discrete,
     overlay var(--motion-panel) allow-discrete;
 }
-dialog[open]::backdrop { opacity: 1; }
+dialog:not(.image-preview)[open]::backdrop { opacity: 1; }
 @starting-style {
-  dialog[open] { opacity: 0; translate: 0 6px; }
-  dialog[open]::backdrop { opacity: 0; }
+  dialog:not(.image-preview)[open] { opacity: 0; translate: 0 6px; scale: .99 .965; }
+  dialog:not(.image-preview)[open]::backdrop { opacity: 0; }
 }
 /* Rich content and canvas coordinates retain their own geometry. */
 .viewport, .world, .node, .CodeMirror, .CodeMirror * { scale: none; }

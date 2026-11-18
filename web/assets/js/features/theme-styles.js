@@ -1,17 +1,59 @@
 // Built-in styles share the existing light/dark and color preferences.
 (() => {
   const styles = [
-    {id: 'astra', name: 'AstraAgent', description: '蓝紫玻璃 · 轻盈层次', theme: '#8582b8', accent: '#77a1ff'},
-    {id: 'anthropic', name: 'Anthropic', description: '暖纸色 · 衬线正文', theme: '#f5f2ec', accent: '#b45335'},
+    {id: 'light-rainbow', name: 'LightRainbow', description: 'AstraAgent 默认主题'},
+    {id: 'astra', name: 'AstraAgent', description: '蓝紫玻璃 · 经典主题', theme: '#8582b8', accent: '#77a1ff'},
+    {id: 'anthropic', name: 'Anthropic', description: '暖纸与陶土 · 编辑式排版', theme: '#f5f4ed', accent: '#b6583a'},
     {id: 'openai', name: 'OpenAI', description: '黑白灰 · 简洁对话', theme: '#f7f7f8', accent: '#16785f'},
+    {id: 'fluent3', name: 'Fluent3', description: 'WinUI 3 · 云母质感与分栏布局'},
+    {id: 'zhufeng', name: '朱峰Agent', description: '画布工作台 · 紧凑面板与工具条'},
   ];
   const root = document.documentElement;
-  let selected = 'astra';
+  let selected = 'light-rainbow';
   try {
     const saved = localStorage.getItem('astra-ui-style');
     if (styles.some(style => style.id === saved)) selected = saved;
   } catch {}
   root.dataset.uiStyle = selected;
+
+  const savedColors = readAppearanceColors();
+  const oldDefault = styles.find(style => style.id === (selected === 'light-rainbow' ? 'astra' : selected));
+  // Older builds saved the preset pair on every boot, even if it was never edited.
+  if (oldDefault?.theme && !savedColors.custom && savedColors.theme?.toLowerCase() === oldDefault.theme &&
+      savedColors.accent?.toLowerCase() === oldDefault?.accent) {
+    saveColors(null);
+  } else if (savedColors.theme || savedColors.accent) {
+    applyColors(savedColors);
+  }
+  function syncPickers() {
+    const tokens = getComputedStyle(root);
+    themeColor.value = appearanceColors?.theme || tokens.getPropertyValue('--preset-theme').trim();
+    accentColor.value = appearanceColors?.accent || tokens.getPropertyValue('--preset-accent').trim();
+    for (const input of [themeColor, accentColor]) {
+      const output = input.parentElement.querySelector('output');
+      if (output) output.value = input.value.toUpperCase();
+    }
+  }
+  async function prepareAppearanceChange() {
+    await marketReady;
+    cancelSkinPreview();
+    await releaseMarketAppearance();
+    applyTheme(themePreference);
+  }
+  async function editColors(change) {
+    try {
+      if (skinPreview || marketData?.state.active_skin) await prepareAppearanceChange();
+      saveColors(change ? { ...appearanceColors, ...change } : null);
+    } catch (error) {
+      toast(error.message);
+    }
+    syncPickers();
+  }
+  for (const [input, key] of [[themeColor, 'theme'], [accentColor, 'accent']]) {
+    input.oninput = () => editColors({ [key]: input.value });
+  }
+  new MutationObserver(syncPickers).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  syncPickers();
 
   const section = elem('section', 'settings-group builtin-styles');
   section.id = 'builtin-theme-styles';
@@ -33,16 +75,11 @@
   async function chooseStyle(style) {
     buttons.forEach(button => {button.disabled = true;});
     try {
-      await marketReady;
-      if (!marketData) throw new Error(uiText('无法读取外观状态，请刷新后重试。'));
-      cancelSkinPreview();
-      await releaseMarketAppearance();
-      applyTheme(themePreference);
+      await prepareAppearanceChange();
       selected = style.id;
       root.dataset.uiStyle = selected;
-      themeColor.value = style.theme;
-      accentColor.value = style.accent;
-      applyColors();
+      saveColors(null);
+      syncPickers();
       try {
         localStorage.setItem('astra-ui-style', selected);
       } catch {
@@ -73,13 +110,7 @@
   }
   section.append(heading, choices);
   $('[data-panel=appearance] .theme-options').previousElementSibling.before(section);
-  // Keep the existing color editor's reset action consistent with the style.
-  resetColors.onclick = () => {
-    const style = styles.find(item => item.id === selected);
-    themeColor.value = style.theme;
-    accentColor.value = style.accent;
-    applyColors();
-  };
+  resetColors.onclick = () => editColors(null);
   new MutationObserver(updateSelection).observe(document.body, {attributes: true, attributeFilter: ['class']});
   updateSelection();
 })();

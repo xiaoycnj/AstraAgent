@@ -25,7 +25,15 @@ jobs:
       - name: Core execution and security tests
         shell: pwsh
         run: |
-          foreach ($suite in @('test_agent_runtime.py','test_context_oauth.py','test_creative_workflows.py','test_durable_execution.py','test_image_generation.py','test_security.py','test_personalization.py','test_usage_meter.py','test_performance_stats.py','test_intelligent_ui.py','test_conversation_modes.py','test_cli_render.py')) {
+          $suites = @(
+            'test_agent_runtime.py', 'test_app.py', 'test_cli_render.py', 'test_context_oauth.py',
+            'test_conversation_modes.py', 'test_create_file.py', 'test_creative_workflows.py',
+            'test_durable_execution.py', 'test_extension_safety.py', 'test_image_generation.py',
+            'test_image_message_state.py', 'test_intelligent_ui.py', 'test_marketplace_author.py',
+            'test_performance_stats.py', 'test_personalization.py', 'test_security.py',
+            'test_stream_journal.py', 'test_usage_meter.py'
+          )
+          foreach ($suite in $suites) {
             python -m unittest discover -s tests -p $suite -q
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
@@ -39,21 +47,13 @@ jobs:
           $env:ASTRA_TEST_PYTHON = (Get-Command python).Source
           $env:ASTRA_TEST_BROWSER = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
           if (!(Test-Path -LiteralPath $env:ASTRA_TEST_BROWSER)) { throw 'Microsoft Edge is required for the browser gate' }
-          node tests/browser_creative.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_security.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_rich_chat.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_personalization.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_performance.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_layout.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_intelligent_ui.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_conversation_modes.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node tests/browser_motion.cjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $suites = @(
+            'image_inline_state', 'image_stream_callbacks', 'browser_first_run', 'browser_windows',
+            'browser_creative', 'browser_security', 'browser_rich_chat', 'browser_personalization',
+            'browser_performance', 'browser_layout', 'browser_intelligent_ui', 'browser_conversation_modes',
+            'browser_motion', 'browser_controls', 'browser_extension_recovery', 'browser_image_inline'
+          )
+          foreach ($suite in $suites) {
+            node "tests/$suite.cjs"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

@@ -34,10 +34,13 @@ class ReleaseEditions(unittest.TestCase):
                 self.assertEqual([name for name in names if '/memory/' in name], ['AstraAgent/memory/README.md'])
                 self.assertIn('AstraAgent/vendor_desktop/_cffi_backend.cp314-win_amd64.pyd', names)
                 self.assertIn('AstraAgent/web/assets/js/app.js', names)
+                self.assertIn('AstraAgent/web/assets/css/ui/anthropic-font.css', names)
+                self.assertIn('AstraAgent/web/assets/fonts/anthropic/noto-serif-sc.woff2', names)
                 self.assertIn('AstraAgent/CHANGELOG.md', names)
                 for name in ('cli_render.py', 'vendor_python/rich/markdown.py', 'vendor_python/pygments/lexers/python.py', 'vendor_python/markdown_it/main.py', 'vendor_python/mdurl/__init__.py'):
                     self.assertIn('AstraAgent/' + name, names)
-                self.assertIn('AstraAgent/dlc_manager.py', names)
+                for name in ('dlc_manager.py', 'extension_safety.py', 'marketplace_author.py'):
+                    self.assertIn('AstraAgent/' + name, names)
                 self.assertIn('AstraAgent/web/assets/js/features/dlc.js', names)
                 readme=archive.read('AstraAgent/README.md').decode('utf-8')
                 self.assertNotRegex(readme,r'(?m)^## V\d')
@@ -46,7 +49,16 @@ class ReleaseEditions(unittest.TestCase):
                 self.assertEqual({item['name'] for item in manifest['components']}, release.LITE_LICENSES)
                 for item in manifest['components']:
                     self.assertIn('AstraAgent/' + item['file'], names)
-                self.assertEqual(json.loads(archive.read('AstraAgent/release.json'))['edition'], 'lite')
+                manifest = json.loads(archive.read('AstraAgent/release.json'))
+                self.assertEqual(manifest['edition'], 'lite')
+                self.assertEqual(manifest['version'], release.VERSION)
+                self.assertEqual(package.name, f'AstraAgent-V{release.VERSION}-lite-win-x64.zip')
+                sbom = json.loads(archive.read('AstraAgent/sbom.cdx.json'))
+                self.assertEqual(sbom['metadata']['component']['version'], release.VERSION)
+                self.assertIn(f'AstraAgent {release.VERSION}', archive.read('AstraAgent/RELEASE.md').decode('utf-8'))
+                self.assertEqual(archive.read('AstraAgent/web/index.html').decode('utf-8').count(f'V{release.VERSION}'), 2)
+                self.assertIn(f'VERSION {release.VERSION}', archive.read('AstraAgent/web/assets/startup/splash.html').decode('utf-8'))
+                self.assertIn(f'## V{release.VERSION} ', archive.read('AstraAgent/CHANGELOG.md').decode('utf-8'))
                 archive.extractall(output / 'path with spaces')
             if os.name == 'nt':
                 app = output / 'path with spaces/AstraAgent'
@@ -58,6 +70,7 @@ class ReleaseEditions(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 doctor = json.loads(result.stdout)
                 self.assertEqual(doctor['edition'], 'lite')
+                self.assertEqual(doctor['version'], release.VERSION)
                 self.assertFalse(doctor['portable_python'])
                 self.assertFalse(doctor['webview2'])
                 command = [os.environ['COMSPEC'], '/d', '/c', 'call', str(app / 'python.bat'), '-c', 'import sys; sys.exit(7)']

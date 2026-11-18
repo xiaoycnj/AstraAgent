@@ -7,6 +7,7 @@ import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -55,6 +56,36 @@ class Integration(unittest.TestCase):
             finally: e.close()
     def configure(self):
         return self.call('/api/settings','PUT',{'base_url':f'http://127.0.0.1:{self.mock.server_port}/v1/chat/completions','model':'local-test-model','api_key':'not-a-real-key'})
+    def test_existing_profile_skips_first_run_migration(self):
+        with (backend.DATA/'onboarding.json').open('w',encoding='utf-8') as stream:json.dump({'required':False},stream)
+        (backend.DATA/'profile.json').write_text(json.dumps({'display_name':'已有用户'},ensure_ascii=False),encoding='utf-8')
+        (backend.DATA/'onboarding.json').unlink()
+        backend.initialize()
+        self.assertFalse(backend.onboarding_status()['required'])
+
+    def test_packaged_memory_readme_does_not_skip_first_run(self):
+        root = backend.DATA / 'package'
+        (root / 'memory').mkdir(parents=True)
+        (root / 'memory' / 'README.md').write_text('Default memory directory', encoding='utf-8')
+        with patch.multiple(backend, ROOT=root, DATA=root / 'data'):
+            backend.initialize()
+            self.assertTrue(backend.onboarding_status()['required'])
+            backend.initialize()
+            self.assertTrue(backend.onboarding_status()['required'])
+
+    def test_first_run_acceptance_and_auto_review_preference(self):
+        self.assertEqual(self.call('/api/bootstrap')[1]['onboarding'],{'required':True,'auto_review_delivered':False})
+        self.assertEqual(self.call('/api/onboarding/preferences','PUT',{'auto_review_delivered':True})[0],409)
+        self.assertEqual(self.call('/api/onboarding/accept','POST',{'accepted':True,'version':1})[0],400)
+        self.assertEqual(self.call('/api/onboarding/accept','POST',{'accepted':True,'version':1,'auto_review_delivered':'yes'})[0],400)
+        result = self.call('/api/onboarding/accept','POST',{'accepted':True,'version':1,'auto_review_delivered':True})
+        self.assertEqual(result, (200, {'ok':True,'onboarding':{'required':False,'auto_review_delivered':True}}))
+        backend.initialize()
+        self.assertEqual(self.call('/api/bootstrap')[1]['settings']['onboarding']['auto_review_delivered'],True)
+        self.assertFalse(self.call('/api/bootstrap')[1]['onboarding']['required'])
+        self.assertEqual(self.call('/api/onboarding/preferences','PUT',{'auto_review_delivered':False}),
+                         (200, {'required':False,'auto_review_delivered':False}))
+
     def test_config_and_upstream(self):
         code,c=self.configure(); self.assertEqual(code,200); self.assertNotIn('api_key',c); self.assertTrue(c['has_key'])
         self.assertTrue(c['base_url'].endswith('/v1'))
@@ -118,7 +149,7 @@ class Integration(unittest.TestCase):
         self.assertEqual(self.call('/api/health',headers={'Host':'example.org'})[0],403)
         self.assertEqual(self.call('/api/health')[1]['app'],backend.APP_ID)
         self.assertEqual(self.call('/data/settings.json')[0],404)
-        for path in ('/','/app.js','/style.css','/assets/js/app.js','/assets/css/style.css','/assets/icons/models/openai.svg'):
+        for path in ('/','/app.js','/style.css','/assets/js/app.js','/assets/css/style.css','/assets/css/first-run.css','/assets/icons/models/openai.svg'):
             with urlopen(self.base+path) as r:
                 self.assertEqual(r.status,200); self.assertGreater(len(r.read()),500)
                 self.assertEqual(r.headers['X-Frame-Options'],'DENY')

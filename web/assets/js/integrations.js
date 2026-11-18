@@ -32,7 +32,7 @@ function renderIntegrationSkills(){
   const row=elem('article','integration-skill-row');const info=elem('div');info.dataset.i18nIgnore='';info.append(elem('strong','',skill.name),elem('p','hint',(skill.prompt||'').slice(0,150)),elem('small','',skill.source));
   const edit=actionButton(skill.editable?'编辑':'查看',()=>{const option=$('#skill-select');if(!Array.from(option.options).some(x=>x.value===id))option.append(new Option(skill.name,id));option.value=id;option._refresh?.();
    skillId.value=id;skillName.value=skill.name;skillPrompt.value=skill.prompt;for(const input of [skillId,skillName,skillPrompt])input.disabled=!skill.editable;saveSkill.disabled=!skill.editable;skillEditor.scrollIntoView({block:'nearest',behavior:'smooth'});},'secondary');
-  row.append(colorIcon(skill.editable?'library':'plugin'),info,edit);
+  row.append(libraryIcon(skill.editable?'library':'plugin'),info,edit);
   if(skill.editable){const label=elem('label','switch-pill');const input=elem('input');input.type='checkbox';input.setAttribute('role','switch');input.setAttribute('aria-label','启用 '+skill.name);input.checked=skill.enabled!==false;input.disabled=id==='general';
    input.onchange=safely(async()=>{input.disabled=true;try{await api('/api/skill-state/'+encodeURIComponent(id),'PUT',{enabled:input.checked});await reloadCapabilities();}finally{input.disabled=id==='general';}});label.append(input);row.append(label);}
   integrationSkills.append(row);

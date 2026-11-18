@@ -1,0 +1,25 @@
+.image-generation-placeholder,.image-candidates{--image-edge:var(--ui-divider,var(--border,#80808060));--image-fill:var(--ui-surface-2,var(--surface,#ddd));--image-ink:var(--text,CanvasText);--image-accent:var(--accent,#798cff);margin-block:14px;width:min(100%,580px);min-width:0;color:var(--image-ink)}
+.image-generation-placeholder{position:relative;isolation:isolate;overflow:hidden;width:min(100%,220px);aspect-ratio:1;border-radius:22px;border:1px solid var(--image-edge);background:radial-gradient(ellipse at 28% 22%,color-mix(in srgb,var(--image-accent) 23%,transparent),transparent 72%),var(--image-fill)}
+.image-generation-placeholder::before{content:"";position:absolute;inset:18%;border-radius:50%;background:radial-gradient(ellipse,color-mix(in srgb,var(--image-accent) 38%,transparent),transparent 70%);animation:image-cloud 4.8s ease-in-out infinite alternate}
+.image-generation-particles{position:absolute;inset:11% 12% 16%;display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);place-items:center;animation:image-field 5.6s ease-in-out infinite alternate}
+.image-generation-particles i{width:3px;height:3px;border-radius:50%;background:color-mix(in srgb,var(--image-ink) 55%,var(--image-accent));opacity:.36;animation:image-particle 2.8s ease-in-out var(--phase) infinite}
+.image-generation-label{position:absolute;inset:auto 12px 12px auto;padding:6px 10px;border:1px solid var(--image-edge);border-radius:999px;background:var(--image-fill);font-size:12px;font-weight:650}
+@keyframes image-cloud{from{transform:translate(-20%,-14%) scale(.8)}to{transform:translate(24%,18%) scale(1.4)}}
+@keyframes image-field{0%{transform:rotate(-8deg) scale(.94)}55%{transform:rotate(8deg) scale(1.07,.92)}100%{transform:rotate(16deg) scale(.94,1.05)}}
+@keyframes image-particle{0%,100%{transform:scale(.55);opacity:.22}45%{transform:translate(var(--drift),-7px) scale(1.65);opacity:.86}70%{transform:translate(0,4px) scale(.85);opacity:.42}}
+.image-candidates{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 12px;align-items:start;transform-origin:top left;animation:image-reveal 560ms var(--motion-spring,cubic-bezier(.24,1.26,.5,1)) both}
+@keyframes image-reveal{from{opacity:0;transform:translateY(12px) scale(.94);border-radius:28px}to{opacity:1;transform:translateY(0) scale(1);border-radius:18px}}
+.image-candidate-preview,.image-candidate-thumb{appearance:none;display:block;padding:0;min-width:0;overflow:hidden;border:1px solid var(--image-edge);background:var(--image-fill);cursor:pointer}
+.image-candidate-preview{grid-column:1;width:100%;border-radius:18px}
+.image-candidate-preview img{display:block;width:100%;height:auto;max-height:68vh;object-fit:contain;min-height:80px}
+.image-candidate-rail{grid-column:2;display:grid;gap:8px;padding:3px;max-height:68vh;overflow:auto;overscroll-behavior:contain}
+.image-candidate-thumb{position:relative;width:60px;height:60px;border-radius:10px}
+.image-candidate-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.image-candidate-thumb[aria-pressed=true]{outline:2px solid var(--image-accent);outline-offset:1px}
+.image-candidate-number{position:absolute;inset:auto 3px 3px auto;padding:0 4px;min-width:14px;border-radius:5px;background:#121622e8;color:#fff;font-size:10px;line-height:16px}
+.image-candidate-footer{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12px}
+.image-candidate-duplicate{display:none!important}
+@media(max-width:600px){.image-candidates{grid-template-columns:minmax(0,1fr)}.image-candidate-rail{grid-column:1;grid-auto-flow:column;grid-auto-columns:max-content;justify-content:start;width:100%;max-height:none}.image-candidate-thumb{width:48px;height:48px}}
+@media(prefers-reduced-motion:reduce){.image-candidates,.image-generation-placeholder::before,.image-generation-particles,.image-generation-particles i{animation:none!important}}
+:root[data-motion=reduced] :is(.image-candidates,.image-generation-placeholder::before,.image-generation-particles,.image-generation-particles i){animation:none!important}
+@media(forced-colors:active){.image-generation-placeholder,.image-candidate-preview,.image-candidate-thumb{border-color:ButtonText}.image-generation-particles i{background:CanvasText}.image-candidate-thumb[aria-pressed=true]{outline-color:Highlight}}

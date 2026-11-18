@@ -27,6 +27,7 @@ function layoutField(parent, title, key, type, options = []) {
   input.id = 'layout-' + key;
   if (type !== 'select') input.type = type;
   else for (const [value, label] of options) input.append(new Option(uiText(label), value));
+  if (type === 'checkbox') input.setAttribute('role', 'switch');
   input.setAttribute('aria-label', title);
   input.addEventListener(['text', 'range'].includes(type) ? 'input' : 'change', () => {
     updateUserLayout({[key]: type === 'checkbox' ? input.checked : type === 'range' || key === 'home_columns' ? Number(input.value) : input.value});

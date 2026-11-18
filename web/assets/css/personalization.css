@@ -5,11 +5,35 @@ body.appearance-wallpaper #app { position: relative; z-index: 1; background: tra
 body.appearance-wallpaper { --ui-panel-surface: rgb(255 255 255 / var(--appearance-opacity)); --ui-pane-surface: rgb(249 250 253 / var(--appearance-opacity)); --ui-chrome-surface: rgb(243 246 251 / var(--appearance-opacity)); --glass-reading: var(--ui-panel-surface); }
 :root[data-theme=dark] body.appearance-wallpaper { --ui-panel-surface: rgb(30 35 46 / var(--appearance-opacity)); --ui-pane-surface: rgb(24 29 38 / var(--appearance-opacity)); --ui-chrome-surface: rgb(31 36 47 / var(--appearance-opacity)); }
 body.appearance-wallpaper .studio-body, body.appearance-wallpaper #chat-view, body.appearance-wallpaper #messages { background: transparent !important; }
+/* Keep wallpaper visible between messages and remove it from the reading surface. */
+body.appearance-wallpaper #messages > .message {
+  --chat-wallpaper-reading: #fafbfe;
+}
+:root[data-theme=dark] body.appearance-wallpaper #messages > .message {
+  --chat-wallpaper-reading: #202632;
+}
+body.appearance-wallpaper #messages > .message.assistant {
+  background-color: var(--chat-wallpaper-reading);
+  transition: none;
+}
+body.appearance-wallpaper #messages > .message.user {
+  --chat-question-surface: var(--chat-wallpaper-reading);
+}
+body.appearance-wallpaper #messages > .message.user > .message-actions {
+  padding-inline: 4px;
+  border-radius: 7px;
+  background-color: var(--chat-wallpaper-reading);
+}
+@media (forced-colors: active) {
+  body.appearance-wallpaper #messages > .message { --chat-wallpaper-reading: Canvas; }
+}
 body.appearance-custom { font-family: var(--appearance-loaded-font, var(--appearance-font)); }
 body.appearance-custom button, body.appearance-custom input, body.appearance-custom textarea, body.appearance-custom select { font-family: inherit; }
 body.appearance-custom .message .markdown { font-family: var(--appearance-loaded-font, var(--appearance-font)); font-size: var(--appearance-font-size); }
 body.appearance-custom #messages .message { border-radius: var(--appearance-message-radius); }
-body.appearance-custom[data-appearance-message=true] #messages .message { background: var(--appearance-message-color); }
+body.appearance-custom #messages .message.user > :is(.markdown, .chat-message-edit) { border-radius: var(--appearance-message-radius); }
+body.appearance-custom[data-appearance-message=true] #messages .message.assistant { background: var(--appearance-message-color); }
+body.appearance-custom[data-appearance-message=true] #messages .message.user { --chat-question-surface: var(--appearance-message-color); }
 body.appearance-custom .message.assistant { padding: 12px 16px; }
 body.appearance-custom #chat-form { border-radius: var(--appearance-composer-radius); }
 body.appearance-custom[data-appearance-composer=true] #chat-form { background: var(--appearance-composer-color); }

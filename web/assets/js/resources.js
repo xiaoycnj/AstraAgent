@@ -6,9 +6,7 @@ resourceButton.title='会话附件';
 resourceButton.setAttribute('aria-label','会话附件');
 resourceButton.setAttribute('aria-expanded','false');
 resourceButton.setAttribute('aria-controls','resource-panel');
-const resourceIcon=svgIcon('note');
-resourceIcon.querySelector('path').setAttribute('d','M8 5h12M8 12h12M8 19h12M3 4h2v2H3zM3 11h2v2H3zM3 18h2v2H3z');
-resourceButton.append(resourceIcon);
+resourceButton.append(svgIcon('list'));
 $('.header-actions').append(resourceButton);
 const resourcePanel=elem('section','resource-panel');
 resourcePanel.id='resource-panel';
@@ -69,8 +67,7 @@ function resourceRow(item){
         downloadLink.href='/api/attachments/'+item.id+'/content';
         downloadLink.download=item.name;
         downloadLink.setAttribute('aria-label',uiText('下载')+' '+item.name);
-        const downloadIcon=svgIcon('note');
-        downloadIcon.querySelector('path').setAttribute('d','M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4');
+        const downloadIcon=svgIcon('download');
         downloadLink.append(downloadIcon);
         row.append(downloadLink);
     }
@@ -130,9 +127,8 @@ resourcePreview.addEventListener('close',()=>resourcePreviewRequest++);
 
 async function previewResource(item){
     if(item.kind==='image'){
-        imageGallery=[...resourceSources(),...resourceData.outputs].filter(row=>row.kind==='image').map(row=>({src:'/api/attachments/'+row.id+'/content',alt:row.name}));
-        showGalleryImage(imageGallery.findIndex(row=>row.src.endsWith('/'+item.id+'/content')));
-        imageViewer.showModal();
+        const collection=[...resourceSources(),...resourceData.outputs].filter(row=>row.kind==='image'&&!row.unavailable);
+        openImagePreview([item,...collection].map(imagePreviewAsset));
         return;
     }
     const ticket=++resourcePreviewRequest;

@@ -96,8 +96,14 @@ def install(package,target,progress=lambda text:None):
 def launch(data,parent):
     # Copy the interpreter and native GUI libraries out of the installation before replacing it.
     folder=Path(tempfile.mkdtemp(prefix='astra-updater-'))
-    for name in ('updater.py','release_feed.py','native_frame.py','security_core.py','openai_oauth.py','runtime_paths.py','watchdog.py'):
+    for name in ('updater.py','release_feed.py','native_frame.py','security_core.py','openai_oauth.py','runtime_paths.py','watchdog.py','ui_locale.py'):
         shutil.copy2(ROOT/name,folder/name)
+    for relative in ('web/assets/startup/update.html', 'web/assets/startup/window.css',
+                     'web/assets/startup/light-rainbow.css', 'web/assets/startup/window.js',
+                     'web/assets/startup/astra.svg', 'web/assets/icons/brand/astra.ico'):
+        destination = folder / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / relative, destination)
     shutil.copytree(ROOT/'vendor_desktop',folder/'vendor_desktop')
     if (ROOT/'runtimes/webview2').exists():shutil.copytree(ROOT/'runtimes/webview2',folder/'webview2')
     executable=Path(sys.executable)
@@ -105,7 +111,6 @@ def launch(data,parent):
         shutil.copytree(executable.parent,folder/'python');executable=folder/'python'/executable.name
         for pth in (folder/'python').glob('*._pth'):
             pth.write_text('python314.zip\n.\n..\n../vendor_desktop\nLib/site-packages\nimport site\n',encoding='utf-8')
-    shutil.copy2(ROOT/'web/assets/startup/update.html',folder/'update.html')
     process=subprocess.Popen([str(executable),str(folder/'updater.py'),'--worker',str(ROOT),str(data),str(parent)],cwd=folder,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     (folder/'owner.json').write_text(json.dumps({'pid':process.pid,'root':str(ROOT)}),encoding='utf-8')
 
@@ -124,13 +129,33 @@ def worker(target,data,parent):
     sys.path.insert(0,str(ROOT/'vendor_desktop'))
     import webview
     import watchdog
+    import ui_locale
+    import native_frame
     fixed=list((ROOT/'webview2').glob('**/msedgewebview2.exe'))
     if fixed:webview.settings['WEBVIEW2_RUNTIME_PATH']=str(fixed[0].parent)
-    failed=threading.Event()
+    translate = ui_locale.translator(target, data)
+    closable = threading.Event()
     class Bridge:
         def close(self):
-            if failed.is_set():window.destroy()
+            if closable.is_set():window.destroy()
+
+    def display(function, *args):
+        try:
+            window.evaluate_js(f'{function}(...{json.dumps(args)})')
+        except Exception:
+            # Rendering must not interrupt verification, install, or rollback.
+            pass
+
+    def status(phase, text, *values):
+        display('setUpdateState', phase, translate(text), *values)
+
     def execute():
+        display('configureWindow', {key: translate(text) for key, text in {
+            'caption': '软件更新', 'subtitle': '正在准备更新', 'waiting': '准备',
+            'download': '下载', 'install': '安装', 'restart': '重启',
+            'details': '查看错误详情', 'close': '关闭', 'steps': '更新步骤', 'progress': '下载进度',
+        }.items()})
+        status('waiting', '正在等待主面板与后台服务退出…')
         try:
             while watchdog.parent_alive(parent):time.sleep(.2)
             state_path=data/'desktop-state.json'
@@ -140,31 +165,45 @@ def worker(target,data,parent):
                     if not watchdog.parent_alive(pid):break
                     time.sleep(.2)
                 else:raise ValueError('后台服务尚未退出，请关闭后重试')
+            status('waiting', '正在检查更新')
             info=latest(target)
             if not info['available'] or not info['can_install'] or not info['asset']:raise ValueError('没有可安装的新版本')
             asset=info['asset'];url=asset['browser_download_url'];digest=asset.get('digest','')
             if not url.startswith('https://github.com/'+REPO+'/releases/download/') or not digest.startswith('sha256:'):raise ValueError('发行包缺少可信来源或 SHA-256')
-            if type(asset.get('size')) is not int or not 0<asset['size']<=600_000_000:raise ValueError('发行包体积无效')
+            total = asset.get('size')
+            if type(total) is not int or not 0<total<=600_000_000:raise ValueError('发行包体积无效')
+            display('configureWindow', {'subtitle': f"{info['current']} → {info['version'].lstrip('v')}"})
             package=ROOT/'release.zip';hashed=hashlib.sha256();size=0
+            last_report = time.monotonic()
+            status('download', '正在下载更新', 0, total)
             with build_opener(release_feed.Redirect()).open(Request(url,headers={'User-Agent':'AstraAgent-Updater'}),timeout=60) as response,package.open('wb') as output:
                 while block:=response.read(1024*1024):
                     size+=len(block)
-                    if size>asset['size']:raise ValueError('下载超过发行清单体积限制')
-                    output.write(block);hashed.update(block);status(f'正在下载 {size//1048576} MB')
-            if size!=asset['size'] or 'sha256:'+hashed.hexdigest()!=digest:raise ValueError('下载校验失败')
-            install(package,target,status);status('更新完成，正在重新启动')
+                    if size>total:raise ValueError('下载超过发行清单体积限制')
+                    output.write(block);hashed.update(block)
+                    now = time.monotonic()
+                    if size == total or now - last_report >= .12:
+                        status('download', '正在下载更新', size, total)
+                        last_report = now
+            status('install', '正在验证更新包')
+            if size!=total or 'sha256:'+hashed.hexdigest()!=digest:raise ValueError('下载校验失败')
+            status('install', '正在安装更新')
+            install(package,target)
+            status('restart', '更新完成，正在重新启动')
             subprocess.Popen([str(target/'runtimes/python/pythonw.exe') if (target/'runtimes/python/pythonw.exe').exists() else sys.executable,str(target/'desktop.py'),'--data-dir',str(data)],cwd=target)
+            closable.set()
             window.destroy()
         except Exception as error:
-            failed.set()
+            closable.set()
             message='更新未完成，可关闭窗口后重新启动。'
             if getattr(error,'code',None)==403:message='更新服务暂时拒绝请求或已限流，请稍后重试。'
-            window.evaluate_js('setUpdateFailure('+json.dumps(message)+','+json.dumps(str(error)[:2000])+')')
-    def status(text):window.evaluate_js('document.getElementById("status").textContent='+json.dumps(text))
-    window=webview.create_window('AstraAgent · Update',url=str(ROOT/'update.html'),width=560,height=350,frameless=True,easy_drag=True,resizable=False,js_api=Bridge())
-    import native_frame
+            display('setUpdateFailure', translate(message), str(error)[:2000])
+
+    webview.settings['DRAG_REGION_DIRECT_TARGET_ONLY'] = True
+    window=webview.create_window('AstraAgent · Update',url=str(ROOT/'web/assets/startup/update.html'),width=560,height=350,frameless=True,easy_drag=False,resizable=False,js_api=Bridge(),background_color='#faf9fc')
     window.events.shown += lambda:native_frame.center(window)
-    webview.start(execute)
+    window.events.closing += lambda: closable.is_set()
+    webview.start(execute, gui='edgechromium', icon=str(ROOT/'web/assets/icons/brand/astra.ico'))
 
 if __name__=='__main__':
     if len(sys.argv)==5 and sys.argv[1]=='--worker':worker(Path(sys.argv[2]),Path(sys.argv[3]),int(sys.argv[4]))

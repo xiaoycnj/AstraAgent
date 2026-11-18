@@ -1,32 +1,40 @@
 // Application hooks share the persisted plugin switches and the existing message lifecycle.
 let applicationHooks=[];
 const applicationPanels=elem('div','plugin-application-panels');pluginSection.append(applicationPanels);
-async function refreshApplicationPlugins(){
+function clearApplicationPlugins(){
  applicationHooks=[];applicationPanels.replaceChildren();document.body.classList.remove('plugin-reading-compact','plugin-reading-comfortable');
- for(const plugin of capabilityCatalog.plugins.filter(p=>p.enabled)){
+}
+async function reportApplicationPluginFault(id){
+ clearApplicationPlugins();
+ try { const result=await api('/api/extensions/safety','POST',{action:'plugin_error',id}); if(result.active) location.reload(); }
+ catch(error){toast('无法记录插件故障：'+error.message);}
+}
+async function refreshApplicationPlugins(){
+ clearApplicationPlugins();
+ for(const plugin of capabilityCatalog.plugins.filter(p=>p.enabled)){ try {
   for(const hook of plugin.hooks||[]){applicationHooks.push({...hook,plugin:plugin.id});if(hook.event==='startup'&&hook.action==='reading_layout')document.body.classList.add('plugin-reading-'+hook.value);}
   for(const panel of plugin.panels||[]){applicationPanels.append(actionButton(panel.title,()=>{const dialog=elem('dialog','app-dialog');dialog.append(elem('h2','',panel.title),elem('p','',panel.text),actionButton('关闭',()=>dialog.close(),'secondary'));dialog.onclose=()=>dialog.remove();document.body.append(dialog);dialog.showModal();},'secondary'));}
- }
+ } catch { await reportApplicationPluginFault(plugin.id); return; } }
 }
 const beforeApplicationReload=reloadCapabilities;reloadCapabilities=async function(){await beforeApplicationReload();await refreshApplicationPlugins()};
 const beforePluginSend=sendMessage;
-sendMessage=async function(event,submittedContent){
+sendMessage=async function(event,submittedContent,submittedAttachments){
  const direct=typeof submittedContent==='string';
  const input=$('#chat-input');let content=direct?submittedContent:input.value;
- if(submitting||!content.trim()&&!pendingAttachments.length)return beforePluginSend(event,submittedContent);
+ if(submitting||!content.trim()&&!pendingAttachments.length)return beforePluginSend(event,submittedContent,submittedAttachments);
  for(const hook of applicationHooks.filter(h=>h.event==='before_send')){
   if(hook.action==='limit_length'&&content.length>hook.value){event.preventDefault();toast('插件限制消息长度：'+hook.value);return;}
  }
  for(const hook of applicationHooks.filter(h=>h.event==='before_send'&&h.action==='prefix'))if(!content.startsWith(hook.value))content=hook.value+content;
  if(!direct)input.value=content;
  const previous=state.messages.at(-1)?.id;
- const sent=await beforePluginSend(event,direct?content:undefined);
+ const sent=await beforePluginSend(event,direct?content:undefined,submittedAttachments);
  const answer=state.messages.at(-1),sid=state.session?.id;
  if(!sid||answer?.role!=='assistant'||!answer.id||answer.id===previous)return sent;
  for(const hook of applicationHooks.filter(h=>h.event==='after_response')){
   try{
    if(hook.action==='notify')toast(hook.value||'回复已完成');
-  }catch(error){toast('插件 '+hook.plugin+'：'+error.message);}
+  }catch{await reportApplicationPluginFault(hook.plugin);break;}
  }
  return sent;
 };

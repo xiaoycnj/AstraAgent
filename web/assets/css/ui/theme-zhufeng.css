@@ -1,0 +1,233 @@
+/* Zhufeng-inspired steel workbench. Astra keeps its own navigation and chat layout. */
+:root[data-ui-style="zhufeng"]:not(:has(body.market-skin)) {
+  --preset-theme: #eaf0f4;
+  --preset-accent: #245c82;
+  --zf-chrome: #dde7ef;
+  --zf-pane: #e3ebf1;
+  --zf-reading: #f8fbfd;
+  --zf-input: #fcfdff;
+  --zf-hover: #e6eef5;
+  --zf-glass-opacity: var(--glass-light-opacity);
+  --zf-ink: #20303d;
+  --zf-muted: #4e6474;
+  --zf-line: #b8c9d6;
+  --zf-control-edge: #768b9d;
+  --zf-action-ink: #fff;
+  --zf-shadow: rgb(35 63 86 / 0.10);
+}
+
+:root[data-ui-style="zhufeng"][data-theme="dark"]:not(:has(body.market-skin)) {
+  --preset-theme: #182532;
+  --preset-accent: #85bee6;
+  --zf-chrome: #141f2a;
+  --zf-pane: #1b2936;
+  --zf-reading: #202f3d;
+  --zf-input: #253747;
+  --zf-hover: #2d4152;
+  --zf-glass-opacity: var(--glass-dark-opacity);
+  --zf-ink: #e8f0f6;
+  --zf-muted: #aec2d2;
+  --zf-line: #465e72;
+  --zf-control-edge: #7791a6;
+  --zf-action-ink: #102232;
+  --zf-shadow: rgb(6 12 19 / 0.26);
+}
+
+@media (forced-colors: none) {
+  :where(:root[data-ui-style="zhufeng"]) body:where(:not(.market-skin)) {
+    --ink: var(--zf-ink);
+    --muted: var(--zf-muted);
+    --text-primary: var(--zf-ink);
+    --text-secondary: var(--zf-muted);
+    --surface: var(--zf-pane);
+    --surface-reading: var(--zf-reading);
+    --surface-input: var(--zf-input);
+    --soft: var(--zf-hover);
+    --line: var(--zf-line);
+    --control-border: var(--zf-control-edge);
+    --ui-control-surface: var(--zf-input);
+    --ui-control-hover: var(--zf-hover);
+    --ui-panel-surface: var(--zf-reading);
+    --ui-pane-surface: var(--zf-pane);
+    --ui-chrome-surface: var(--zf-chrome);
+    --ui-divider: var(--zf-line);
+    --ui-selected: color-mix(in srgb, var(--blue) 15%, var(--zf-input));
+    --ui-subtle-shadow: 0 2px 5px var(--zf-shadow);
+    --glass-reading: var(--ui-panel-surface);
+    --glass-fill: color-mix(in srgb, var(--zf-pane) calc(var(--zf-glass-opacity) * 100%), transparent);
+    --glass-inner: var(--ui-control-hover);
+    --glass-edge: var(--ui-divider);
+    accent-color: var(--blue);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]:not([data-custom-colors])) body:where(:not(.market-skin, [data-appearance-accent="true"])) {
+    --action-ink: var(--zf-action-ink);
+    --focus-color: var(--blue);
+    --selection-ink: var(--zf-action-ink);
+    --selection-surface: var(--blue);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]:not([data-custom-colors])) :where(body:not(.market-skin, [data-appearance-accent="true"])) #send {
+    color: var(--action-ink);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) body:where(:not(.market-skin, .appearance-wallpaper)) {
+    --brand-wash: linear-gradient(150deg, var(--zf-chrome), var(--theme-color));
+    background-color: var(--theme-color);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-wallpaper)) #chat-view {
+    background-color: var(--theme-color);
+  }
+
+  /* The grid is decorative. Leave narrow and custom home layouts unpatterned. */
+  @media (min-width: 761px) {
+    :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-wallpaper, .layout-home-active)) #chat-view {
+      --zf-grid-line: color-mix(in srgb, var(--blue) 9%, transparent);
+      background-image:
+        linear-gradient(to right, var(--zf-grid-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--zf-grid-line) 1px, transparent 1px);
+      background-size: 32px 32px;
+      background-position: center top;
+    }
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .layout-navigation-custom)) #app > main {
+    border-radius: 9px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .layout-navigation-custom)) :is(.app-rail .rail-button, #conversation-sidebar .list-item) {
+    border-radius: 6px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .layout-navigation-custom)) #conversation-sidebar .list-item.active {
+    box-shadow: inset 3px 0 var(--blue);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .layout-home-active)) .welcome .welcome-mark {
+    border-radius: 9px;
+    background: var(--ui-control-surface);
+    box-shadow: inset 0 -3px var(--ui-selected), var(--ui-subtle-shadow);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .layout-home-active)) .welcome .starter-card {
+    border-radius: 6px;
+    box-shadow: inset 0 -2px var(--ui-divider);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-wallpaper, .appearance-custom)) #messages > .message.assistant {
+    padding: 12px clamp(10px, 2vw, 18px) 14px;
+    outline: 1px solid var(--ui-divider);
+    outline-offset: -1px;
+    border-radius: 8px;
+    background: var(--surface-reading);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-wallpaper, .appearance-custom)) #messages > .message.user > :is(.markdown, .chat-message-edit) {
+    border-radius: 8px 8px 3px 8px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) .message.assistant > .message-header::before {
+    border-radius: 1px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-custom, .layout-home-active)) #chat-form {
+    border-color: var(--control-border);
+    border-radius: 9px;
+    background: var(--surface-input);
+    box-shadow: 0 3px 12px var(--zf-shadow);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-custom, .layout-home-active)) #chat-form:focus-within {
+    border-color: var(--blue);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-custom, .layout-home-active)) .composer-tools #send {
+    border-radius: 6px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) .task-status-strip {
+    border-radius: 7px;
+    background: var(--surface-reading);
+    box-shadow: inset 0 2px var(--ui-divider);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin, .appearance-wallpaper)) #canvas-view .viewport {
+    --zf-canvas-grid: color-mix(in srgb, var(--blue) 15%, transparent);
+    background-color: var(--theme-color);
+    background-image:
+      linear-gradient(to right, var(--zf-canvas-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--zf-canvas-grid) 1px, transparent 1px);
+    /* Match the fallback pitch to the canvas's existing zoom transform. */
+    background-size: 22px 22px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view :is(.canvas-toolbar, .zoom-controls, .canvas-minimap, .canvas-extra-actions, .canvas-search-results) {
+    color: var(--ink);
+    background: var(--ui-chrome-surface);
+    border-color: var(--control-border);
+    border-radius: 7px;
+    box-shadow: 0 3px 12px var(--zf-shadow);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .canvas-guide {
+    top: 76px;
+    right: 18px;
+    left: 18px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .canvas-minimap {
+    bottom: 136px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .canvas-minimap rect:not(.selected) {
+    fill: var(--muted);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view :is(.canvas-toolbar, .zoom-controls) button:hover:not(:disabled) {
+    background: var(--ui-control-hover);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .canvas-toolbar button.active {
+    color: var(--blue);
+    background: var(--ui-selected);
+    box-shadow: inset 0 -2px var(--blue);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view #zoom-value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .node {
+    color: var(--ink);
+    background: var(--surface-reading);
+    border-color: var(--ui-divider);
+    border-radius: 8px;
+    box-shadow: 0 5px 16px var(--zf-shadow);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .node.agent {
+    border-color: color-mix(in srgb, var(--blue) 55%, var(--ui-divider));
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .node.selected {
+    outline-color: var(--blue);
+    outline-offset: 2px;
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .node-head {
+    color: var(--ink);
+    background: var(--ui-chrome-surface);
+    border-color: var(--ui-divider);
+  }
+
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view :is(.canvas-guide span, .node-content, .node-dot) {
+    color: var(--muted);
+  }
+}
+
+@media (forced-colors: active) {
+  :where(:root[data-ui-style="zhufeng"]) :where(body:not(.market-skin)) #canvas-view .node.selected {
+    outline-color: Highlight;
+  }
+}

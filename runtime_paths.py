@@ -7,11 +7,14 @@ import sys
 from pathlib import Path
 
 
+APP_VERSION = '3.19.0'
+
+
 def release_info(root):
     path = Path(root) / 'release.json'
     if path.is_file():
         return json.loads(path.read_text(encoding='utf-8'))
-    return {'edition': 'development', 'version': '3.14.0'}
+    return {'edition': 'development', 'version': APP_VERSION}
 
 
 def workspace_id(data):

@@ -1,6 +1,20 @@
 [hidden] {
   display: none !important;
 }
+/* A matched foreground and background also covers inline code and links. */
+:root {
+  --selection-ink: #fff;
+  --selection-surface: #244b9b;
+}
+:root[data-theme="dark"] {
+  --selection-ink: #101b30;
+  --selection-surface: #bad2ff;
+}
+#chat-view ::selection {
+  color: var(--selection-ink) !important;
+  background-color: var(--selection-surface) !important;
+  text-shadow: none !important;
+}
 .ui-sr-only {
   position: absolute !important;
   width: 1px !important;
@@ -25,6 +39,7 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
+  details::details-content { animation: none !important; }
 }
 :root[data-motion="reduced"] *,
 :root[data-motion="reduced"] *::before,
@@ -46,6 +61,8 @@
 }
 @media (forced-colors: active) {
   :root {
+    --selection-ink: HighlightText !important;
+    --selection-surface: Highlight !important;
     --ink: CanvasText !important;
     --muted: CanvasText !important;
     --ui-control-surface: Canvas !important;
@@ -72,19 +89,12 @@
     background: Highlight !important;
     color: HighlightText !important;
   }
-  .ui-switch {
-    border-color: ButtonText !important;
-    background: Canvas !important;
-    forced-color-adjust: none;
-  }
-  .ui-switch::before {
-    background: ButtonText !important;
-  }
-  .ui-switch:checked {
-    background: Highlight !important;
-    border-color: Highlight !important;
-  }
-  .ui-switch:checked::before {
-    background: HighlightText !important;
-  }
+  input.ui-switch { background: transparent !important; forced-color-adjust: none; }
+  .ui-switch::after { border-color: ButtonText !important; background: Canvas !important; }
+  .ui-switch::before { background: ButtonText !important; }
+  .ui-switch:checked::after { background: Highlight !important; border-color: Highlight !important; }
+  .ui-switch:checked::before { background: HighlightText !important; }
+  .ui-switch:disabled { opacity: 1 !important; }
+  .ui-switch:disabled::after { border-color: GrayText !important; background: Canvas !important; }
+  .ui-switch:disabled::before { background: GrayText !important; }
 }

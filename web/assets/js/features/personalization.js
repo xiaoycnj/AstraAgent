@@ -42,6 +42,7 @@ function appearanceField(label, control) {
 function appearanceInput(label, group, key, type, options = {}) {
   const input = elem('input');
   input.type = type;
+  if (type === 'checkbox') input.setAttribute('role', 'switch');
   Object.assign(input, options);
   appearanceFields.set(group + '.' + key, input);
   input.addEventListener(type === 'range' || type === 'text' ? 'input' : 'change', () => {

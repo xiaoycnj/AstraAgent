@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, '..');
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'astra-security-ui-'));
   const data = path.join(folder, 'data');
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python = process.env.ASTRA_TEST_PYTHON || path.join(root, 'runtimes/python/python.exe');
   const server = spawn(python, ['-u', path.join(root, 'server.py'), '--port', '0', '--data-dir', data], {
     cwd: root, env: {...process.env, PYTHONUTF8: '1'}, windowsHide: true
@@ -95,7 +97,8 @@ async function main() {
     await page.locator('#nav-more').click();
     assert.equal(await page.locator('.rail-menu').isVisible(),true);
     await page.keyboard.press('Escape');
-    assert.equal(await page.locator('.rail-menu').isVisible(),false);
+    assert.equal(await page.locator('#nav-more').getAttribute('aria-expanded'),'false');
+    await page.locator('.rail-menu').waitFor({state:'hidden'});
     await page.locator('#nav-more').click();
     await page.locator('#nav-review').click();
     await page.locator('.workbench-drawer').waitFor();
@@ -179,9 +182,9 @@ async function main() {
     const imageRendered=await page.evaluate(item=>{const block=markdown('![result](/api/attachments/'+item.id+'/content)');return !!block.querySelector('img')},imageItem);
     assert.equal(imageRendered,true);
     await page.evaluate(item=>previewGeneratedImage(item),imageItem);
-    await page.locator('.generated-image-dialog img').waitFor();
-    await page.waitForFunction(()=>document.querySelector('.generated-image-dialog img')?.naturalWidth===1);
-    await page.locator('.generated-image-dialog button').click();
+    await page.locator('.image-preview-plane img').waitFor();
+    await page.waitForFunction(()=>document.querySelector('.image-preview-plane img')?.naturalWidth===1);
+    await page.getByRole('button',{name:'关闭预览',exact:true}).click();
 
     await page.locator('#nav-library').click();
     await page.waitForFunction(()=>appPage==='library'&&libraryAssets.some(item=>item.name==='fixture.png'));

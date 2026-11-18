@@ -1,10 +1,41 @@
 """Durable SSE journal. Generation lifetime is independent of HTTP readers."""
+from contextlib import contextmanager
 import hashlib
 import json
 import time
 import threading
 
-SIGNAL=threading.Condition()
+_READERS={}
+_READERS_LOCK=threading.Lock()
+
+@contextmanager
+def _reader_signal(key):
+    with _READERS_LOCK:
+        entry=_READERS.get(key)
+        if entry is None:
+            entry=_READERS[key]=[threading.Condition(),0]
+        entry[1]+=1
+    try:
+        yield entry[0]
+    finally:
+        with _READERS_LOCK:
+            entry[1]-=1
+            if not entry[1]:del _READERS[key]
+
+
+def _notify_readers(key):
+    with _READERS_LOCK:
+        entry=_READERS.get(key)
+    if entry is not None:
+        signal=entry[0]
+        with signal:signal.notify_all()
+
+
+# Status and the bounded event page must come from the same SQLite snapshot.
+_READ_PAGE='''SELECT request.status,event.id,event.event
+FROM stream_requests AS request
+LEFT JOIN stream_events AS event ON event.request_id=:key AND event.id>:after
+WHERE request.id=:key ORDER BY event.id LIMIT 200'''
 
 def initialize(db):
     db.executescript('''CREATE TABLE IF NOT EXISTS stream_requests(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,hash TEXT NOT NULL,run_id TEXT NOT NULL,status TEXT NOT NULL,input TEXT NOT NULL,created TEXT DEFAULT CURRENT_TIMESTAMP);
@@ -41,9 +72,11 @@ class Writer:
         with self.lock:return self._publish(event)
     def _publish(self,event):
         if self.closed:return
+        kind=event['type']
+        if not self.key and kind=='delta':return
         if self.db is None:
             self.context=self.database();self.db=self.context.__enter__()
-        db=self.db;event={**event,'time':time.time()};kind=event['type']
+        db=self.db;event={**event,'time':time.time()}
         try:
             if self.key:db.execute('INSERT INTO stream_events(request_id,event) VALUES(?,?)',(self.key,json.dumps(event,ensure_ascii=False)))
             if kind!='delta':
@@ -62,7 +95,7 @@ class Writer:
             db.commit()
         except BaseException:
             db.rollback();self.close();raise
-        with SIGNAL:SIGNAL.notify_all()
+        if self.key:_notify_readers(self.key)
         if kind in ('done','error','cancelled'):self.close()
     def close(self):
         with self.lock:
@@ -83,16 +116,18 @@ def serve(handler,database,key,after=0):
     handler.end_headers();handler.close_connection=True
     heartbeat=time.monotonic()
     try:
-        with database() as db:
-          while True:
-            with SIGNAL:
-                rows=db.execute('SELECT id,event FROM stream_events WHERE request_id=? AND id>? ORDER BY id LIMIT 200',(key,after)).fetchall()
-                job=db.execute('SELECT status FROM stream_requests WHERE id=?',(key,)).fetchone()
-                if not rows and job and job['status']=='running':SIGNAL.wait(.5)
-            for row in rows:
-                handler.wfile.write(('id: '+str(row['id'])+'\ndata: '+row['event']+'\n\n').encode())
-                handler.wfile.flush();after=row['id']
-            if not rows and (not job or job['status']!='running'):return
-            if time.monotonic()-heartbeat>10:
-                handler.wfile.write(b': heartbeat\n\n');handler.wfile.flush();heartbeat=time.monotonic()
+        with _reader_signal(key) as signal,database() as db:
+            while True:
+                with signal:
+                    rows=db.execute(_READ_PAGE,{'key':key,'after':after}).fetchall()
+                    if not rows:return
+                    if rows[0]['id'] is None:
+                        if rows[0]['status']!='running':return
+                        signal.wait(.5)
+                        rows=()
+                for row in rows:
+                    handler.wfile.write(('id: '+str(row['id'])+'\ndata: '+row['event']+'\n\n').encode())
+                    handler.wfile.flush();after=row['id']
+                if time.monotonic()-heartbeat>10:
+                    handler.wfile.write(b': heartbeat\n\n');handler.wfile.flush();heartbeat=time.monotonic()
     except (OSError,ConnectionError):return

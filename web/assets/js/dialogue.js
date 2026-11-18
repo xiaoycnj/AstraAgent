@@ -1,6 +1,3 @@
-Object.assign(iconPaths,{code:'m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16',document:iconPaths.note,folder:'M3 6h7l2 2h9v12H3V6Z',terminal:'M3 4h18v13H3V4Zm5 17h8m-4-4v4'});
-$('.shelf-project svg path')?.setAttribute('d',iconPaths.folder);
-$('.composer-device svg path')?.setAttribute('d',iconPaths.terminal);
 // Reuse the actual controls and renderer so permissions and streaming keep one state owner.
 const dialogueContext=elem('span','chat-context','本地工作空间');
 

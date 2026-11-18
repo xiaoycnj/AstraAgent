@@ -18,6 +18,13 @@
   --ui-card-radius: 12px;
   --ui-dialog-radius: 20px;
   --ui-panel-gap: 16px;
+  --ui-section-inset: 20px;
+  --ui-setting-hit: 36px;
+  --ui-switch-width: 40px;
+  --ui-switch-track-height: 22px;
+  --ui-switch-inset: 4px;
+  --ui-switch-thumb: 14px;
+  --ui-switch-offset: calc(var(--ui-switch-width) - 2 * var(--ui-switch-inset) - var(--ui-switch-thumb));
   --ui-page-inset: clamp(24px, 4vw, 64px);
   --ui-page-width: 1120px;
   --ui-reading-width: 920px;
@@ -49,5 +56,7 @@
 @media (pointer: coarse) {
   :root {
     --ui-control-height: 40px;
+    --ui-setting-hit: 44px;
+    --ui-switch-width: 44px;
   }
 }

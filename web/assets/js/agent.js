@@ -38,19 +38,66 @@ function handleAgentEvent(sid,event){if(state.session?.id!==sid)return;if(event.
 async function refreshTaskRecords(){const sid=state.session?.id;if(!sid){taskPanel.hidden=true;return}const runs=await api('/api/sessions/'+sid+'/runs');if(state.session?.id!==sid)return;state.sessionRuns=runs;renderRunSummaries?.();if(runs[0]){currentTaskEvents=runs[0].events;drawTaskEvents(currentTaskEvents,runs[0].status)}else taskPanel.hidden=true}
 const previousOpenSession=openSession;openSession=async function(session){await previousOpenSession(session);await refreshTaskRecords()};const previousStreamChat=streamChat;streamChat=async function(sid,content){try{return await previousStreamChat(sid,content)}finally{await refreshTaskRecords().catch(()=>{})}};const previousNewSession=newSession;newSession=async function(){await previousNewSession();taskPanel.hidden=true};
 studioReady.then(async()=>{await reloadCapabilities();$('#skill-select').onchange=()=>{showSkillEditor();saveRuntime()}}).catch(e=>toast(e.message));refreshTaskRecords().catch(()=>{});
-// Slash Skills and @ plugins: one query at the start of an otherwise empty composer.
+// Inline Skill and plugin references at the current caret.
 const commandInput=$('#chat-input');const commandMenu=elem('section','command-menu');commandMenu.id='composer-command-menu';commandMenu.hidden=true;commandMenu.setAttribute('aria-label','快捷能力选择');const commandTitle=elem('div','command-menu-title');const commandList=elem('div','command-list');commandList.setAttribute('role','listbox');commandList.id='composer-command-options';commandMenu.append(commandTitle,commandList);$('#chat-form').before(commandMenu);commandInput.setAttribute('aria-controls',commandList.id);commandInput.setAttribute('aria-autocomplete','list');commandInput.setAttribute('aria-expanded','false');let commandRows=[],commandIndex=0,commandSignature='',commandSuppressed=null,commandFetch=0;
 function hideCommands(){commandMenu.hidden=true;commandInput.setAttribute('aria-expanded','false');commandInput.removeAttribute('aria-activedescendant')}
-function commandQuery(){const raw=commandInput.value,text=raw.trimStart();if(!/^[\/@][^\n]*$/.test(text)||commandInput.selectionStart!==raw.length||commandInput.selectionEnd!==raw.length)return null;return {type:text[0],query:text.slice(1).trim()}}
+function commandQuery() {
+    const {value, selectionStart: end, selectionEnd} = commandInput;
+    if (end !== selectionEnd) return null;
+    const before = value.slice(0, end);
+    const match = /([@/])([\w\p{L}\p{N}-]*)$/u.exec(before);
+    if (!match) return null;
+    const start = match.index, type = match[1];
+    // Ignore completed references, URLs, email addresses and common file paths.
+    if (/[\w@/:\\[]/.test(value[start - 1] || '') || /[/.]/.test(value[end] || '')) return null;
+    return {type, query: match[2], start, end};
+}
 function fuzzyCommandMatch(query,entry){const normalize=s=>s.toLocaleLowerCase().replace(/[\s_\-]/g,'');const needle=normalize(query);if(!needle)return true;const haystack=normalize(entry.name+' '+entry.id+' '+(entry.description||''));let index=0;for(const char of haystack){if(char===needle[index])index++;if(index===needle.length)return true}return false}
-function getCommandEntries(type){if(type==='/')return Object.entries(capabilityCatalog.skills).map(([id,skill])=>({id,name:skill.name,description:skill.prompt.split('\n')[0],icon:'review',type:'skill',skill:id}));return capabilityCatalog.plugins.map(plugin=>({...plugin,type:'plugin',icon:'tools',description:(plugin.description||'')+(plugin.enabled?'':' · 未启用，选择后前往设置启用')}))}
+function getCommandEntries(type) {
+    if (type === '/') return Object.entries(capabilityCatalog.skills).map(([id, skill]) => ({
+        id, name: skill.name, description: skill.prompt.split('\n')[0], icon: 'review', type: 'skill',
+    }));
+    return capabilityCatalog.plugins.map(plugin => ({
+        ...plugin, type: 'plugin', icon: 'tools',
+        description: (plugin.description || '') + (plugin.enabled ? '' : ' · 需先在设置中启用'),
+    }));
+}
 function highlightCommand(index){commandIndex=index;[...commandList.children].forEach((row,i)=>{row.classList.toggle('active',i===index);row.setAttribute('aria-selected',String(i===index))});const row=commandList.children[index];if(row){commandInput.setAttribute('aria-activedescendant',row.id);row.scrollIntoView({block:'nearest'})}}
 function renderCommands(){const query=commandQuery();if(!query||commandSuppressed===commandInput.value){hideCommands();return}const entries=getCommandEntries(query.type).filter(entry=>fuzzyCommandMatch(query.query,entry));if(!entries.length){hideCommands();return}const signature=query.type+'|'+query.query+'|'+entries.map(e=>e.id+e.name+e.enabled).join('|');commandRows=entries;if(signature!==commandSignature){commandSignature=signature;commandIndex=0;commandList.replaceChildren();for(const [index,entry] of entries.entries()){const row=elem('div','command-option');row.id='command-option-'+index;row.setAttribute('role','option');row.append(svgIcon(entry.icon),elem('strong','',entry.name),elem('span','',entry.description||''));row.addEventListener('pointerdown',e=>e.preventDefault());row.onclick=()=>chooseCommand(index);row.onpointermove=()=>highlightCommand(index);commandList.append(row)}}commandTitle.textContent=query.type==='/'?'Skills · 选择任务角色':'插件';commandMenu.hidden=false;commandInput.setAttribute('aria-expanded','true');highlightCommand(commandIndex)}
 async function refreshCommandCatalog(){const generation=++commandFetch;try{const result=await api('/api/capabilities');if(generation!==commandFetch)return;capabilityCatalog=result;renderCommands()}catch(e){hideCommands();toast(e.message)}}
-function chooseCommand(index){const entry=commandRows[index];if(!entry)return;if(entry.type==='plugin'){if(!entry.enabled){hideCommands();showSettings();selectSettingsTab('capabilities');pluginSection.scrollIntoView({block:'start',behavior:'smooth'});toast('请先在设置中启用此插件');return}const found=Object.entries(capabilityCatalog.skills).find(([id,skill])=>skill.source==='plugin:'+entry.id);if(!found){hideCommands();toast('此插件尚未提供可用于对话的 Skill');return}entry.skill=found[0]}
-const skill=capabilityCatalog.skills[entry.skill];if(!skill)return;if(![...$('#skill-select').options].some(o=>o.value===entry.skill))$('#skill-select').append(new Option(skill.name,entry.skill));$('#skill-select').value=entry.skill;$('#skill-select').dispatchEvent(new Event('change',{bubbles:true}));$('#skill-select')._refresh?.();commandInput.value='';commandSignature='';commandSuppressed=null;hideCommands();syncCommandBadge();commandInput.focus();toast('已选择 '+entry.name)}
-commandInput.addEventListener('input',()=>{if(commandSuppressed!==commandInput.value)commandSuppressed=null;renderCommands();if(commandQuery()&&commandInput.value.length===1)refreshCommandCatalog()});commandInput.addEventListener('click',renderCommands);commandInput.addEventListener('keyup',e=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key))renderCommands()});commandInput.addEventListener('compositionend',renderCommands);
-commandInput.addEventListener('keydown',e=>{if(e.isComposing||commandMenu.hidden)return;if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();e.stopImmediatePropagation();highlightCommand((commandIndex+(e.key==='ArrowDown'?1:-1)+commandRows.length)%commandRows.length)}else if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();e.stopImmediatePropagation();chooseCommand(commandIndex)}else if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();commandSuppressed=commandInput.value;hideCommands()}else if(e.key==='Tab'){hideCommands()}},{capture:true});
+function chooseCommand(index) {
+    const entry = commandRows[index], query = commandQuery();
+    if (!entry || !query) return;
+    if (entry.type === 'plugin' && (!entry.supported || !entry.enabled)) {
+        toast(entry.supported ? '请先在设置中启用此插件' : '此插件的工具适配器暂不可用');
+        return;
+    }
+    const entries = getCommandEntries(query.type);
+    const folded = entry.name.toLowerCase();
+    const sameName = entries.filter(item => item.name.toLowerCase() === folded);
+    const idCollision = entries.some(item => item.id !== entry.id && item.id.toLowerCase() === folded);
+    const label = sameName.length === 1 && !idCollision && !/[\r\n\[\]]/.test(entry.name) ? entry.name : entry.id;
+    const tag = '[' + query.type + label + ']';
+    commandInput.focus();
+    commandInput.setSelectionRange(query.start, query.end);
+    if (!document.execCommand('insertText', false, tag)) {
+        commandInput.setRangeText(tag, query.start, query.end, 'end');
+        commandInput.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+    hideCommands();
+}
+commandInput.addEventListener('input', event => {
+    if (event.isComposing) {hideCommands(); return;}
+    if (commandSuppressed !== commandInput.value) commandSuppressed = null;
+    renderCommands();
+    if (commandQuery()?.query === '') refreshCommandCatalog();
+});
+commandInput.addEventListener('click', renderCommands);
+commandInput.addEventListener('keyup', event => {
+    if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) renderCommands();
+});
+commandInput.addEventListener('compositionend', renderCommands);
+commandInput.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229||commandMenu.hidden)return;if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();e.stopImmediatePropagation();highlightCommand((commandIndex+(e.key==='ArrowDown'?1:-1)+commandRows.length)%commandRows.length)}else if((e.key==='Enter'&&!e.shiftKey)||e.key==='Tab'&&!e.shiftKey){e.preventDefault();e.stopImmediatePropagation();chooseCommand(commandIndex)}else if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();commandSuppressed=commandInput.value;hideCommands()}else if(e.key==='Tab'){hideCommands()}},{capture:true});
 document.addEventListener('pointerdown',e=>{if(!commandMenu.contains(e.target)&&e.target!==commandInput)hideCommands()});$('#chat-form').addEventListener('submit',hideCommands);$('#settings-open').addEventListener('click',hideCommands);$('#canvas-tab').addEventListener('click',hideCommands);
 const commandBadge=elem('div','command-badge');commandBadge.hidden=true;const commandBadgeName=elem('span');const commandBadgeRemove=elem('button');commandBadgeRemove.type='button';commandBadgeRemove.setAttribute('aria-label','清除所选 Skill');commandBadgeRemove.append(svgIcon('close'));commandBadge.append(commandBadgeName,commandBadgeRemove);$('#chat-form').prepend(commandBadge);function syncCommandBadge(){const id=$('#skill-select').value,skill=capabilityCatalog.skills[id];commandBadge.hidden=!skill||id==='general';if(skill)commandBadgeName.textContent=(skill.source?.startsWith('plugin:')?'@ ':'/ ')+skill.name}commandBadgeRemove.onclick=()=>{$('#skill-select').value='general';$('#skill-select').dispatchEvent(new Event('change',{bubbles:true}));syncCommandBadge()};$('#skill-select').addEventListener('change',syncCommandBadge);studioReady.then(()=>setTimeout(syncCommandBadge,0));
 

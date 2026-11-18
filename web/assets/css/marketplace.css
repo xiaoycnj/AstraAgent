@@ -1,3 +1,7 @@
+.extension-recovery { max-width: 48rem; padding-block: 1rem; overflow-wrap: anywhere; }
+.extension-recovery h2 { margin-block: 0 .75rem; }
+.extension-recovery-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding-block: .5rem; border-bottom: 1px solid var(--line); }
+.extension-recovery > button { margin-block: .5rem 1rem; }
 .market-intro {
   padding: 28px 0 32px;
   border-bottom: 1px solid var(--line);
@@ -74,8 +78,8 @@
   border-radius: 16px;
   display: grid;
   place-items: center;
-  color: #b294ff;
-  background: linear-gradient(135deg, #8c6bea28, #3ec9cd22);
+  color: var(--ink);
+  background: var(--ui-control-surface);
 }
 .market-glyph svg {
   width: 30px;

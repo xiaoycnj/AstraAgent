@@ -36,6 +36,7 @@
 @import url("marketplace.css") layer(legacy);
 @import url("media-models.css") layer(legacy);
 @import url("design-system.css") layer(legacy);
+@import url("../startup/light-rainbow.css") layer(tokens);
 @import url("ui/tokens.css") layer(tokens);
 @import url("ui/components.css") layer(components);
 @import url("ui/layout.css") layer(layout);
@@ -46,7 +47,10 @@
 
 @import url("rich-chat.css") layer(layout);
 
+@import url("ui/anthropic-font.css") layer(skins);
 @import url("theme-styles.css") layer(skins);
+@import url("ui/theme-fluent3.css") layer(skins);
+@import url("ui/theme-zhufeng.css") layer(skins);
 @import url("personalization.css") layer(skins);
 
 @import url("performance.css") layer(layout);
@@ -59,3 +63,9 @@
 @import url("conversation-modes.css") layer(layout);
 
 @import url("ui/motion.css") layer(motion);
+@import url("ui/image-preview.css") layer(layout);
+@import url("ui/image-candidates.css") layer(layout);
+@import url("ui/chat-branches.css") layer(layout);
+@import url("ui/chat-surface.css") layer(layout);
+@import url("ui/workspace-refinement.css") layer(layout);
+@import url("first-run.css") layer(layout);

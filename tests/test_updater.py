@@ -35,4 +35,18 @@ class UpdateTests(unittest.TestCase):
    p=Path(t)/'bad.zip'
    with zipfile.ZipFile(p,'w') as z:z.writestr('AstraAgent/../escape','x')
    with zipfile.ZipFile(p) as z,self.assertRaises(ValueError):updater.checked_members(z)
+ def test_worker_stages_self_contained_window(self):
+  with tempfile.TemporaryDirectory() as t:
+   folder = Path(t)
+   with patch.object(updater.tempfile, 'mkdtemp', return_value=t), \
+        patch.object(updater.shutil, 'copytree'), \
+        patch.object(updater.subprocess, 'Popen') as popen:
+    popen.return_value.pid = 123
+    updater.launch(folder / 'data', 42)
+   for relative in ('web/assets/startup/update.html', 'web/assets/startup/window.css',
+                    'web/assets/startup/light-rainbow.css', 'web/assets/startup/window.js', 'web/assets/startup/astra.svg',
+                    'web/assets/icons/brand/astra.ico'):
+    self.assertEqual((folder / relative).read_bytes(), (updater.ROOT / relative).read_bytes(), relative)
+   self.assertIn('src="astra.svg"', (folder / 'web/assets/startup/update.html').read_text(encoding='utf-8'))
+   self.assertEqual(popen.call_args.kwargs['cwd'], folder)
 if __name__=='__main__':unittest.main()

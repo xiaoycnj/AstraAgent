@@ -8,6 +8,33 @@ def valid_id(value):
     if not isinstance(value,str) or not re.fullmatch(r'[a-z][a-z0-9_-]{0,63}',value): raise ValueError('ID 仅支持小写字母、数字、下划线和短横线。')
     return value
 
+def read_manifest(path):
+    if path.stat().st_size > 100000:
+        raise ValueError('插件清单过大')
+    m = json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(m, dict) or valid_id(m.get('id')) != path.parent.name or type(m.get('schema_version')) is not int or m['schema_version'] not in (1, 2):
+        raise ValueError('插件 ID 或版本无效')
+    if m['schema_version'] == 2:
+        import application_plugins
+        return application_plugins.validate(m)
+    if not isinstance(m.get('name'), str) or not m['name'].strip():
+        raise ValueError('插件名称无效')
+    for field in ('tools', 'permissions'):
+        if not isinstance(m.get(field, []), list) or not all(isinstance(v, str) for v in m.get(field, [])):
+            raise ValueError('插件字段无效：' + field)
+    if m.get('hooks') or m.get('panels') or not isinstance(m.get('skills', []), list):
+        raise ValueError('插件贡献格式无效')
+    ids = set()
+    for item in m.get('skills', []):
+        if not isinstance(item, dict) or not isinstance(item.get('prompt'), str) or not 0 < len(item['prompt']) <= 12000 or not isinstance(item.get('name'), str):
+            raise ValueError('插件 Skill 无效')
+        ident = valid_id(item.get('id'))
+        if ident in ids:
+            raise ValueError('插件 Skill ID 重复')
+        ids.add(ident)
+    return m
+
+
 def catalog(root,data,include_disabled=False):
     skills={};errors=[];plugins=[]
     disabled_path=data/"skill-settings.json"
@@ -23,17 +50,21 @@ def catalog(root,data,include_disabled=False):
             if not active and not include_disabled:continue
             skills[key]={'enabled':active,'name':title[2:].strip(),'prompt':prompt.strip(),'source':'skills/'+key+'/SKILL.md','editable':True}
         except (ValueError,OSError) as e: errors.append(str(path.name)+': '+str(e))
+    import extension_safety
+    if extension_safety.status(data)['active']:
+        return {'skills':skills,'plugins':[],'errors':errors}
     state_path=data/'extensions.json'
     try: enabled=json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {}
-    except (ValueError,OSError): enabled={};errors.append('插件状态无法读取')
+    except (ValueError,OSError,RecursionError):
+        enabled=None
+    if not isinstance(enabled, dict) or any(type(v) is not bool for v in enabled.values()):
+        reason=extension_safety.latch(data, '检查损坏的 extensions.json。')['reason']
+        return {'skills':skills,'plugins':[],'errors':errors+[reason]}
+    core_skills = skills.copy()
     for path in sorted((root/'plugins').glob('*/manifest.json')):
         try:
             if not path.resolve().is_relative_to((root/'plugins').resolve()) or path.stat().st_size>100000: raise ValueError('插件路径或大小无效')
-            m=json.loads(path.read_text(encoding='utf-8'));pid=valid_id(m['id'])
-            if m.get('schema_version') not in (1,2) or not isinstance(m.get('name'),str): raise ValueError('插件版本或名称无效')
-            if m.get('schema_version')==2:
-                import application_plugins
-                m=application_plugins.validate(m)
+            m=read_manifest(path);pid=m['id']
             contributions={}
             for item in m.get('skills',[]):
                 sid=pid+'__'+valid_id(item['id']);prompt=item['prompt'];name=item['name']
@@ -44,7 +75,10 @@ def catalog(root,data,include_disabled=False):
             active=enabled.get(pid,builtin) and supported
             plugins.append({'id':pid,'name':m['name'],'version':m.get('version','1.0'),'description':m.get('description',''),'enabled':active,'supported':supported,'skills':len(contributions),'permissions':m.get('permissions',[]),'tools':agent_hub.PLUGINS[pid][1] if builtin else [],'builtin':builtin,'hooks':m.get('hooks',[]),'panels':m.get('panels',[])})
             if active or (include_disabled and supported): skills.update(contributions)
-        except (KeyError,ValueError,TypeError,OSError) as e: errors.append(path.parent.name+': '+str(e))
+        except (KeyError,ValueError,TypeError,OSError,RecursionError):
+            label = path.parent.name if re.fullmatch(r'[a-z][a-z0-9_-]{0,63}',path.parent.name) else '?'
+            reason=extension_safety.latch(data, '检查损坏的 plugins/'+label+'/manifest.json。')['reason']
+            return {'skills':core_skills,'plugins':[],'errors':errors+[reason]}
     return {'skills':skills,'plugins':plugins,'errors':errors}
 
 def save_skill(root,key,body):

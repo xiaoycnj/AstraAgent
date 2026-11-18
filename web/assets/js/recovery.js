@@ -46,7 +46,9 @@ async function resumeExecution(row){
   const result=await api(`/api/executions/${row.request_id}/resume`,'POST',{});
   const draft={role:'assistant',content:'',streaming:true};
   if(state.session?.id===sid){state.messages.push(draft);renderMessages();}
-  promise=consumeDurableStream(sid,row.request_id,null,text=>{draft.content+=text;if(state.session?.id===sid)renderMessages();},result.after);
+  promise=consumeDurableStream(sid,row.request_id,null,text=>{draft.content+=text;if(state.session?.id===sid)renderMessages();},result.after,event=>{
+    if(typeof updateInlineImageRun==='function'&&updateInlineImageRun(draft,event)&&state.session?.id===sid)renderMessages();
+   });
   activeStreams.set(sid,promise);streamKeys.set(sid,row.request_id);await promise;
  }catch(error){toast(error.message);}
  finally{

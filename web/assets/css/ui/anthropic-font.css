@@ -1,0 +1,7 @@
+@font-face {
+  font-family: "Astra Editorial Serif";
+  src: url("../../fonts/anthropic/noto-serif-sc.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+}

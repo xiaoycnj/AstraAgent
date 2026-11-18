@@ -30,7 +30,7 @@ async function navigatePage(page,{historyMode='push'}={}){
  for(const [id,label] of (page==='images'?[['image','全部图片'],['outputs','生成作品']]:[['all','全部'],['image','图像'],['document','文档'],['outputs','输出']])){const button=actionButton(label,()=>{libraryFilter=id;for(const child of destinationTabs.children)child.classList.toggle('active',child===button);renderAssetGrid()},'');button.classList.toggle('active',id===libraryFilter);destinationTabs.append(button)}
  destinationTabs.append(pageCounts);
  if(page==='images'){
-  const intro=elem('div','image-page-intro');intro.append(elem('h2','','让想法，有一个画面。'),elem('p','','通过对话调用生图插件，生成的作品会自动收录到资料库。'),actionButton('开始创作',async()=>{await railHome();$('#chat-input').value='请使用生图插件生成图片：';$('#chat-input').dispatchEvent(new Event('input',{bubbles:true}));$('#chat-input').focus()},'primary'));destinationBody.append(intro);
+  const intro=elem('div','image-page-intro');intro.append(elem('h2','','让想法，有一个画面。'),elem('p','','通过对话调用生图插件，生成的作品会自动收录到资料库。'),actionButton('开始创作',async()=>{const draft=$('#chat-input');if(draft.value.trim()&&!await appConfirm('保留当前草稿并开始创作？草稿不会被覆盖。'))return;if(!await railHome())return;if(!draft.value.trim()){draft.value='请使用生图插件生成图片：';draft.dispatchEvent(new Event('input',{bubbles:true}))}draft.focus()}));destinationBody.append(intro);
  }
  const grid=elem('div','asset-grid');grid.id='asset-grid';destinationBody.append(grid);await loadAssetPage(page,ticket);return true;
 }
@@ -40,15 +40,15 @@ async function loadAssetPage(page,ticket){const grid=$('#asset-grid');if(!grid)r
 }
 function renderAssetGrid(){const grid=$('#asset-grid');if(!grid)return;grid.replaceChildren();const query=assetSearch.value.trim().toLowerCase();
  const rows=libraryAssets.filter(item=>(appPage!=='images'||item.kind==='image')&&(!query||item.name.toLowerCase().includes(query))&&(libraryFilter==='all'||libraryFilter==='outputs'&&item.output||libraryFilter==='document'&&item.kind!=='image'||item.kind===libraryFilter));pageCounts.textContent=rows.length+' 项';
- for(const item of rows){const card=elem('article','asset-card');const preview=actionButton('',()=>item.kind==='image'?previewGeneratedImage(item):previewResource(item),'asset-preview');preview.setAttribute('aria-label','预览 '+item.name);
-  if(item.kind==='image'){const image=elem('img');image.src='/api/attachments/'+item.id+'/content';image.alt=item.name;image.loading='lazy';preview.append(image)}else preview.append(railIcon('review'),elem('span','asset-filetype',item.name.split('.').pop().toUpperCase()));
+ for(const item of rows){const card=elem('article','asset-card');const preview=actionButton('',event=>item.kind==='image'?previewGeneratedImage(item,event.currentTarget.querySelector('img')):previewResource(item),'asset-preview');preview.setAttribute('aria-label','预览 '+item.name);
+  if(item.kind==='image'){const image=elem('img');image.src='/api/attachments/'+item.id+'/content';image.alt=item.name;image.loading='lazy';preview.append(image)}else preview.append(svgIcon('note'),elem('span','asset-filetype',item.name.split('.').pop().toUpperCase()));
   const footer=elem('div','asset-caption');footer.append(elem('strong','',item.name),elem('small','',(item.output?'输出作品 · ':'')+Math.max(1,Math.round(item.size/1024))+' KB'));
   const download=elem('a','asset-download','下载');download.href='/api/attachments/'+item.id+'/content';download.download=item.name;footer.append(download);card.append(preview,footer);grid.append(card);
  }
  if(!rows.length)grid.append(elem('div','page-empty',query?'没有匹配的资料。':'这里还没有内容。上传附件或生成作品后，会显示在这里。'));
 }
 function openRailCollection(page){return navigatePage(page)}
-const originalRailHome=railHome;railHome=async function(){if(!await navigatePage('home'))return;await originalRailHome()};
+const originalRailHome=railHome;railHome=async function(){if(!await navigatePage('home'))return false;await originalRailHome();return true};
 const beforePageSession=openSession;openSession=async function(session){await beforePageSession(session);selectRail(appPage==='home'?'home':appPage)};
 const beforePageNewSession=newSession;newSession=async function(...args){if(appPage!=='home')await navigatePage('home');return beforePageNewSession(...args)};
 const beforePageSwitch=switchMode;switchMode=async function(mode){if(appPage!=='home'&&!await navigatePage('home'))return;return beforePageSwitch(mode)};

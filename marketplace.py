@@ -9,6 +9,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.parse import urlsplit
 import application_plugins
 import extensions
+import extension_safety
 LOCK = threading.RLock()
 SOURCE = 'https://raw.githubusercontent.com/xiaoycnj/AstraAgent/main/marketplace/catalog.json'
 
@@ -84,13 +85,18 @@ def read_catalog(path):
         result.append(normalized)
     return result
 
-def state(data):
+def raw_state(data):
     path = Path(data) / 'marketplace/state.json'
     if not path.exists():
         return {'installed': {}, 'active_skin': None}
     value = json.loads(path.read_text(encoding='utf-8'))
     if not isinstance(value, dict) or not isinstance(value.get('installed'), dict):
         raise ValueError('市场安装记录无效')
+    return value
+
+
+def state(data):
+    value = raw_state(data)
     for entry in value['installed'].values():
         package(entry)
     return value
@@ -102,7 +108,23 @@ def write_state(data, value):
     temporary.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
     temporary.replace(path)
 
+def recovery_inventory(data):
+    installed = {}
+    try:
+        keys = raw_state(data)['installed']
+    except (ValueError, OSError, RecursionError):
+        keys = {}
+    for key_name in keys:
+        match = re.fullmatch(r'(plugin|skin):([a-z][a-z0-9_-]{0,63})', key_name)
+        if match:
+            kind, ident = match.groups()
+            installed[key_name] = {'kind':kind, 'id':ident, 'name':ident}
+    return {'installed': installed, 'active_skin': None}
+
+
 def catalog(root, data):
+    if extension_safety.status(data)['active']:
+        return {'entries': [], 'source':'recovery', 'state': recovery_inventory(data)}
     cached = Path(data) / 'marketplace/catalog.json'
     path = cached if cached.exists() else Path(root) / 'marketplace/catalog.json'
     try:
@@ -113,6 +135,7 @@ def catalog(root, data):
     return {'entries': rows, 'source': 'online-cache' if path == cached else 'bundled', 'state': state(data)}
 
 def refresh(root, data):
+    extension_safety.require_normal(data)
     with build_opener(CatalogRedirect()).open(Request(SOURCE, headers={'User-Agent': 'AstraAgent-Marketplace'}), timeout=20) as response:
         raw = response.read(500001)
     if len(raw) > 500000:
@@ -144,8 +167,9 @@ def check_folder(root, path):
         current = current.parent
 
 def install(root, data, value):
-    entry = package(value)
     with LOCK, application_plugins.LOCK:
+        extension_safety.require_normal(data)
+        entry = package(value)
         saved = state(data)
         previous_switches = (Path(data) / 'extensions.json').read_bytes() if (Path(data) / 'extensions.json').exists() else None
         entry_key = key(entry)
@@ -193,6 +217,7 @@ def install_from_catalog(root, data, kind, ident, expected):
 
 def activate(data, ident):
     with LOCK:
+        extension_safety.require_normal(data)
         saved = state(data)
         if ident is not None and 'skin:' + str(ident) not in saved['installed']:
             raise ValueError('请先安装皮肤')
@@ -202,36 +227,42 @@ def activate(data, ident):
 
 def uninstall(root, data, kind, ident):
     with LOCK, application_plugins.LOCK:
-        saved = state(data)
-        previous_switches = (Path(data) / 'extensions.json').read_bytes() if (Path(data) / 'extensions.json').exists() else None
-        entry_key = str(kind) + ':' + str(ident)
-        if entry_key not in saved['installed']:
+        recovery = extension_safety.status(data)['active']
+        saved = raw_state(data) if recovery else state(data)
+        ident = extensions.valid_id(ident)
+        entry_key = str(kind) + ':' + ident
+        if kind not in ('plugin','skin') or entry_key not in saved['installed']:
             raise ValueError('此作品未由市场安装')
-        entry = saved['installed'][entry_key]
-        target = Path(root) / 'plugins' / entry['id']
+        switch_path = Path(data) / 'extensions.json'
+        previous_switches = switch_path.read_bytes() if not recovery and switch_path.exists() else None
+        # Do not derive paths from the untrusted, potentially broken receipt.
+        target = Path(root) / 'plugins' / ident
         backup = None
-        if entry['kind'] == 'plugin' and target.exists():
+        if kind == 'plugin' and target.exists():
             check_folder(Path(root) / 'plugins', target)
-            backup = Path(root) / 'plugins/.market-trash' / (entry['id'] + '-' + uuid.uuid4().hex)
+            backup = Path(root) / 'plugins/.market-trash' / (ident + '-' + uuid.uuid4().hex)
             check_folder(Path(root) / 'plugins', backup)
             backup.parent.mkdir(parents=True, exist_ok=True)
             try:
-                extensions.toggle_plugin(root, data, entry['id'], False)
+                if not recovery:
+                    extensions.toggle_plugin(root, data, ident, False)
                 target.rename(backup)
             except Exception:
-                restore_switches(data, previous_switches)
+                if not recovery:
+                    restore_switches(data, previous_switches)
                 raise
         del saved['installed'][entry_key]
-        if saved['active_skin'] == ident and kind == 'skin':
+        if saved.get('active_skin') == ident and kind == 'skin':
             saved['active_skin'] = None
         try:
             write_state(data, saved)
         except Exception:
-            restore_switches(data, previous_switches)
+            if not recovery:
+                restore_switches(data, previous_switches)
             if backup:
                 backup.rename(target)
             raise
-        return saved
+        return recovery_inventory(data) if recovery else saved
 
 def restore_switches(data, previous):
     path = Path(data) / 'extensions.json'

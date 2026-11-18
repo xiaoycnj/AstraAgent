@@ -49,14 +49,12 @@ const headerRows=[
     [headerOriginals.window,'window',false],
     [headerOriginals.project,'canvas',false],
     [headerArchive,'archive',true],
-    [headerOriginals.delete,'close',false],
+    [headerOriginals.delete,'trash',false],
 ];
-const headerPaths={pin:'m15 3 6 6-4 1-4 5-1 4-7-7 4-1 5-4 1-4ZM3 21l5-5',download:'M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4',window:'M3 3h18v18H3zM3 8h18',archive:'M3 3h18v5H3zM5 8v13h14V8M9 12h6'};
 for(const [button,name] of headerRows){
     const label=button.textContent;
     button.replaceChildren();
-    const icon=svgIcon(headerPaths[name]?'note':name);
-    if(headerPaths[name])icon.querySelector('path').setAttribute('d',headerPaths[name]);
+    const icon=svgIcon(name);
     button.append(icon,elem('span','',label));
     button.type='button';button.setAttribute('role','menuitem');
     button.addEventListener('click',closeHeaderMenu);

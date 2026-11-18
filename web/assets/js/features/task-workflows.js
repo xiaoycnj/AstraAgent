@@ -1,6 +1,6 @@
 // Project acceptance and isolation reuse the normal chat/permission workflow.
 (() => {
-  const isolation = elem('details', 'settings-group');
+  const isolation = elem('details', 'settings-disclosure workspace-disclosure');
   isolation.id = 'container-settings';
   const image = elem('input');
   image.id = 'container-image';
@@ -15,7 +15,6 @@
   network.type = 'checkbox';
   const networkRow = elem('label', 'switch-pill');
   networkRow.append(elem('span', '', '允许容器联网'), network);
-  upgradeSwitches(networkRow);
   const isolationStatus = elem('p', 'hint');
   isolationStatus.setAttribute('role', 'status');
   isolation.append(elem('summary', '', '隔离执行环境'),
@@ -75,9 +74,8 @@
   human.type = 'checkbox';
   human.id = 'evaluation-human';
   function toggle(label, input) {
-    const row = elem('label', 'switch-pill');
-    row.append(elem('span', '', label), input);
-    upgradeSwitches(row);
+    const row = elem('label', 'toggle-line');
+    row.append(input, elem('span', '', label));
     return row;
   }
   const advanced = elem('details', 'project-change');

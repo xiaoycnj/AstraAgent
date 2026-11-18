@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-shared-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python =
     process.env.ASTRA_TEST_PYTHON ||
     path.join(root, "runtimes/python/python.exe");
@@ -176,6 +178,82 @@ async function main() {
       return {controls:controls.length,missing:missing.map(node=>node.id||node.className||node.tagName)};
     });
     assert.deepEqual(audit.missing, [], JSON.stringify(audit));
+    const reading = await page.evaluate(async () => {
+      const theme = document.documentElement.dataset.theme;
+      document.body.classList.add('appearance-wallpaper', 'appearance-custom');
+      state.session = {id: 'reading-fixture'};
+      state.messages = [{id: 1, role: 'assistant', content: '可读正文和 `inline-code`'}];
+      renderMessages();
+      await new Promise(requestAnimationFrame);
+      const article = document.querySelector('#messages > .message');
+      const code = article.querySelector('code');
+      const range = document.createRange();
+      range.selectNodeContents(article.querySelector('.markdown'));
+      window.getSelection().addRange(range);
+      const results = ['light', 'dark'].map(theme => {
+        document.documentElement.dataset.theme = theme;
+        return [getComputedStyle(article).backgroundColor, ...[article.querySelector('p'), code].map(node => {
+          const style = getComputedStyle(node, '::selection');
+          return [style.color, style.backgroundColor];
+        })];
+      });
+      window.getSelection().removeAllRanges();
+      document.documentElement.dataset.theme = theme;
+      document.body.classList.remove('appearance-wallpaper', 'appearance-custom');
+      return results;
+    });
+    assert.deepEqual(reading, [
+      ['rgb(250, 251, 254)', ['rgb(37, 35, 55)', 'rgb(219, 205, 248)'], ['rgb(37, 35, 55)', 'rgb(219, 205, 248)']],
+      ['rgb(32, 38, 50)', ['rgb(245, 240, 250)', 'rgb(85, 65, 116)'], ['rgb(245, 240, 250)', 'rgb(85, 65, 116)']],
+    ]);
+    const spring = await page.evaluate(async () => {
+      const menu = document.querySelector('#conversation-menu');
+      const trigger = document.querySelector('#conversation-more');
+      getComputedStyle(menu).display;
+      trigger.click();
+      const entry = menu.getAnimations().find(animation => animation.transitionProperty === 'scale');
+      const frames = entry?.effect.getKeyframes();
+      const easing = entry?.effect.getTiming().easing;
+      await Promise.all(menu.getAnimations().map(animation => animation.finished));
+      menu.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+      const exit = getComputedStyle(menu);
+      const during = exit.display;
+      const inert = exit.interactivity;
+      menu.querySelector('button:not([hidden]):not(:disabled)')?.focus();
+      const focus = document.activeElement === trigger;
+      const final = Promise.all(menu.getAnimations().map(animation => animation.finished));
+      await final;
+      return {shape: frames?.[0].scale, easing, during, inert, focus, hidden: menu.hidden, display:getComputedStyle(menu).display};
+    });
+    assert.equal(spring.shape, '0.96 0.86');
+    assert.match(spring.easing, /linear\(.*1\.069/);
+    assert.equal(spring.inert, 'inert');
+    assert.equal(spring.focus, true);
+    assert.equal(spring.hidden, true);
+    assert.notEqual(spring.during, 'none');
+    assert.equal(spring.display, 'none');
+    const railSpring = await page.evaluate(async () => {
+      const el = document.querySelector('.rail-motion-marker');
+      const animate = () => el.getAnimations().find(a=>a.id==='astra-rail-spring');
+      const move = async name => { selectRail(name); await Promise.resolve(); };
+      await move('home');
+      if (animate()) await animate().finished;
+      await move('library');
+      const first = animate();
+      if (!first) return {missing: true};
+      first.currentTime = 86;
+      const y = () => parseFloat(getComputedStyle(el).translate.split(' ')[1]);
+      const before = y();
+      await move('images');
+      const second = animate();
+      const frames = second.effect.getKeyframes();
+      const start = parseFloat(frames[0].translate.split(' ')[1]);
+      const end = parseFloat(frames.at(-1).translate.split(' ')[1]);
+      const next = parseFloat(frames[1].translate.split(' ')[1]);
+      await second.finished;
+      return {delta:Math.abs(start-before), endDelta:Math.abs(end-y()), carry:next>start, stretch:frames.some(f=>parseFloat(f.scale.split(' ')[1])>1.08), oldCancelled:first.playState==='idle'};
+    });
+    assert.ok(railSpring.delta < 1 && railSpring.endDelta < 1 && railSpring.carry && railSpring.stretch && railSpring.oldCancelled, JSON.stringify(railSpring));
     const destinationEnter = await page.evaluate(async () => {
       const navigation = navigatePage('library');
       await new Promise(requestAnimationFrame);
@@ -213,8 +291,29 @@ async function main() {
     await page.evaluate(()=>{document.documentElement.dataset.motion='reduced'; selectSettingsTab('general');});
     await page.waitForTimeout(50);
     assert.equal(await page.evaluate(()=>document.getAnimations().filter(animation=>animation.id==='astra-enter').length),0);
-    await page.evaluate(()=>{document.documentElement.dataset.motion='full';});
+    await page.evaluate(async ()=>{document.documentElement.dataset.motion='full'; await closeSettingsPage();});
     await page.setViewportSize({width:390,height:844});
+    const mobilePane = await page.evaluate(async () => {
+      const pane = document.querySelector('#conversation-sidebar');
+      const main = document.querySelector('#app > main');
+      const frame = () => new Promise(requestAnimationFrame);
+      setConversationPane(false, false);
+      await frame();
+      await Promise.allSettled(pane.getAnimations().map(a=>a.finished));
+      const width = main.offsetWidth;
+      setConversationPane(true, false);
+      const slide = pane.getAnimations().find(a=>a.transitionProperty==='transform');
+      if (!slide) return {missing: true};
+      slide.currentTime = 95;
+      const x = () => new DOMMatrix(getComputedStyle(pane).transform).m41;
+      const before = x();
+      setConversationPane(false, false);
+      const after = x();
+      const inert = pane.inert;
+      await Promise.allSettled(pane.getAnimations().map(a=>a.finished));
+      return {before, delta: Math.abs(after-before), inert, sameWidth: width===main.offsetWidth, closed:getComputedStyle(pane).visibility==='hidden'};
+    });
+    assert.ok(mobilePane.before < -2 && mobilePane.delta < 3 && mobilePane.inert && mobilePane.sameWidth && mobilePane.closed, JSON.stringify(mobilePane));
     await page.screenshot({path:path.join(root,'work/motion-mobile.png')});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     console.log(JSON.stringify({scrolling,resize,inlineResize,hiddenReading,audit,reduced}));

@@ -64,4 +64,8 @@ def after_response(root,data,database,sid,message_id,emit):
             try:
                 with database() as db:attachments.save_output(db,data,sid,{'message_id':message_id})
                 emit({'type':'plugin','name':plugin['name'],'status':'complete'})
-            except Exception as error:emit({'type':'plugin','name':plugin['name'],'status':'error','message':str(error)[:200]})
+            except Exception:
+                import extension_safety
+                safety = extension_safety.latch(data, '插件 ' + plugin['id'] + ' 无法保存输出；检查后重试。')
+                emit({'type':'plugin','name':plugin['name'],'status':'error','message':safety['reason']})
+                return

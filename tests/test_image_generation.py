@@ -110,7 +110,7 @@ class ImageGeneration(unittest.TestCase):
             {"choices": [{"message": {"content": "完成"}}]},
         ]
 
-    def test_agent_approval_real_request_and_durable_output(self):
+    def test_generation_without_approval_makes_real_request_and_stores_output(self):
         events = []
         with patch.object(
             backend, "stream_upstream", side_effect=self.replies()
@@ -123,7 +123,7 @@ class ImageGeneration(unittest.TestCase):
                 ),
                 r"完成\s+!\[生成的图片\]\(/api/attachments/[a-f0-9]{32}/content\)",
             )
-        self.assertEqual(approve.call_count, 1)
+        approve.assert_not_called()
         self.assertEqual(ImageAPI.calls[0][0], "/v1/images/generations")
         self.assertEqual(ImageAPI.calls[0][2], "Bearer fixture-only")
         self.assertNotIn("response_format", ImageAPI.calls[0][1])
@@ -144,10 +144,12 @@ class ImageGeneration(unittest.TestCase):
     def test_denied_tool_never_calls_image_api(self):
         with patch.object(
             backend, "stream_upstream", side_effect=self.replies()
-        ), patch.object(backend, "approve_tool", return_value=False):
+        ), patch.object(backend, "approve_tool") as approve:
             backend.completion(
-                self.config(), [{"role": "user", "content": "拒绝"}], lambda e: None
+                {**self.config(), "access_policy": "deny"},
+                [{"role": "user", "content": "拒绝"}], lambda e: None
             )
+        approve.assert_not_called()
         self.assertEqual(ImageAPI.calls, [])
         with backend.database() as db:
             self.assertEqual(
@@ -291,7 +293,7 @@ class ImageGeneration(unittest.TestCase):
         }
         with patch.object(
             backend, "stream_upstream", side_effect=replies
-        ), patch.object(backend, "approve_tool", return_value=True):
+        ), patch.object(backend, "approve_tool", side_effect=AssertionError("unexpected edit approval")):
             self.assertRegex(
                 backend.completion(
                     {**config, "tools": ["image_gen"]},
@@ -331,6 +333,17 @@ class ImageGeneration(unittest.TestCase):
                     },
                 )
         self.assertEqual(ImageAPI.calls, [])
+
+    def test_only_image_tools_skip_prompt_in_attached_context(self):
+        args = {'file': 'a' * 32, 'mask': 'b' * 32}
+        config = {**self.config(), '_untrusted_context': True}
+        for name in ('image_gen', 'generate_image', 'list_image_models'):
+            for policy in ('ask', 'trusted', 'full', 'deny'):
+                with self.subTest(name=name, policy=policy):
+                    self.assertEqual(backend.runtime_engine.authorize(
+                        name, args, {**config, 'access_policy': policy}, None, None
+                    ), policy != 'deny')
+        self.assertFalse(backend.runtime_engine.authorize('calculator', {}, config, None, None))
 
     def test_image_model_discovery_hides_credentials(self):
         result = catalog.execute(
@@ -386,7 +399,7 @@ class ImageGeneration(unittest.TestCase):
             captured.append(json.loads(json.dumps(payload)))
             return replies.pop(0)
         config = {**self.config(), 'models': [{'id': 'mock', 'multimodal': True}]}
-        with patch.object(backend, 'stream_upstream', side_effect=upstream), patch.object(backend, 'approve_tool', return_value=True):
+        with patch.object(backend, 'stream_upstream', side_effect=upstream), patch.object(backend, 'approve_tool', side_effect=AssertionError('unexpected image approval')):
             answer = backend.completion(config, [{'role': 'user', 'content': '画两张星星'}], lambda e: None)
         messages = captured[-1]['messages']
         self.assertEqual([message['role'] for message in messages[-3:]], ['tool', 'tool', 'user'])
@@ -402,7 +415,7 @@ class ImageGeneration(unittest.TestCase):
         def upstream(config, payload, emit):
             captured.append(json.loads(json.dumps(payload)))
             return replies.pop(0)
-        with patch.object(backend, 'stream_upstream', side_effect=upstream), patch.object(backend, 'approve_tool', return_value=True):
+        with patch.object(backend, 'stream_upstream', side_effect=upstream), patch.object(backend, 'approve_tool', side_effect=AssertionError('unexpected image approval')):
             backend.completion({**self.config(), 'models': [{'id': 'mock', 'multimodal': False}]}, [{'role': 'user', 'content': '画图'}], lambda e: None)
         self.assertIn('尚未视觉检查', captured[-1]['messages'][-1]['content'])
         self.assertNotIn('data:image/', json.dumps(captured[-1]))
@@ -443,7 +456,7 @@ class ImageGeneration(unittest.TestCase):
                 output = json.loads(tool['content'])
                 return {'choices': [{'message': {'tool_calls': [{'id': 'edit-call', 'function': {'name': 'generate_image', 'arguments': json.dumps({'prompt': 'Make it larger', 'file': output['attachment']['id']})}}]}}]}
             return self.replies()[1]
-        with patch.object(backend, 'stream_upstream', side_effect=upstream), patch.object(backend, 'approve_tool', return_value=True):
+        with patch.object(backend, 'stream_upstream', side_effect=upstream), patch.object(backend, 'approve_tool', side_effect=AssertionError('unexpected image approval')):
             backend.completion({**self.config(), 'models': [{'id': 'mock', 'multimodal': True}]}, [{'role': 'user', 'content': '画完检查并改进'}], lambda e: None)
         self.assertEqual(len(ImageAPI.calls), 2)
         self.assertEqual(ImageAPI.calls[1][0], '/v1/images/edits')

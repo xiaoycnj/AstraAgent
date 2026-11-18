@@ -411,7 +411,7 @@
       "模型选择",
       "",
       async () => {
-        if (await navigatePage("home")) openReasoning();
+        if (await navigatePage("home")) openModelPicker();
       },
     ],
     ["模型服务商", "", () => settings("connection")],
@@ -422,6 +422,7 @@
     ["定时任务", "", () => navigatePage("schedule")],
     ["生图", "", () => navigatePage("images")],
     ["项目工作区", "", showProjectManager],
+    ["启动 OOBE 预览", "", () => previewFirstRun(returnFocus)],
     ["文件工作台", "", () => openWorkbench("files")],
     ["终端", "", () => openWorkbench("terminal")],
     [
@@ -481,7 +482,7 @@
     }
   }
   function openCommands() {
-    if (document.querySelector("dialog[open]")) return;
+    if (firstRunActive || document.querySelector("dialog[open]")) return;
     returnFocus = document.activeElement;
     search.value = "";
     selected = 0;
@@ -492,7 +493,7 @@
   palette.addEventListener(
     "close",
     () =>
-      returnFocus?.isConnected && returnFocus.focus({ preventScroll: true }),
+      !firstRunActive && returnFocus?.isConnected && returnFocus.focus({ preventScroll: true }),
   );
   search.oninput = () => {
     selected = 0;
@@ -527,7 +528,7 @@
     }
   });
   document.addEventListener("keydown", (event) => {
-    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (firstRunActive || !(event.ctrlKey || event.metaKey) || event.altKey) return;
     if (
       event.key.toLowerCase() === "k" ||
       (event.shiftKey && event.key.toLowerCase() === "p")
@@ -547,6 +548,6 @@
   );
   commandButton.setAttribute("aria-label", "命令面板");
   commandButton.title = "命令面板 · Ctrl+K";
-  commandButton.append(railIcon("search"));
+  commandButton.append(svgIcon("search"));
   titlebarDrag.before(commandButton);
 })();

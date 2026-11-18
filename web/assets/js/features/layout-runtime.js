@@ -119,7 +119,7 @@ function applyHomeLayout() {
     const entry = userLayout.shortcuts.find(item => item.id === id) || (layoutActions[id] && {label: uiText(layoutActions[id][0]), icon: id, action: id});
     if (!entry) continue;
     const button = actionButton('', () => runLayoutAction(entry), 'layout-home-shortcut secondary');
-    button.append(railIcon(entry.icon), elem('span', '', entry.label));
+    button.append(svgIcon(entry.icon), elem('span', '', entry.label));
     shortcuts.append(button);
   }
   const blocks = {greeting: title, hint: welcome.querySelector(':scope > p'), starters: welcome.querySelector('.starter-grid'), shortcuts};

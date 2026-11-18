@@ -16,10 +16,13 @@ function enhanceUiElement(element) {
     );
     if (element.matches(".custom-select")) element.classList.add("ui-picker");
   }
-  if (tag === "INPUT" && element.type === "checkbox" && !element.hasAttribute("data-native-checkbox")) {
+  if (tag === "INPUT" && element.type === "checkbox") {
+    const isSwitch = !element.hasAttribute("data-native-checkbox") &&
+      (element.getAttribute("role") === "switch" || !!element.closest("label.switch-pill"));
     element.classList.remove("ui-field");
-    element.classList.add("ui-switch");
-    element.setAttribute("role", "switch");
+    element.classList.toggle("ui-switch", isSwitch);
+    element.classList.toggle("ui-checkbox", !isSwitch);
+    if (isSwitch) element.setAttribute("role", "switch");
   } else if (element.matches("input,textarea,select")) {
     const excluded = element.matches(
       "#chat-input,[type=range],[type=color],[type=hidden],[type=radio],[type=submit],[type=button]",
@@ -34,7 +37,18 @@ function enhanceUiElement(element) {
     )
   )
     element.classList.add("ui-field-group");
-  if (tag === "SUMMARY") element.classList.add("ui-disclosure");
+  if (tag === "SUMMARY") {
+    element.classList.add("ui-disclosure");
+    const disclosure = element.parentElement;
+    if (disclosure?.matches("details.settings-disclosure") && element === disclosure.firstElementChild) {
+      let indicator = element.querySelector(":scope > .chevron");
+      if (!indicator) {
+        indicator = chevron();
+        element.append(indicator);
+      }
+      indicator.setAttribute("aria-hidden", "true");
+    }
+  }
   if (tag === "DIALOG") element.classList.add("ui-dialog");
   if (element.matches(".settings-group")) element.classList.add("ui-section");
   if (element.matches(".preference-row"))

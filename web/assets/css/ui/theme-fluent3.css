@@ -1,0 +1,417 @@
+/* Fluent 3 web preset. Mica's opaque base and inset content are represented by solid layers. */
+:root[data-ui-style="fluent3"] {
+  --preset-theme: #f3f3f3;
+  --preset-accent: #005fb8;
+  --f3-window: #f3f3f3;
+  --f3-content: #f9f9f9;
+  --f3-card: #fff;
+  --f3-hover: #ededed;
+  --f3-line: #e0e0e0;
+  --f3-control-edge: #8c8c8c;
+  --f3-ink: #1b1b1b;
+  --f3-muted: #555;
+  --f3-action-ink: #fff;
+  --f3-shadow: rgb(0 0 0 / .12);
+}
+
+:root[data-ui-style="fluent3"][data-theme="dark"] {
+  --preset-theme: #202020;
+  --preset-accent: #60cdff;
+  --f3-window: #202020;
+  --f3-content: #272727;
+  --f3-card: #303030;
+  --f3-hover: #3a3a3a;
+  --f3-line: #404040;
+  --f3-control-edge: #777;
+  --f3-ink: #f5f5f5;
+  --f3-muted: #bcbcbc;
+  --f3-action-ink: #071e28;
+  --f3-shadow: rgb(0 0 0 / .34);
+}
+
+:where(:root[data-ui-style="fluent3"]:not(:has(body.market-skin))) {
+  --surface: var(--f3-content);
+  --surface-reading: var(--f3-content);
+  --surface-input: var(--f3-card);
+  --text-primary: var(--f3-ink);
+  --text-secondary: var(--f3-muted);
+  --line: var(--f3-line);
+  --soft: var(--f3-hover);
+  --control-border: var(--f3-control-edge);
+  --ui-chrome-surface: color-mix(in srgb, var(--f3-window) 82%, var(--theme-color));
+  --ui-pane-surface: var(--f3-content);
+  --ui-panel-surface: var(--f3-card);
+  --ui-control-surface: var(--f3-card);
+  --ui-control-hover: var(--f3-hover);
+  --ui-divider: var(--f3-line);
+  --ui-shadow: 0 8px 28px var(--f3-shadow);
+  --ui-subtle-shadow: 0 1px 2px rgb(0 0 0 / .06);
+  --ui-control-radius: 4px;
+  --ui-card-radius: 8px;
+  --ui-dialog-radius: 8px;
+  --glass-reading: var(--f3-card);
+  --glass-fill: var(--f3-content);
+  --glass-inner: var(--f3-hover);
+  --glass-edge: var(--f3-line);
+  --glass-shadow: var(--f3-shadow);
+  --glass-sheen: transparent;
+  accent-color: var(--blue);
+}
+
+:where(:root[data-ui-style="fluent3"]:not([data-custom-colors], :has(body.market-skin))) {
+  --focus-color: var(--preset-accent);
+  --selection-surface: color-mix(in srgb, var(--preset-accent) 25%, var(--f3-card));
+  --selection-ink: var(--f3-ink);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin) {
+  --ink: var(--f3-ink);
+  --muted: var(--f3-muted);
+  --ui-selected: color-mix(in srgb, var(--blue) 9%, var(--ui-control-surface));
+  --f3-settings-inset: clamp(24px, 3.5vw, 52px);
+  --f3-settings-measure: 880px;
+}
+
+:where(:root[data-ui-style="fluent3"]:not([data-custom-colors])) body:not(.market-skin, [data-appearance-accent="true"]) {
+  --action-ink: var(--f3-action-ink);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper) {
+  background: var(--ui-chrome-surface);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper)::before,
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper)::after {
+  display: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper) :is(.custom-titlebar, .desktop-menubar, .app-rail, #conversation-sidebar, .settings-nav) {
+  background: var(--ui-chrome-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper) :is(#app > main, .topbar, .settings-main, .settings-view) {
+  background: var(--ui-pane-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* The legacy glass material reads --glass-fill on the category pane. */
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin, .appearance-wallpaper) .settings-nav {
+  --glass-fill: var(--ui-chrome-surface);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper) .settings-view::before,
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-wallpaper) :is(.settings-view, .app-rail.glass-surface, #conversation-sidebar.glass-surface, .topbar.glass-surface)::after {
+  display: none;
+}
+
+/* NavigationView-inspired Left pane, with the existing icon rail as LeftCompact. */
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin) #app > main {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .app-rail {
+  border-inline-end: 0;
+  padding-block: 8px;
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .layout-navigation-custom) .app-rail .rail-button {
+  border-radius: 4px;
+  transform: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .layout-navigation-custom) .app-rail .rail-button.active::before {
+  inset-inline-start: 0;
+  inset-block: 50% auto;
+  width: 3px;
+  height: 16px;
+  transform: translateY(-50%);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin) .rail-menu {
+  border-radius: 8px;
+  background: var(--glass-reading);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: var(--ui-shadow);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin) .rail-menu .rail-menu-item {
+  border-radius: 4px;
+}
+
+@media (min-width: 1180px) {
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) {
+    --nav-rail: 174px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) :is(.rail-top, .rail-bottom) {
+    width: 100%;
+    padding-inline: 8px;
+    align-items: stretch;
+    gap: 3px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .app-rail .rail-button {
+    display: flex;
+    justify-content: flex-start;
+    gap: 12px;
+    width: 100%;
+    padding-inline: 12px;
+    font-size: 14px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .app-rail .rail-button.active {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .app-rail .rail-tooltip {
+    position: static;
+    display: block;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .app-rail .rail-tooltip::before {
+    display: none;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .app-rail .rail-divider {
+    width: auto;
+    margin: 7px 4px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) .rail-menu {
+    left: calc(var(--nav-rail) + 4px);
+    top: calc(var(--titlebar-height, 38px) + 120px);
+  }
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin) .topbar {
+  height: 44px;
+  min-height: 44px;
+  border-radius: 0;
+  border-block-end: 1px solid var(--ui-divider);
+  box-shadow: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin) #conversation-sidebar {
+  border-inline-end: 0;
+  box-shadow: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin) #conversation-sidebar :is(.list-item, #new-item) {
+  border-radius: 4px;
+}
+
+/* Align the greeting, quick actions, conversation and entry point on one reading column. */
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view {
+  --chat-measure: min(744px, var(--ui-reading-width));
+  --chat-inset: clamp(18px, 3.1vw, 48px);
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome {
+  width: 100%;
+  padding-block: 20px;
+  text-align: start;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome-mark {
+  width: 44px;
+  height: 44px;
+  margin: 0 0 16px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome > :is(h1, p) {
+  text-align: start;
+  margin-inline: 0;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome > h1 {
+  display: block;
+  margin-block: 6px 8px;
+  font-size: clamp(26px, 3.25vw, 42px);
+  font-weight: 600;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome > p {
+  max-width: 56ch;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome .starter-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 144px), 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 24px 0 0;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome .starter-card {
+  min-height: 52px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome .layout-home-edit {
+  margin-inline: 0;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, .appearance-custom, [data-skin-layout="compact"]) #chat-view #chat-form {
+  border-radius: 8px;
+  border-color: var(--control-border);
+  box-shadow: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, .appearance-custom, [data-skin-layout="compact"]) #chat-view #chat-form:focus-within {
+  box-shadow: inset 0 -2px var(--blue);
+}
+
+:where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active) #chat-view .composer-tools :is(#send, #stop-generation) {
+  border-radius: 4px;
+}
+
+:where(:root[data-ui-style="fluent3"]:not([data-custom-colors])) body:not(.market-skin, [data-appearance-accent="true"]) #send {
+  color: var(--action-ink);
+}
+
+:where(:root[data-ui-style="fluent3"]) body:not(.market-skin, .appearance-custom) #chat-view #messages > .message.user > :is(.markdown, .chat-message-edit) {
+  border-radius: 8px;
+}
+
+/* One content surface with a category pane and a common header/section measure. */
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-nav {
+  padding: 16px 10px;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-nav :is(.settings-category-link, .ui-button[data-settings-group]) {
+  position: relative;
+  border-radius: 4px;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-nav :is(.settings-category-link, .ui-button[data-settings-group])[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--blue);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-page-header {
+  min-height: 0;
+  padding: 24px var(--f3-settings-inset) 0;
+  gap: 8px 12px;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-page-header h1 {
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 600;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-main > .settings-content {
+  padding: 20px var(--f3-settings-inset) 36px;
+  background: transparent;
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) :is(.settings-page-header h1, .settings-subnav, .settings-content > [data-panel]) {
+  max-width: var(--f3-settings-measure);
+}
+
+:where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-content .settings-group.ui-section {
+  margin-block: 0 12px;
+  padding: 16px clamp(12px, 2vw, 20px);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+@media (min-width: 681px) {
+  :where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) #settings .settings-layout {
+    grid-template-columns: clamp(174px, 19vw, 232px) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin) #app > main {
+    border-radius: 0;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .appearance-wallpaper) #conversation-sidebar {
+    border-inline-end: 1px solid var(--ui-divider);
+    box-shadow: var(--ui-shadow);
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .appearance-wallpaper) .pane-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-navigation-custom) :is(#conversation-sidebar, .pane-backdrop) {
+    left: var(--nav-rail);
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view {
+    --chat-inset: 13px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome {
+    margin-block-start: 20px;
+  }
+}
+
+@media (max-width: 460px) {
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome .starter-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-block-start: 18px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.has-navigation-rail:not(.market-skin, .layout-home-active, [data-skin-layout="compact"]) #chat-view .welcome .starter-card {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 680px) {
+  :where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) {
+    --f3-settings-inset: 14px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-page-header {
+    padding-block-start: 14px;
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-page-header h1 {
+    font-size: clamp(19px, 4vw, 24px);
+  }
+
+  :where(:root[data-ui-style="fluent3"]) body.in-settings:not(.market-skin) .settings-main > .settings-content {
+    padding-block: 14px 28px;
+  }
+}
+
+@media (forced-colors: active) {
+  :where(:root[data-ui-style="fluent3"]) body:not(.market-skin) .settings-nav [aria-current="page"] {
+    outline: 1px solid Highlight;
+    outline-offset: -2px;
+  }
+}

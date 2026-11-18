@@ -13,7 +13,7 @@ function drawActivity(){
  activitySection('当前会话执行',state.sessionRuns||[],run=>activityRow((run.status==='running'?'执行中':'任务记录')+' · '+run.events.filter(e=>e.type==='tool').length+' 次工具调用',run.status,run.created,async()=>{taskPanel.hidden=false;drawTaskEvents(run.events,run.status)}));
  activitySection('工作空间进度',(activityHub.records||[]).filter(row=>row.kind==='task').slice(0,16),row=>activityRow(row.title,row.status,row.content,async()=>{hubView='task';hubDialog.showModal();await refreshHub()}));
  activitySection('子智能体',(activityHub.jobs||[]).slice(0,12),row=>activityRow(row.name,row.status,row.task,async()=>{const session=state.sessions.find(s=>s.id===row.session_id);if(session)await openSession(session);else{await refreshList();const fresh=state.sessions.find(s=>s.id===row.session_id);if(fresh)await openSession(fresh)}}));
- activitySection('交付物',activityOutputs,row=>{const card=activityRow(row.name,'done',row.kind,async()=>{if(row.kind==='image')previewGeneratedImage(row);else{resourcePanel.hidden=false;await refreshResources()}});if(row.kind==='image'){const image=elem('img','activity-thumbnail');image.src='/api/attachments/'+row.id+'/content';image.alt=row.name;image.loading='lazy';card.prepend(image)}return card});
+ activitySection('交付物',activityOutputs,row=>{const card=activityRow(row.name,'done',row.kind,async()=>{if(row.kind==='image')previewGeneratedImage(row,card.querySelector('img'));else{resourcePanel.hidden=false;await refreshResources()}});if(row.kind==='image'){const image=elem('img','activity-thumbnail');image.src='/api/attachments/'+row.id+'/content';image.alt=row.name;image.loading='lazy';card.prepend(image)}return card});
 }
 async function refreshActivity(){
  if(activityRail.hidden||document.hidden)return;

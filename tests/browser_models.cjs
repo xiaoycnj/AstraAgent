@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-design-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python = path.join(root, "runtimes/python/python.exe");
   const server = spawn(
     python,
@@ -54,7 +56,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         state.token &&
-        state.settings &&
+        state.onboarding.required === false &&
         document.querySelector(".command-launcher"),
     );
 

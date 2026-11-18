@@ -10,6 +10,8 @@ async function main() {
   const root = path.resolve(__dirname, "..");
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "astra-design-ui-"));
   const data = path.join(folder, "data");
+  fs.mkdirSync(data, {recursive: true});
+  fs.writeFileSync(path.join(data, 'settings.json'), '{}');
   const python = path.join(root, "runtimes/python/python.exe");
   const server = spawn(
     python,
@@ -57,7 +59,31 @@ async function main() {
         state.settings &&
         document.querySelector(".command-launcher"),
     );
+    await page.evaluate(async () => {
+      await navigatePage("home");
+      await newSession();
+    });
+    const welcome = page.locator("#messages .welcome");
+    await welcome.waitFor();
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => applyTheme(theme), theme);
+      await page.screenshot({path: path.join(root, `work/workspace-${theme}.png`)});
+    }
+    await page.setViewportSize({width: 390, height: 844});
+    const starters = welcome.locator(".starter-card");
+    await starters.first().waitFor();
+    const boxes = await starters.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().toJSON()));
+    assert.equal(boxes.length, 3);
+    assert.ok(boxes.every((box, i) => box.height >= 42 && (!i || box.top >= boxes[i - 1].bottom)));
+    await page.screenshot({path: path.join(root, "work/workspace-mobile.png")});
+    await starters.first().focus();
+    await page.keyboard.press("Enter");
+    assert.match(await page.locator("#chat-input").inputValue(), /梳理这个项目/);
+    assert.equal(await page.locator("#chat-input").evaluate(node => document.activeElement === node), true);
+    await page.locator("#chat-input").fill("");
+    await page.setViewportSize({width: 1440, height: 1000});
     await page.evaluate(() => {
+      applyTheme("light");
       showSettings();
       selectSettingsTab("connection");
     });

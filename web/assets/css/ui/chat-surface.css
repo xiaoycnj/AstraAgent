@@ -1,0 +1,178 @@
+/* Keep the scroll column, entry controls and message anatomy in one layout. */
+#chat-view {
+  --chat-measure: min(780px, var(--ui-reading-width));
+  --chat-inset: clamp(22px, 4.6vw, 72px);
+  --chat-question-surface: color-mix(in srgb, var(--blue) 9%, var(--ui-control-surface));
+  --chat-question-edge: color-mix(in srgb, var(--blue) 16%, var(--ui-divider));
+}
+.has-navigation-rail:not(.layout-home-active) #chat-view > #messages {
+  padding: 32px var(--chat-inset) 25px;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable both-edges;
+}
+#chat-view :is(.welcome, .pending, #chat-error, #composer-command-menu, .execution-recovery) {
+  max-width: var(--chat-measure);
+}
+#chat-view > .task-status-strip {
+  width: min(var(--chat-measure), calc(100% - 2 * var(--chat-inset)));
+  margin-inline: auto;
+}
+#chat-view #messages > .message {
+  width: 100%;
+  max-width: var(--chat-measure);
+  min-width: 0;
+  margin: 0 auto 24px;
+  font-size: var(--message-size, 15px);
+  line-height: 1.75;
+}
+#chat-view #messages > .message.assistant {
+  padding: 4px 0 14px;
+  background: transparent;
+}
+#chat-view #messages > .message.user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-block-end: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+#chat-view #messages > .message.user > :is(.markdown, .chat-message-edit) {
+  width: fit-content;
+  max-width: min(86%, 620px);
+  min-width: 0;
+  margin: 0;
+  padding: 10px 15px;
+  color: inherit;
+  background: var(--chat-question-surface);
+  border: 1px solid var(--chat-question-edge);
+  border-radius: 17px 17px 6px 17px;
+  overflow-wrap: anywhere;
+}
+#chat-view #messages > .message.user > .chat-message-edit { width: min(100%, 620px); max-width: 100%; }
+#chat-view .message.user > .message-attachments { max-width: 100%; margin: 0; }
+#chat-view .message.user > .markdown > :first-child { margin-block-start: 0; }
+#chat-view .message.user > .markdown > :last-child { margin-block-end: 0; }
+#chat-view .message .message-actions {
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 100%;
+  margin: 6px 0 0;
+}
+#chat-view .message.user .message-actions { justify-content: flex-end; margin-block-start: 0; }
+#chat-view #messages > .message.assistant:last-of-type .message-actions { opacity: 1; }
+#chat-view .message-actions button { border-radius: 6px; }
+#chat-view .message-actions button:hover { background: var(--ui-control-hover); }
+#chat-view .message.assistant > .message-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  margin: 0 0 8px;
+  font: 600 12px/1.5 var(--ui-font);
+  letter-spacing: normal;
+}
+#chat-view .message.assistant > .message-header::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+#chat-view .message-header > .message-model-name {
+  margin-inline-start: 0;
+  max-width: min(65%, 280px);
+  font: 400 11px/1.5 var(--ui-font);
+}
+#chat-view .message.assistant > .markdown > :first-child { margin-block-start: 0; }
+#chat-view .thinking-process, #chat-view .execution-summary {
+  margin-block: 4px 11px;
+  padding: 0 0 0 9px;
+  border: 0;
+  border-inline-start: 2px solid var(--ui-divider);
+  background: transparent;
+}
+#chat-view .thinking-process summary, #chat-view .execution-summary summary { padding: 4px 0; }
+.has-navigation-rail:not(.layout-home-active) #chat-view .composer-wrap {
+  width: min(100%, calc(var(--chat-measure) + 2 * var(--chat-inset)));
+  padding: 6px var(--chat-inset) 12px;
+}
+.has-navigation-rail:not(.layout-home-active) #chat-view #chat-form {
+  max-width: var(--chat-measure);
+  margin-block: 0;
+  padding: 11px 12px 8px;
+  background: color-mix(in srgb, var(--glass-reading) 65%, var(--ui-control-surface));
+  border: 1px solid var(--control-border);
+  border-radius: 17px;
+  box-shadow: var(--ui-subtle-shadow);
+}
+.has-navigation-rail #chat-view #chat-input {
+  font-size: 15px;
+  line-height: 1.55;
+  padding-inline: 4px;
+}
+#chat-view #chat-form .composer-tools {
+  align-items: center;
+  border-block-start: 1px solid var(--ui-divider);
+  margin-top: 5px;
+  padding-top: 6px;
+}
+#chat-view .composer-tools #model-pill { min-width: 0; flex-shrink: 1; }
+#chat-view .composer-tools > .spacer { min-width: 0; }
+#chat-view .composer-tools .conversation-mode-picker > summary {
+  padding-inline: 7px;
+  border: 1px solid var(--ui-divider);
+  border-radius: 7px;
+  min-height: 28px;
+}
+#chat-view .composer-tools .conversation-mode-picker > summary:hover { background: var(--ui-control-hover); }
+.has-navigation-rail #app > main:has(#chat-view:not([hidden])) > .topbar .breadcrumb strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+body:has(.studio-body:not([hidden]) #chat-view:not([hidden])) #toast {
+  inset: 98px 16px auto auto;
+  max-width: min(420px, calc(100vw - 32px));
+  transform: translateY(-6px);
+}
+body:has(.studio-body:not([hidden]) #chat-view:not([hidden])) #toast.show { transform: translateY(0); }
+.has-navigation-rail:not(.layout-home-active) #chat-view .welcome {
+  margin-inline: auto;
+  padding-inline: 0;
+}
+.has-navigation-rail:not(.layout-home-active) #chat-view .welcome h1 {
+  font-size: clamp(25px, 4.2vw, 36px);
+  letter-spacing: -.025em;
+}
+.has-navigation-rail:not(.layout-home-active) #chat-view .welcome .starter-card {
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid var(--ui-divider);
+  border-radius: 9px;
+}
+@media (max-width: 760px) {
+  #chat-view { --chat-inset: 13px; }
+  .has-navigation-rail:not(.layout-home-active) #chat-view > #messages {
+    padding: 22px 15px 18px 25px;
+    scrollbar-gutter: auto;
+  }
+  #chat-view #messages > .message { margin-block-end: 17px; }
+  #chat-view #messages > .message.user > .markdown { max-width: 93%; padding: 8px 11px; }
+  .has-navigation-rail:not(.layout-home-active) #chat-view #chat-form { padding: 8px 9px 7px; border-radius: 13px; }
+  .has-navigation-rail:not(.layout-home-active) #chat-view .composer-wrap { padding-bottom: 8px; }
+  #chat-view #chat-form .composer-tools { gap: 4px; }
+  .has-navigation-rail #app > main:has(#chat-view:not([hidden])) > .topbar {
+    padding-inline: 9px;
+    gap: 4px;
+  }
+  .has-navigation-rail #app > main:has(#chat-view:not([hidden])) > .topbar .breadcrumb {
+    display: flex;
+    flex: 1;
+  }
+  .has-navigation-rail #app > main:has(#chat-view:not([hidden])) > .topbar .breadcrumb strong {
+    font-size: 12px;
+  }
+}

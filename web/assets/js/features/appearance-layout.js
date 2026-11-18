@@ -26,8 +26,8 @@
     colorOutputs.push(() => {value.value = input.value.toUpperCase();});
   }
   const previousColors = applyColors;
-  applyColors = function() {
-    previousColors();
+  applyColors = function(colors) {
+    previousColors(colors);
     colorOutputs.forEach(update => update());
   };
   colorOutputs.forEach(update => update());
