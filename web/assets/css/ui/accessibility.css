@@ -19,7 +19,8 @@
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  *::backdrop {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
@@ -27,7 +28,8 @@
 }
 :root[data-motion="reduced"] *,
 :root[data-motion="reduced"] *::before,
-:root[data-motion="reduced"] *::after {
+:root[data-motion="reduced"] *::after,
+:root[data-motion="reduced"] *::backdrop {
   animation: none !important;
   transition: none !important;
   scroll-behavior: auto !important;

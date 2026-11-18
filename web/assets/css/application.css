@@ -1,5 +1,5 @@
 /* Explicit cascade ownership. User skin styles remain independent. */
-@layer accessibility, vendor, legacy, tokens, components, layout, skins;
+@layer accessibility, vendor, legacy, tokens, components, layout, skins, motion;
 @import url("style.css") layer(legacy);
 @import url("theme.css") layer(legacy);
 @import url("studio.css") layer(legacy);
@@ -57,3 +57,5 @@
 @import url("layout-customization.css") layer(layout);
 @import url("intelligent-ui.css") layer(layout);
 @import url("conversation-modes.css") layer(layout);
+
+@import url("ui/motion.css") layer(motion);

@@ -31,7 +31,73 @@ async function switchMode(mode){if(!$('#settings').hidden&&!await closeSettingsP
 async function newSession(){const s=await api('/api/sessions','POST',{title:typeof uiText==='function'?uiText('新会话'):'新会话',conversation_mode:typeof getConversationMode==='function'?getConversationMode():'agent'});await openSession(s);await refreshList();return s}
 async function openSession(s){if(!$('#settings').hidden&&!await closeSettingsPage())return;state.session=s;state.messages=[];$('#chat-input').value='';$('#chat-error').hidden=true;updateHeader();renderList();$('#app .sidebar').classList.remove('open');const req=++messageRequest;const messages=await api(`/api/sessions/${s.id}/messages`);if(req!==messageRequest)return;state.messages=messages;renderMessages()}
 function markdown(text){const block=elem('div','markdown');const parts=text.split(/```/);parts.forEach((part,i)=>{if(i%2){const code=part.replace(/^[\w+-]*\n/,'');const pre=elem('pre');pre.append(elem('code','',code));block.append(pre)}else{for(const chunk of part.split(/\n\n+/)){if(!chunk.trim())continue;if(/^#{1,6}\s/.test(chunk))block.append(elem('h3','',chunk.replace(/^#{1,6}\s+/,'')));else block.append(elem('p','',chunk))}}});return block}
-function renderMessages(){const list=$('#messages');list.classList.toggle('has-streaming',state.messages.some(m=>m.streaming));list.replaceChildren();if(!state.messages.length){const w=elem('div','welcome');w.innerHTML='<h1>今天想做什么？</h1><p>输入 / 选择技能，输入 @ 加载插件。</p>';const suggestions=elem('div','suggestions');for(const t of ['帮我梳理一个创意','写一段有趣的故事','解释一个复杂概念']){const b=elem('button','',t+' ↗');b.onclick=()=>{$('#chat-input').value=t;$('#chat-input').focus()};suggestions.append(b)}w.append(suggestions);list.append(w)}for(const m of state.messages){const el=elem('article','message '+m.role);if(m.role==='user')el.textContent=m.content;else{const label={architect:'⌘ 架构师',critic:'◇ 挑错者',product:'◎ 用户视角',security:'⬡ 安全审查',synthesis:'✳ 综合结论'}[m.persona];const h=elem('div','message-header',label?`✳ ${label}`:'✦ ASTRA / ASSISTANT');if(m.persona==='synthesis')el.classList.add('synthesis-message');const b=elem('button','','复制');b.onclick=safely(async()=>{await navigator.clipboard.writeText(m.content);toast('已复制')});h.append(b);el.append(h,markdown(m.content))}list.append(el)}if(state.session&&state.pending.has(state.session.id))list.append(elem('div','pending','✦ '+(state.reviewMode?'多人格并行审查与汇总中…':'模型正在思考，请稍候…')));$('#send').disabled=!!(state.session&&state.pending.has(state.session.id));list.scrollTop=list.scrollHeight}
+// Keep message DOM, focus, media and native card state across stream updates.
+const messageViews = new WeakMap();
+let messageViewSession;
+function renderMessages() {
+  const list = $('#messages');
+  const session = state.session?.id;
+  if (messageViewSession !== session) {
+    list.replaceChildren();
+    messageViewSession = session;
+  }
+  list.classList.toggle('has-streaming', state.messages.some(message => message.streaming));
+  if (!state.messages.length) {
+    if (!list.querySelector('.welcome')) {
+      list.replaceChildren();
+      const welcome = elem('div', 'welcome');
+      welcome.append(elem('h1', '', '今天想做什么？'), elem('p', '', '输入 / 选择技能，输入 @ 加载插件。'));
+      const suggestions = elem('div', 'suggestions');
+      for (const text of ['帮我梳理一个创意', '写一段有趣的故事', '解释一个复杂概念']) {
+        const button = elem('button', '', text + ' ↗');
+        button.onclick = () => { $('#chat-input').value = text; $('#chat-input').focus(); };
+        suggestions.append(button);
+      }
+      welcome.append(suggestions);
+      list.append(welcome);
+    }
+  } else {
+    list.querySelector('.welcome')?.remove();
+    const articles = [...list.querySelectorAll(':scope > .message')];
+    const keyed = new Map(articles.map(article => [messageViews.get(article)?.message.id, article]));
+    const retained = new Set();
+    state.messages.forEach((message, index) => {
+      let article = message.id == null ? null : keyed.get(message.id);
+      const candidate = articles[index], previous = candidate && messageViews.get(candidate);
+      if (!article && previous && previous.message.role === message.role &&
+          (previous.message === message || previous.message.id == null)) article = candidate;
+      if (!article || retained.has(article)) {
+        article = elem('article', 'message ' + message.role);
+        messageViews.set(article, {message, content: null});
+        if (message.role !== 'user') {
+          const label = {architect: '⌘ 架构师', critic: '◇ 挑错者', product: '◎ 用户视角', security: '⬡ 安全审查', synthesis: '✳ 综合结论'}[message.persona];
+          article.append(elem('div', 'message-header', label ? '✳ ' + label : '✦ ASTRA / ASSISTANT'));
+        }
+      }
+      const view = messageViews.get(article);
+      view.message = message;
+      article.classList.toggle('synthesis-message', message.persona === 'synthesis');
+      if (view.content !== message.content || view.renderer !== markdown) {
+        const body = article.querySelector(':scope > .markdown');
+        const next = markdown(message.content);
+        if (body) body.replaceWith(next); else article.append(next);
+        view.content = message.content;
+        view.renderer = markdown;
+      }
+      const at = list.children[index];
+      if (at !== article) list.insertBefore(article, at || null);
+      retained.add(article);
+    });
+    for (const article of articles) if (!retained.has(article)) article.remove();
+  }
+  const busy = !!(state.session && state.pending.has(state.session.id));
+  let pending = list.querySelector(':scope > .pending');
+  if (busy && !state.messages.some(message => message.streaming)) {
+    if (!pending) { pending = elem('div', 'pending'); list.append(pending); }
+    pending.textContent = '✦ ' + (state.reviewMode ? '多人格并行审查与汇总中…' : '模型正在思考，请稍候…');
+  } else pending?.remove();
+  $('#send').disabled = busy;
+}
 async function refreshSessionMessages(sid) {
   if (state.session?.id !== sid) return false;
   const request = messageRequest;

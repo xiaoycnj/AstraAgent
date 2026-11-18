@@ -55,3 +55,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/browser_conversation_modes.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node tests/browser_motion.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

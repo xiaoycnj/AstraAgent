@@ -139,7 +139,7 @@ appendMessageActions = function() {
     const button = richAction('引用', () => {
       const selection = window.getSelection();
       const selected = selection && articles[index].contains(selection.anchorNode) ? selection.toString() : '';
-      quoteIntoComposer(selected || message.content);
+      quoteIntoComposer(selected || (messageViews.get(articles[index])?.message || message).content);
     });
     button.addEventListener('pointerdown', event => event.preventDefault());
     button.classList.add('quote-message');

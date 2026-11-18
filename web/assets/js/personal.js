@@ -21,7 +21,58 @@ function stopSpeech(){if(playingAudio){playingAudio.pause();playingAudio=null}if
 async function readMessage(message,button){if(playingMessage===message.id&&playingAudio){stopSpeech();return}stopSpeech();if(!ttsSettings.base_url||!ttsSettings.model){showSettings();selectSettingsTab('voice');toast('先配置 TTS API 即可朗读');return}busyButton(button,true,'…');try{const response=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json','X-App-Token':state.token},body:JSON.stringify({text:message.content})});if(!response.ok){const error=await response.json();throw new Error(error.error||'朗读失败')}playingUrl=URL.createObjectURL(await response.blob());playingAudio=new Audio(playingUrl);playingAudio.controls=true;playingMessage=message.id;const close=actionButton('关闭',stopSpeech,'secondary');audioDock.append(playingAudio,close);audioDock.hidden=false;playingAudio.onended=stopSpeech;await playingAudio.play().catch(()=>toast('音频已生成，请点击播放'))}finally{busyButton(button,false);button.replaceChildren(svgIcon('speaker'))}}
 const messageMore=elem('dialog','message-more');messageMore.append(elem('h2','','消息操作'));const moreActions=elem('div','more-actions');messageMore.append(moreActions);document.body.append(messageMore);
 function showMessageMore(message){moreActions.replaceChildren();for(const [label,fn] of [['引用到输入框',()=>{messageMore.close();$('#chat-input').value='> '+message.content.replace(/\n/g,'\n> ')+'\n\n';$('#chat-input').focus()}],['导出 Markdown',()=>{download('message-'+message.id+'.md',message.content,'text/markdown;charset=utf-8');messageMore.close()}],['保存为本地记忆',()=>{messageMore.close();showSettings();selectSettingsTab('memory');memoryId.input.value='message-'+(message.id||Date.now());memoryBody.input.value=message.content;if(message.content.length>16000)toast('消息较长，请精简至 16000 字符以内再保存');memoryBody.input.focus()}],['关闭',()=>messageMore.close()]])moreActions.append(actionButton(label,fn,'secondary'));messageMore.showModal()}
-function appendMessageActions(){const articles=$$('#messages .message');for(const [index,message] of state.messages.entries()){const article=articles[index];if(!article||article.querySelector('.message-actions'))continue;article.querySelector('.message-header button')?.remove();const bar=elem('div','message-actions');for(const [name,icon,fn] of [['复制','copy',async()=>{await navigator.clipboard.writeText(message.content);toast('已复制')}],['点赞','like',async()=>{if(!message.id)return;const result=await api('/api/messages/'+message.id+'/like','PUT',{liked:!message.liked});message.liked=result.liked;likeButton.classList.toggle('liked',!!message.liked);likeButton.setAttribute('aria-pressed',String(!!message.liked))}],['朗读','speaker',async()=>readMessage(message,readButton)],['分享','share',async()=>{if(navigator.share){try{await navigator.share({title:'AstraAgent 对话',text:message.content});return}catch(e){if(e.name==='AbortError')return}}download('AstraAgent-message.md',message.content,'text/markdown;charset=utf-8');toast('已导出分享文件')}],['更多','more',()=>showMessageMore(message)]]){const button=elem('button');button.type='button';button.title=name;button.setAttribute('aria-label',name);button.append(svgIcon(icon));button.disabled=!!message.streaming||!message.id;button.onclick=safely(fn);bar.append(button)}const likeButton=bar.children[1],readButton=bar.children[2];likeButton.classList.toggle('liked',!!message.liked);likeButton.setAttribute('aria-pressed',String(!!message.liked));article.append(bar)}}
+function appendMessageActions() {
+ const articles = $$('#messages > .message');
+ for (const [index, initialMessage] of state.messages.entries()) {
+  let message = initialMessage;
+  const article = articles[index];
+  if (!article) continue;
+  const existing = article.querySelector('.message-actions');
+  if (existing) {
+   for (const button of existing.children) button.disabled = !!message.streaming || !message.id;
+   existing.children[1].classList.toggle('liked', !!message.liked);
+   existing.children[1].setAttribute('aria-pressed', String(!!message.liked));
+   continue;
+  }
+  article.querySelector('.message-header button')?.remove();
+  const bar = elem('div', 'message-actions');
+  for (const [name, icon, action] of [
+   ['复制', 'copy', async () => {await navigator.clipboard.writeText(message.content); toast('已复制');}],
+   ['点赞', 'like', async () => {
+    if (!message.id) return;
+    const result = await api('/api/messages/' + message.id + '/like', 'PUT', {liked: !message.liked});
+    message.liked = result.liked;
+    likeButton.classList.toggle('liked', !!message.liked);
+    likeButton.setAttribute('aria-pressed', String(!!message.liked));
+   }],
+   ['朗读', 'speaker', async () => readMessage(message, readButton)],
+   ['分享', 'share', async () => {
+    if (navigator.share) {
+     try {await navigator.share({title: 'AstraAgent 对话', text: message.content}); return;}
+     catch (error) {if (error.name === 'AbortError') return;}
+    }
+    download('AstraAgent-message.md', message.content, 'text/markdown;charset=utf-8');
+    toast('已导出分享文件');
+   }],
+   ['更多', 'more', () => showMessageMore(message)],
+  ]) {
+   const button = elem('button');
+   button.type = 'button'; button.title = name;
+   button.setAttribute('aria-label', name);
+   button.append(svgIcon(icon));
+   button.disabled = !!message.streaming || !message.id;
+   button.onclick = safely(event => {
+    message = messageViews.get(article)?.message || message;
+    return action(event);
+   });
+   bar.append(button);
+  }
+  const likeButton = bar.children[1], readButton = bar.children[2];
+  likeButton.classList.toggle('liked', !!message.liked);
+  likeButton.setAttribute('aria-pressed', String(!!message.liked));
+  article.append(bar);
+ }
+}
 const previousPersonalRenderMessages=renderMessages;renderMessages=function(){previousPersonalRenderMessages();appendMessageActions()};appendMessageActions();profileLabel.hidden=true;
 // Constrain settings scrolling to its two panes, reset only the content on category changes.
 const previousScrollSettingsTab=selectSettingsTab;selectSettingsTab=function(name){previousScrollSettingsTab(name);const content=$('.settings-content');content.scrollTop=0;content.querySelectorAll('[data-panel]').forEach(panel=>panel.classList.toggle('settings-panel-active',panel.dataset.panel===name));window.scrollTo(0,0)};

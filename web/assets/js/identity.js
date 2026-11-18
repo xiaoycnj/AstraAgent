@@ -51,7 +51,42 @@ function finishAttachmentSend(sid,succeeded){
     setTimeout(renderAttachmentTray,0);
 }
 const attachmentMetaCache=new Map();async function fetchAttachmentMeta(id){if(!attachmentMetaCache.has(id))attachmentMetaCache.set(id,api('/api/attachments/'+id).catch(()=>null));return attachmentMetaCache.get(id)}
-const previousIdentityRenderMessages=renderMessages;renderMessages=function(){previousIdentityRenderMessages();const articles=$$('#messages .message');state.messages.forEach((message,index)=>{const article=articles[index];if(!article)return;if(message.role==='assistant'){const header=article.querySelector('.message-header');const model=message.model;if(header&&model){const badge=elem('span','message-model-name',model);badge.prepend(modelLogo(model));header.append(badge)}}let ids=[];try{ids=Array.isArray(message.attachments)?message.attachments:JSON.parse(message.attachments||'[]')}catch(e){}if(!ids.length)return;const tray=elem('div','message-attachments');article.prepend(tray);for(const id of ids){const staged=pendingAttachments.find(a=>a.id===id);if(staged)tray.append(attachmentCard(staged,false));else fetchAttachmentMeta(id).then(item=>{if(item&&tray.isConnected)tray.append(attachmentCard(item,false))})}});decorateModelNames()};renderMessages();
+const previousIdentityRenderMessages = renderMessages;
+renderMessages = function() {
+ previousIdentityRenderMessages();
+ const articles = $$('#messages > .message');
+ state.messages.forEach((message, index) => {
+  const article = articles[index];
+  if (!article) return;
+  if (message.role === 'assistant') {
+   const header = article.querySelector('.message-header');
+   const existing = header?.querySelector('.message-model-name');
+   if (existing?.dataset.model !== message.model) {
+    existing?.remove();
+    if (header && message.model) {
+     const badge = elem('span', 'message-model-name', message.model);
+     badge.dataset.model = message.model;
+     badge.prepend(modelLogo(message.model)); header.append(badge);
+    }
+   }
+  }
+  let ids = [];
+  try {ids = Array.isArray(message.attachments) ? message.attachments : JSON.parse(message.attachments || '[]');} catch {}
+  const signature = JSON.stringify(ids), existing = article.querySelector('.message-attachments');
+  if (existing?.dataset.attachments === signature) return;
+  existing?.remove();
+  if (!ids.length) return;
+  const tray = elem('div', 'message-attachments');
+  tray.dataset.attachments = signature; article.prepend(tray);
+  for (const id of ids) {
+   const staged = pendingAttachments.find(attachment => attachment.id === id);
+   if (staged) tray.append(attachmentCard(staged, false));
+   else fetchAttachmentMeta(id).then(item => {if (item && tray.isConnected) tray.append(attachmentCard(item, false));});
+  }
+ });
+ decorateModelNames();
+};
+renderMessages();
 const attachmentDrafts=new Map();
 const previousAttachmentOpenSession=openSession;
 openSession=async function(session){

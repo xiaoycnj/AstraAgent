@@ -19,6 +19,14 @@ function syncHistoryButtons(){historyBack.title=uiText('后退');historyForward.
 syncHistoryButtons();
 
 // Small drafts keep a single text row; longer drafts grow within a bounded height.
-function sizeCompactComposer(){const input=$('#chat-input');if(!input.value){input.style.height='36px';return}if(document.hidden||input.clientWidth<80)return;input.style.height='36px';input.style.height=Math.min(142,Math.max(36,input.scrollHeight))+'px'}
+let compactComposerSize = {value: null, width: 0};
+function sizeCompactComposer() {
+ const input = $('#chat-input'), width = input.clientWidth;
+ if (input.value === compactComposerSize.value && width === compactComposerSize.width) return;
+ if (input.value && (document.hidden || width < 80)) return;
+ compactComposerSize = {value: input.value, width};
+ input.style.height = '36px';
+ if (input.value) input.style.height = Math.min(142, Math.max(36, input.scrollHeight)) + 'px';
+}
 $('#chat-input').rows=1;$('#chat-input').addEventListener('input',sizeCompactComposer);window.addEventListener('resize',sizeCompactComposer);
 const beforeCompactMessages=renderMessages;renderMessages=function(){beforeCompactMessages();sizeCompactComposer()};sizeCompactComposer();
