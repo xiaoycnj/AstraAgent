@@ -14,7 +14,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const url=log.match(/http:\/\/127\.0\.0\.1:\d+/)?.[0];assert.ok(url,log);
   const token=execFileSync(python,['-c','import security_core,sys;from pathlib import Path;print(security_core.capability(Path(sys.argv[1])))',data],{cwd:root,windowsHide:true}).toString().trim();
   browser=await chromium.launch({headless:true,executablePath:process.env.ASTRA_TEST_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
-  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const page=await browser.newPage({locale:'zh-CN',viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/api/attachments/*/content',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><defs><linearGradient id="g"><stop stop-color="#556de8"/><stop offset="1" stop-color="#9ee2cf"/></linearGradient></defs><rect width="640" height="480" fill="url(#g)"/><circle cx="320" cy="240" r="100" fill="white" opacity=".3"/></svg>'}));
   await page.goto(url+'/#access='+token);
   await page.waitForFunction(()=>state.token&&typeof updateInlineImageRun==='function');
