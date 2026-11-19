@@ -93,6 +93,15 @@ openWorkbenchButton.replaceChildren(workbenchPlus);openWorkbenchButton.title='�
 openWorkbenchButton.classList.add('header-icon');
 const headerStorageStatus=$('#save-status');
 headerActions.replaceChildren(headerMore,resourceButton,headerDivider,openWorkbenchButton);
+const headerNewChat = actionButton('', () => newSession(), 'header-icon zhufeng-new-chat');
+headerNewChat.setAttribute('aria-label', '新建会话');
+headerNewChat.title = '新建会话';
+headerNewChat.append(svgIcon('plus'));
+headerMore.after(headerNewChat);
+const headerChatIcon = elem('span', 'zhufeng-chat-icon');
+headerChatIcon.setAttribute('aria-hidden', 'true');
+headerChatIcon.append(svgIcon('chat'));
+$('#current-title').before(headerChatIcon);
 // The save status remains available inside the menu.
 if(headerStorageStatus)headerMenu.append(headerStorageStatus);
 const beforeCompactHeader=updateHeader;

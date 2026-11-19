@@ -49,7 +49,7 @@ jobs:
           if (!(Test-Path -LiteralPath $env:ASTRA_TEST_BROWSER)) { throw 'Microsoft Edge is required for the browser gate' }
           $suites = @(
             'image_inline_state', 'image_stream_callbacks', 'browser_first_run', 'browser_windows',
-            'browser_creative', 'browser_security', 'browser_rich_chat', 'browser_personalization',
+            'browser_canvas_workspace', 'browser_creative', 'browser_security', 'browser_rich_chat', 'browser_personalization',
             'browser_performance', 'browser_layout', 'browser_intelligent_ui', 'browser_conversation_modes',
             'browser_motion', 'browser_controls', 'browser_extension_recovery', 'browser_image_inline'
           )

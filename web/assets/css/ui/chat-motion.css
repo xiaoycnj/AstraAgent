@@ -1,0 +1,23 @@
+/* Keep focus on the composer surface without moving the caret or toolbar. */
+@media (forced-colors: none) {
+  #chat-view #chat-form {
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    transition: outline-color var(--motion-control) var(--motion-ease),
+      outline-offset var(--motion-release) var(--motion-spring),
+      border-color var(--motion-control) var(--motion-ease),
+      box-shadow var(--motion-control) var(--motion-ease);
+  }
+  #chat-view #chat-form:has(#chat-input:focus) {
+    outline-color: color-mix(in srgb, var(--focus-color) 54%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+.stream-reveal {
+  animation: stream-reveal var(--motion-message, 150ms) ease-out both;
+}
+@keyframes stream-reveal {
+  from { opacity: .48; filter: blur(2px); }
+  to { opacity: 1; filter: none; }
+}

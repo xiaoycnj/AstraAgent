@@ -1,6 +1,8 @@
 // Conversation content uses the existing offline Markdown sanitizer and highlighter.
 const renderRichMarkdown = markdown;
 const richStreamBlocks = new WeakMap();
+const streamGraphemes = new Intl.Segmenter(undefined, {granularity: 'grapheme'});
+const streamMotionReduced = matchMedia('(prefers-reduced-motion: reduce), (forced-colors: active)');
 
 function richAction(label, action) {
   const button = actionButton(uiText(label), action, 'code-action');
@@ -64,8 +66,37 @@ markdown = function(text) {
   return block;
 };
 
+function revealStreamTail(block, appended) {
+  const root = document.documentElement;
+  if (!appended || root.dataset.motion === 'reduced' || streamMotionReduced.matches ||
+      block.closest('[data-reduced-motion="true"]')) return;
+  let leaf = block;
+  while (leaf?.nodeType === Node.ELEMENT_NODE) {
+    leaf = leaf.lastChild;
+    while (leaf?.nodeType === Node.TEXT_NODE && !leaf.data.trim()) leaf = leaf.previousSibling;
+  }
+  if (leaf?.nodeType !== Node.TEXT_NODE || leaf.parentElement.closest('pre, code, button, .katex, .iui-card')) return;
+  const end = leaf.data.trimEnd().length;
+  const segments = streamGraphemes.segment(leaf.data);
+  let start = end;
+  for (let count = 0; count < 6 && start > 0; count++) {
+    const candidate = segments.containing(start - 1).index;
+    if (!appended.endsWith(leaf.data.slice(candidate, end))) break;
+    start = candidate;
+  }
+  if (start === end) return;
+  const range = document.createRange();
+  range.setStart(leaf, start);
+  range.setEnd(leaf, end);
+  const reveal = elem('span', 'stream-reveal');
+  range.surroundContents(reveal);
+  reveal.addEventListener('animationend', () => reveal.classList.remove('stream-reveal'), {once: true});
+}
+
 function updateRichStream(body, text) {
   if (body.dataset.streamText === text) return;
+  const priorText = body.dataset.streamText ?? '';
+  const appended = text.startsWith(priorText) ? text.slice(priorText.length).trimEnd() : '';
   const tokens = marked.lexer(text).filter(token => token.type !== 'space');
   const previous = richStreamBlocks.get(body) || [];
   const next = [];
@@ -83,6 +114,8 @@ function updateRichStream(body, text) {
     for (const child of [...body.childNodes]) if (!nodes.has(child)) child.remove();
   }
   for (const old of previous.slice(next.length)) old.node.remove();
+  const last = next.at(-1);
+  if (last && last !== previous.at(-1)) revealStreamTail(last.node, appended);
   richStreamBlocks.set(body, next);
   body.classList.remove('streaming-text');
   body.classList.add('rich-stream');

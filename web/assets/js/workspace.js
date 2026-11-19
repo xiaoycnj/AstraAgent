@@ -32,71 +32,41 @@ function showSessionMenu(item,x,y){
     sessionMenu.querySelector('button').focus();
 }
 const baseWorkspaceRenderList=renderList;
-renderList=function(){
+const collapsedSessionGroups = new Set();
+renderList=function(search = ''){
     listFilters.hidden=state.mode!=='chat';
     if(state.mode!=='chat'){baseWorkspaceRenderList();return}
-    const rows=state.sessions.filter(item=>!item.archived&&(!projectFilter||(item.project||'').includes(projectFilter)));
+    const rows=state.sessions.filter(item=>!item.archived&&(!projectFilter||(item.project||'').includes(projectFilter))&&(!search||item.title.toLowerCase().includes(search)));
     $('#item-list').replaceChildren();$('#item-count').textContent=rows.length;
     const groups=new Map();
     for(const item of rows){const key=item.project||'未分组';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item)}
     for(const [name,items] of groups){
-        $('#item-list').append(elem('div','session-group-title',name));
+        const group = elem('details', 'session-group');
+        const heading = elem('summary', 'session-group-title');
+        heading.append(elem('span', 'session-group-name', name), elem('span', 'session-group-count', String(items.length)));
+        group.open = Boolean(search) || !collapsedSessionGroups.has(name);
+        group.addEventListener('toggle', () => {
+            if (search || !group.isConnected) return;
+            if (group.open) collapsedSessionGroups.delete(name);
+            else collapsedSessionGroups.add(name);
+        });
+        // Keep existing row selectors and the context menu independent of the group toggle.
+        group.append(heading);
         for(const item of items){
             const row=elem('div','session-list-row');
             const button=elem('button','list-item'+(state.session?.id===item.id?' active':''));
+            if (state.session?.id === item.id) button.setAttribute('aria-current', 'true');
             button.append(sidebarIcon(item.parent_id?'review':'chat'),elem('span','',item.title),elem('small','',String(item.message_count||0)));
             button.onclick=safely(()=>openSession(item));
             row.oncontextmenu=event=>{event.preventDefault();showSessionMenu(item,event.clientX,event.clientY)};
             const more=elem('button','session-more');more.type='button';more.setAttribute('aria-label','会话操作 '+item.title);more.append(sidebarIcon('settings'));more.onclick=()=>{const rect=more.getBoundingClientRect();showSessionMenu(item,rect.right,rect.bottom)};
-            row.append(button,more);$('#item-list').append(row);
+            row.append(button,more);group.append(row);
         }
+        $('#item-list').append(group);
     }
     if(!rows.length)$('#item-list').append(elem('p','hint','这里还没有会话。'));
 };
-// Canvas search, topological layout, duplication and clickable overview.
-const canvasActions=elem('div','canvas-extra-actions');
-const canvasSearch=elem('input');canvasSearch.placeholder='查找节点…';canvasSearch.setAttribute('aria-label','查找画布节点');
-const canvasResults=elem('div','canvas-search-results');canvasResults.hidden=true;
-const layoutButton=elem('button','','整理');layoutButton.type='button';
-const duplicateButton=elem('button','','复制节点');duplicateButton.type='button';
-canvasActions.append(canvasSearch,layoutButton,duplicateButton,canvasResults);$('#viewport').append(canvasActions);
-const minimap=document.createElementNS('http://www.w3.org/2000/svg','svg');minimap.classList.add('canvas-minimap');minimap.setAttribute('viewBox','0 0 200 120');minimap.setAttribute('aria-label','画布小地图');$('#viewport').append(minimap);
-function focusCanvasNode(node){pick(node.id);const viewport=$('#viewport');state.x=viewport.clientWidth/2-(node.x+140)*state.scale;state.y=viewport.clientHeight/2-(node.y+100)*state.scale;viewTransform()}
-canvasSearch.oninput=()=>{
-    const query=canvasSearch.value.trim().toLowerCase();canvasResults.replaceChildren();canvasResults.hidden=!query;
-    if(!query)return;
-    const nodes=(state.board?.data.nodes||[]).filter(node=>(node.title+' '+node.content).toLowerCase().includes(query));
-    for(const node of nodes){const button=elem('button','',node.title||'未命名');button.type='button';button.onclick=()=>{focusCanvasNode(node);canvasResults.hidden=true};canvasResults.append(button)}
-    if(!nodes.length)canvasResults.append(elem('p','hint','没有匹配节点'));
-};
-layoutButton.onclick=()=>{
-    if(!state.board||state.running.size)return;
-    const {nodes,edges}=state.board.data;record();
-    const levels=new Map(nodes.map(node=>[node.id,0]));
-    const pending=new Map(nodes.map(node=>[node.id,edges.filter(edge=>edge.to===node.id).length]));
-    const queue=nodes.filter(node=>!pending.get(node.id)).map(node=>node.id);
-    for(let index=0;index<queue.length;index++){const id=queue[index];for(const edge of edges.filter(edge=>edge.from===id)){levels.set(edge.to,Math.max(levels.get(edge.to),levels.get(id)+1));pending.set(edge.to,pending.get(edge.to)-1);if(!pending.get(edge.to))queue.push(edge.to)}}
-    const columns=new Map();
-    for(const node of nodes){const level=levels.get(node.id);const row=columns.get(level)||0;node.x=60+level*360;node.y=70+row*260;columns.set(level,row+1)}
-    changed();renderNodes();fit();
-};
-duplicateButton.onclick=()=>{
-    const source=selectedNode();if(!source||state.running.size)return;
-    if(state.board.data.nodes.length>=300){toast('画布最多 300 个节点');return}
-    record();const node={...source,id:uid(),title:(source.title+' · 副本').slice(0,200),...vacant(source.x+50,source.y+50)};state.board.data.nodes.push(node);changed();renderNodes();focusCanvasNode(node);
-};
-function drawMinimap(){
-    minimap.replaceChildren();const nodes=state.board?.data.nodes||[];if(!nodes.length)return;
-    const left=Math.min(...nodes.map(node=>node.x)),top=Math.min(...nodes.map(node=>node.y));
-    const width=Math.max(...nodes.map(node=>node.x+280))-left,height=Math.max(...nodes.map(node=>node.y+200))-top;
-    const scale=Math.min(184/Math.max(width,1),104/Math.max(height,1));
-    for(const node of nodes){const rect=document.createElementNS(minimap.namespaceURI,'rect');rect.setAttribute('x',8+(node.x-left)*scale);rect.setAttribute('y',8+(node.y-top)*scale);rect.setAttribute('width',280*scale);rect.setAttribute('height',200*scale);rect.setAttribute('rx',3);rect.setAttribute('class',node.id===state.selected?'selected':'');rect.onclick=()=>focusCanvasNode(node);minimap.append(rect)}
-}
-const baseWorkspaceRenderNodes=renderNodes;
-renderNodes=function(){baseWorkspaceRenderNodes();drawMinimap()};
-const baseWorkspacePick=pick;pick=function(id){baseWorkspacePick(id);drawMinimap()};
-canvasActions.addEventListener('pointerdown',event=>event.stopPropagation());minimap.addEventListener('pointerdown',event=>event.stopPropagation());
-renderList();drawMinimap();
+renderList();
 // Archived conversations live alongside the other personal settings.
 const archivePanel=settingPanel('archives','已归档的聊天','搜索、恢复或管理归档会话。');
 const archiveNav=elem('button');

@@ -136,6 +136,34 @@ async function main() {
       };
     });
     assert.deepEqual(stream, {heading: true, retained: true, code: true, strong: 'Next paragraph', plain: false});
+    const input = page.locator('#chat-input');
+    await input.focus();
+    assert.equal(await input.evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#chat-form')).outlineOffset === '1px');
+    await input.blur();
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#chat-form')).outlineOffset === '-2px');
+    const reveal = await page.evaluate(async () => {
+      const message = state.messages[0];
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const heading = document.querySelector('#messages h1');
+      message.content += '\n\n这段文字已经可读。';
+      renderMessages(); await frame();
+      message.content += '复核完成👍🏽。';
+      renderMessages(); await frame();
+      const tail = document.querySelector('#messages .stream-block:last-child .stream-reveal');
+      const keyframes = tail?.getAnimations()[0]?.effect.getKeyframes();
+      return {tail: tail?.textContent, filter: keyframes?.[0].filter,
+        headingRetained: heading === document.querySelector('#messages h1'),
+        text: tail?.closest('p').textContent};
+    });
+    assert.deepEqual(reveal, {tail: '复核完成👍🏽。', filter: 'blur(2px)', headingRetained: true, text: '这段文字已经可读。复核完成👍🏽。'});
+    await page.emulateMedia({reducedMotion: 'reduce'});
+    await page.evaluate(async () => {
+      state.messages[0].content += '无需动效';
+      renderMessages();
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    assert.equal(await page.locator('#messages .stream-reveal').count(), 0);
     const unsafe = await page.evaluate(() => {
       const node = markdown('<script>window.escaped=true</script><img src=x onerror="window.escaped=true"><iframe src="/api/settings"></iframe><a href="javascript:alert(1)">bad</a>');
       return !!node.querySelector('script,iframe,[onerror],[href^="javascript:"]');

@@ -52,6 +52,7 @@
 @import url("ui/theme-fluent3.css") layer(skins);
 @import url("ui/theme-zhufeng.css") layer(skins);
 @import url("personalization.css") layer(skins);
+@import url("ui/theme-zhufeng-home.css") layer(skins);
 
 @import url("performance.css") layer(layout);
 
@@ -63,9 +64,11 @@
 @import url("conversation-modes.css") layer(layout);
 
 @import url("ui/motion.css") layer(motion);
+@import url("ui/chat-motion.css") layer(motion);
 @import url("ui/image-preview.css") layer(layout);
 @import url("ui/image-candidates.css") layer(layout);
 @import url("ui/chat-branches.css") layer(layout);
 @import url("ui/chat-surface.css") layer(layout);
 @import url("ui/workspace-refinement.css") layer(layout);
 @import url("first-run.css") layer(layout);
+@import url("canvas-workspace.css") layer(layout);

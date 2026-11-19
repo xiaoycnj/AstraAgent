@@ -291,12 +291,77 @@ async function main() {
       if(name==='OpenAI')assert.equal(bubble,'rgb(240, 240, 241)');
       if (name === '朱峰Agent') {
         const card = page.locator('#messages > .message.assistant');
-        assert.equal(await card.evaluate(node => getComputedStyle(node).outlineStyle), 'solid');
+        assert.deepEqual(await card.evaluate(node => {
+          const style = getComputedStyle(node);
+          return [style.backgroundColor, style.outlineStyle];
+        }), ['rgba(0, 0, 0, 0)', 'none']);
+        await page.setViewportSize({width:1279,height:719});
+        const geometry = await page.evaluate(() => {
+          const bounds = selector => document.querySelector(selector).getBoundingClientRect();
+          return {
+            rail: bounds('.app-rail').width, pane: bounds('#conversation-sidebar').width,
+            title: bounds('.topbar').height, reading: bounds('.message.assistant').width,
+            composer: bounds('#chat-form').width, rightInset: bounds('#chat-form').right - bounds('#send').right,
+          };
+        });
+        assert.deepEqual(geometry, {rail:46,pane:233,title:37,reading:812,composer:834,rightInset:12});
+        const group = page.locator('#item-list .session-group').first();
+        await group.locator('summary').press('Space');
+        assert.equal(await group.locator('.list-item').first().isVisible(), false);
+        await group.locator('summary').press('Enter');
+        assert.equal(await group.locator('.list-item').first().isVisible(), true);
+        await group.locator('summary').blur();
+        const wallpaperFixture = await page.evaluate(async () => {
+          await appearanceReady;
+          const previous = structuredClone(appearanceDraft);
+          const image = document.createElement('canvas');
+          image.width = 1280;
+          image.height = 720;
+          const context = image.getContext('2d');
+          const wash = context.createLinearGradient(0, 0, 1280, 720);
+          wash.addColorStop(0, '#2b3c55');
+          wash.addColorStop(.58, '#6f8da7');
+          wash.addColorStop(1, '#3a435d');
+          context.fillStyle = wash;
+          context.fillRect(0, 0, image.width, image.height);
+          for (let index = 0; index < 11; index++) {
+            context.beginPath();
+            context.ellipse(650, 400, 570 - index * 19, 188 + index * 8, -.34, 0, Math.PI * 2);
+            context.strokeStyle = index % 3 ? '#bce8fc' : '#f4d5ae';
+            context.lineWidth = index % 3 ? 2 : 13;
+            context.stroke();
+          }
+          const blob = await new Promise(resolve => image.toBlob(resolve, 'image/png'));
+          const asset = await sendAppearanceFile('/api/appearance/upload?name=zhufeng-test.png', blob);
+          appearanceDraft.enabled = true;
+          Object.assign(appearanceDraft.background, {asset: asset.id, opacity: 1});
+          appearanceDraft.styles.composer_radius = 17;
+          applyPersonalAppearance();
+          await document.querySelector('#personal-wallpaper img').decode();
+          return previous;
+        });
+        assert.equal(await card.evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)');
+        for (const mode of ['light', 'dark']) {
+          await page.evaluate(mode => applyTheme(mode), mode);
+          await page.screenshot({path:path.join(root,`work/theme-zhufeng-conversation-${mode}.png`)});
+        }
+        await page.evaluate(previous => { appearanceDraft = previous; applyPersonalAppearance(); applyTheme('light'); }, wallpaperFixture);
+        const previousChat = await page.evaluate(() => ({id: state.session.id, messages: state.messages}));
+        await page.locator('.zhufeng-new-chat').click();
+        await page.waitForFunction(previous => state.session?.id !== previous, previousChat.id);
+        await page.evaluate(async ({id, messages}) => {
+          await openSession(state.sessions.find(item => item.id === id));
+          state.messages = messages;
+          renderMessages();
+        }, previousChat);
+        await page.setViewportSize({width:1440,height:1000});
         const rail = page.getByRole('navigation', {name: '主导航'});
         await rail.getByRole('button', {name: '更多', exact: true}).click();
         await page.getByRole('menuitem', {name: '无限画布', exact: true}).click();
         const canvas = page.locator('#canvas-view');
-        await canvas.locator('.canvas-toolbar [data-add=note]').click();
+        await canvas.getByRole('button', {name: '新建空白画布', exact: true}).click();
+        await page.locator('.app-dialog').getByRole('button', {name:'确认', exact:true}).click();
+        await canvas.getByRole('button', {name: '添加第一张便签', exact: true}).click();
         await canvas.locator('#node-title').fill('产品构思');
         await canvas.locator('#node-content').fill('先把最重要的事情写下来，再逐步展开。');
         await canvas.locator('.canvas-toolbar [data-add=document]').click();

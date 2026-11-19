@@ -14,6 +14,16 @@ const reviewControl=$('#review-toggle');
 if(reviewControl)composerOptionsPanel.append(reviewControl);
 composerOptions.append(composerOptionsTitle,composerOptionsPanel);
 $('.composer-tools .spacer').before(composerOptions);
+for (const [icon, label, action] of [
+  ['folder', '打开项目', showProjectManager],
+  ['tools', '扩展能力', () => { showSettings(); selectSettingsTab('capabilities'); }],
+]) {
+  const shortcut = actionButton('', action, 'zhufeng-composer-shortcut');
+  shortcut.setAttribute('aria-label', label);
+  shortcut.title = label;
+  shortcut.append(svgIcon(icon));
+  $('.composer-tools .spacer').before(shortcut);
+}
 document.addEventListener('pointerdown',event=>{if(composerOptions.open&&!composerOptions.contains(event.target))composerOptions.open=false});
 composerOptions.addEventListener('keydown',event=>{if(event.key==='Escape'){composerOptions.open=false;composerOptionsTitle.focus()}});
 const previousDialogueRender=renderMessages;

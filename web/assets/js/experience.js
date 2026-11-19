@@ -52,7 +52,14 @@ async function streamChat(sid,content){
   if(typeof updateInlineImageRun==='function'&&updateInlineImageRun(draft,event)&&state.session?.id===sid)renderMessages();
  })}catch(e){if(state.session?.id===sid)state.messages=state.messages.filter(m=>m!==draft);throw e}
 }
-async function streamCanvasChat(sid,content,nodeId){let text='';const result=await receiveStream(sid,content,chunk=>{text+=chunk;const card=$$('.node').find(n=>n.dataset.id===nodeId);if(card)card.querySelector('.node-content').textContent=text.slice(-500)});return result}
+function streamCanvasChat(sid, content, nodeId, options) {
+  return receiveStream(sid, content, chunk => {
+    const preview = ((canvasLive.get(nodeId) || '') + chunk).slice(-500);
+    canvasLive.set(nodeId, preview);
+    const card = $$('#nodes .node').find(item => item.dataset.id === nodeId);
+    if (card) card.querySelector('.node-content').textContent = preview;
+  }, undefined, options);
+}
 // The first view is reasoning; clicking its model label replaces it with model choices.
 reasoningButton.hidden=true;reasoningPopover.hidden=true;
 $('#model-pill').setAttribute('aria-controls','reasoning-popover');

@@ -31,10 +31,7 @@ selectSettingsTab=function(name){previousIconSettingsTab(name);$('#settings').sc
 const sessionSearch=elem('input');sessionSearch.type='search';sessionSearch.placeholder='搜索会话';sessionSearch.setAttribute('aria-label','搜索会话');listFilters.prepend(sessionSearch);
 const previousSearchRenderList=renderList;
 renderList=function(){
-    previousSearchRenderList();const query=sessionSearch.value.trim().toLowerCase();
-    if(!query||state.mode!=='chat')return;
-    for(const row of $$('.session-list-row'))row.hidden=!row.querySelector('.list-item span')?.textContent.toLowerCase().includes(query);
-    for(const title of $$('.session-group-title')){let row=title.nextElementSibling,visible=false;while(row&&!row.classList.contains('session-group-title')){if(row.classList.contains('session-list-row')&&!row.hidden)visible=true;row=row.nextElementSibling;}title.hidden=!visible;}
+    previousSearchRenderList(sessionSearch.value.trim().toLowerCase());
 };
 sessionSearch.oninput=renderList;
 const previousBranchMessageMore=showMessageMore;
