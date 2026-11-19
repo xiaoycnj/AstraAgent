@@ -28,3 +28,74 @@
 @keyframes resource-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .resource-panel { animation: none; } }
 @media (max-width: 600px) { .resource-panel { right: 8px; } .resource-preview,.output-editor { padding: 16px; } }
+
+#app > main.with-attachment-preview,
+.in-destination #app > main.with-attachment-preview {
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr) clamp(300px, 36%, 560px);
+}
+.with-attachment-preview > .topbar { grid-area: 1 / 1 / 2 / -1; }
+.with-attachment-preview > :is(.studio-body, .destination-page) { grid-area: 2 / 1; min-width: 0; }
+.attachment-side-preview {
+  grid-area: 2 / 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  color: var(--ink);
+  background: var(--soft);
+  border-inline-start: 1px solid var(--line);
+}
+.attachment-side-preview[hidden] { display: none; }
+.attachment-side-preview > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.attachment-side-preview h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-preview-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.attachment-preview-control {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 7px;
+  color: var(--ink);
+}
+.attachment-preview-control:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.attachment-preview-control .ui-icon { width: 16px; height: 16px; margin: 0; }
+.attachment-card .attachment-preview-control { width: 28px; height: 28px; margin-left: 0; }
+.attachment-card { flex-wrap: wrap; }
+.attachment-preview-body { flex: 1; min-height: 0; padding: 16px; overflow: auto; overscroll-behavior: contain; }
+.attachment-preview-body pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.attachment-preview-body > img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; margin: 0 auto; }
+.attachment-preview-status { color: var(--muted); margin: 0; font-size: 13px; }
+@media (max-width: 1050px) {
+  #app > main.with-attachment-preview,
+  .in-destination #app > main.with-attachment-preview { grid-template-columns: minmax(0, 1fr); }
+  .attachment-side-preview {
+    grid-area: 2 / 1;
+    justify-self: end;
+    width: min(450px, 100%);
+    z-index: 10;
+    box-shadow: -10px 0 30px #0002;
+  }
+}
+@media (pointer: coarse) {
+  .attachment-preview-actions .attachment-preview-control { width: 44px; height: 44px; }
+}

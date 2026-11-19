@@ -6,15 +6,26 @@ const openImagePreview = (() => {
   const viewer = elem('dialog', 'image-preview');
   viewer.setAttribute('aria-label', '图像工作台');
   const header = elem('header', 'image-preview-header');
-  const title = elem('h2', '', '图像工作台');
-  const filename = elem('p', 'image-preview-filename');
-  filename.dataset.i18nIgnore = '';
+  const glyphs = {
+    gallery: 'M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M5 7h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm-2 10 4-4 4 4 2-2 4 4m-4-8h.01',
+    chevron: 'm7 10 5 5 5-5', dock: 'M14 4h6v6m0-6-7 7M10 20H4v-6m0 6 7-7',
+    drag: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
+    brush: 'M3 17C9 10 14 3 17 5c4 3-10 14-6 14 2 0 5-6 8-5 3 1-3 5-1 6 1 0 2-1 3-2',
+    cursor: 'm5 3 14 8-6 2-2 6-6-16Z', comment: 'M20 11a7 7 0 1 0-3 6l3 3v-5m-8-7v6m-3-3h6',
+    background: 'M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm-2 9 9-9M5 19 19 5m-8 15 9-9',
+    erase: 'm9 20-5-5a2 2 0 0 1 0-3l7-7a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-7 7H9Zm-2-11 8 8m-3 3h9',
+    resize: 'M3 14V6h18v12h-8M3 12h9v8H3Zm13-2h2v2', text: 'M5 7V5h14v2m-7-2v14m-3 0h6',
+    undo: 'M9 5 4 10l5 5m-5-5h10a5 5 0 0 1 0 10', redo: 'm15 5 5 5-5 5m5-5H10a5 5 0 0 0 0 10',
+    wave: 'M4 10v4m4-7v10m4-14v18m4-14v10m4-7v4',
+    progress: 'M12 3a9 9 0 1 1-9 9',
+  };
+  const glyph = name => glyphs[name] ? makeGlyph(glyphs[name], name === 'drag' ? '2.4' : '1.65') : svgIcon(name);
   const identity = elem('div', 'image-preview-identity');
-  identity.append(title, filename);
   const headerTools = elem('div', 'image-preview-header-tools');
   const zoom = elem('select', 'image-preview-zoom');
   zoom.setAttribute('aria-label', '预览缩放');
-  for (const [value, label] of [['fit', '适应窗口'], ['.25', '25%'], ['.5', '50%'], ['1', '100%'], ['1.5', '150%'], ['2', '200%'], ['3', '300%'], ['4', '400%']]) {
+  const zoomChoices = [['fit', '适应窗口'], ['.25', '25%'], ['.5', '50%'], ['1', '100%'], ['1.5', '150%'], ['2', '200%'], ['3', '300%'], ['4', '400%']];
+  for (const [value, label] of zoomChoices) {
     zoom.append(new Option(label, value));
   }
   const thumbs = elem('nav', 'image-preview-thumbs');
@@ -37,7 +48,11 @@ const openImagePreview = (() => {
   const footer = elem('footer', 'image-preview-footer');
   const toolbar = elem('div', 'image-preview-edit-tools');
   toolbar.setAttribute('role', 'group');
-  toolbar.setAttribute('aria-label', '标注工具');
+  toolbar.setAttribute('aria-label', '图像编辑工具');
+  const mainTools = elem('div', 'image-preview-tool-row');
+  const annotateTools = elem('div', 'image-preview-tool-row image-preview-annotation-tools');
+  annotateTools.hidden = true;
+  toolbar.append(mainTools, annotateTools);
   const brushOptions = elem('div', 'image-preview-brush');
   const brushSize = elem('input');
   Object.assign(brushSize, {type: 'range', min: '2', max: '48', value: '8'});
@@ -48,10 +63,10 @@ const openImagePreview = (() => {
   const text = elem('input');
   Object.assign(text, {type: 'text', placeholder: '输入文字，再点图像放置', maxLength: 100});
   text.setAttribute('aria-label', '标注文字');
-  brushOptions.append(ink, brushSize, text);
+  brushOptions.append(brushSize, text);
   const edit = elem('form', 'image-preview-prompt');
   const prompt = elem('textarea');
-  Object.assign(prompt, {placeholder: '描述要如何修改这张图…', rows: 2, maxLength: 4000});
+  Object.assign(prompt, {placeholder: '描述修改内容', rows: 1, maxLength: 4000});
   prompt.setAttribute('aria-label', '图像修改说明');
   const mask = elem('input');
   mask.type = 'checkbox';
@@ -59,21 +74,48 @@ const openImagePreview = (() => {
   const maskLabel = elem('label', 'image-preview-mask');
   maskLabel.append(mask, elem('span', '', '限定重绘区域'));
   maskLabel.title = '画笔和矩形可作为蒙版，需选择支持蒙版的图片模型';
-  const submit = elem('button', 'image-preview-submit', '发送修改');
+  const submit = elem('button', 'image-preview-submit');
   submit.type = 'submit';
+  const primaryActions = {
+    voice: [glyph('wave'), '语音输入修改说明'],
+    permission: [glyph('close'), '取消麦克风请求'],
+    recording: [glyph('stop'), '结束录音'],
+    transcribing: [glyph('progress'), '正在转写'],
+    send: [glyph('send'), '发送修改'],
+  };
   const status = elem('p', 'image-preview-status');
   status.setAttribute('role', 'status');
   const editActions = elem('div', 'image-preview-prompt-actions');
-  editActions.append(maskLabel, submit);
-  edit.append(prompt, editActions);
+  const effort = elem('button', 'image-preview-effort');
+  effort.type = 'button';
+  effort.dataset.reasoningTrigger = '';
+  effort.setAttribute('aria-controls', 'reasoning-popover');
+  effort.setAttribute('aria-expanded', 'false');
+  effort.setAttribute('aria-label', '思考强度');
+  const effortLabel = elem('span', '', '默认');
+  effort.append(effortLabel, glyph('chevron'));
+  effort.onclick = () => {dismissPanel();toggleReasoningControl(effort);};
+  const beforePreviewComposerSync = syncComposerControls;
+  syncComposerControls = function () {
+    beforePreviewComposerSync();
+    const label = slider.getAttribute('aria-valuetext') || '默认';
+    const description = uiText(label);
+    if (effortLabel.textContent !== description) effortLabel.textContent = description;
+    effort.setAttribute('aria-label', slider.getAttribute('aria-label') || '思考强度');
+    effort.title = description;
+  };
+  editActions.append(effort);
   footer.append(toolbar, brushOptions, edit, status);
   const scrim = elem('div', 'image-preview-scrim');
   scrim.setAttribute('aria-hidden', 'true');
-  viewer.append(scrim, header, thumbs, stage, footer);
+  const flights = elem('div', 'image-preview-flight-layer');
+  flights.setAttribute('aria-hidden', 'true');
+  viewer.append(scrim, header, thumbs, stage, footer, flights);
   document.body.append(viewer);
 
   let gallery = [], current, rotation = 0, ready = false, busy = false, revision = 0;
-  let tool = 'view', gesture = null, paintFrame = 0;
+  let tool = 'view', editing = false, gesture = null, paintFrame = 0, voice = null;
+  let openPanel = null;
   const documents = new Map();
   const cacheLimit = 12;
   const isEditable = src => src.origin === location.origin && /^\/api\/(attachments|project-files)\//.test(src.pathname) ||
@@ -87,7 +129,7 @@ const openImagePreview = (() => {
     }, 'image-preview-button');
     control.title = label;
     control.setAttribute('aria-label', label);
-    if (icon) control.append(svgIcon(icon));
+    if (icon) control.append(glyph(icon));
     control.append(elem('span', '', label));
     return control;
   }
@@ -95,30 +137,251 @@ const openImagePreview = (() => {
     const link = elem('a');
     link.href = url;
     link.download = name;
+    viewer.append(link);
     link.click();
+    link.remove();
   }
   const rotate = button('旋转预览', 'refresh', () => {rotation = (rotation + 1) % 4; layoutImage(true);});
   const original = button('下载原图', 'download', () => save(current.src, current.alt || 'image.png'));
-  const exportImage = button('导出标注', 'share', () => save(makeImage('marked'), 'astra-annotated.png'));
+  original.classList.add('image-preview-icon-only');
+  const dock = button('在侧面板中打开', 'dock', () => {
+    const id = attachmentDownloadId(current.src);
+    if (!id || !viewer.open || busy) return;
+    const source = origin?.closest('button,[tabindex],a') || returnFocus;
+    const item = {id, name: current.alt, kind: 'image'};
+    settleMotion();
+    viewer.close();
+    return previewResource(item, source);
+  });
+  dock.classList.add('image-preview-dock');
+  // Keep the download bridge for locally generated PNGs without enabling WebView downloads.
+  async function savePNG(url, name) {
+    if (typeof window.pywebview?.api?.save_attachment !== 'function') return save(url, name);
+    const item = await upload(name, url);
+    save(imagePreviewAsset(item).src, name);
+  }
+  const exportImage = button('导出标注', 'share', () => savePNG(makeImage('marked'), 'astra-annotated.png'));
   const close = button('关闭预览', 'close', () => requestClose());
+  close.classList.add('image-preview-icon-only');
   close.autofocus = true;
-  headerTools.append(zoom, rotate, original, exportImage, close);
+  const galleryToggle = button('图像', 'gallery', () => {
+    const show = thumbs.hidden;
+    thumbs.hidden = !show;
+    galleryToggle.setAttribute('aria-expanded', String(show));
+    if (show) reveal(thumbs, -1);
+  });
+  galleryToggle.append(glyph('chevron'));
+  galleryToggle.setAttribute('aria-controls', thumbs.id = 'image-preview-thumbs');
+  const zoomWrap = elem('div', 'image-preview-zoom-wrap');
+  const zoomLabel = elem('span', '', '100%');
+  zoomLabel.setAttribute('aria-hidden', 'true');
+  zoomWrap.append(zoomLabel, glyph('chevron'), zoom);
+  identity.append(galleryToggle);
+  headerTools.append(zoomWrap, original, dock, close);
   header.append(identity, headerTools);
+
+  const options = elem('div', 'image-preview-popover');
+  const sizing = elem('div', 'image-preview-popover image-preview-sizing');
+  options.hidden = sizing.hidden = true;
+  footer.prepend(options, sizing);
+  const appendVoice = button('追加语音输入', 'mic', () => {
+    dismissPanel();
+    submit.focus();
+    togglePreviewVoice();
+  });
+  options.append(rotate, exportImage, appendVoice, maskLabel);
+  const more = button('更多图像选项', 'plus', () => togglePanel(options, more));
+  const size = button('调整大小', 'resize', () => togglePanel(sizing, size));
+  for (const [control, panel, id] of [[more, options, 'image-edit-options'], [size, sizing, 'image-edit-sizing']]) {
+    panel.id = id;
+    control.setAttribute('aria-controls', id);
+    control.setAttribute('aria-expanded', 'false');
+  }
+  const resizeWidth = elem('input'), resizeHeight = elem('input');
+  for (const [input, label] of [[resizeWidth, '宽度'], [resizeHeight, '高度']]) {
+    Object.assign(input, {type:'number', min:'1', max:'8192', step:'1'});
+    input.setAttribute('aria-label', label);
+    const field = elem('label', '', label);
+    field.append(input);
+    sizing.append(field);
+  }
+  sizing.append(button('下载调整后的图像', 'download', () => {
+    const w = resizeWidth.valueAsNumber, h = resizeHeight.valueAsNumber;
+    if (![w,h].every(n => Number.isInteger(n) && n >= 1 && n <= 8192) || w * h > 16_777_216) {
+      throw Error('请输入有效尺寸：边长最多 8192 像素，总像素不超过 1600 万。');
+    }
+    return savePNG(makeImage('marked', w, h), 'astra-resized.png');
+  }));
+  const grip = () => {
+    const handle = button('拖动工具条', 'drag', () => {});
+    handle.classList.add('image-preview-icon-only', 'image-preview-grip');
+    let drag;
+    handle.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || matchMedia('(max-width: 720px)').matches) return;
+      const box = toolbar.getBoundingClientRect();
+      const bounds = viewer.getBoundingClientRect();
+      const start = Number(toolbar.dataset.offset || 0);
+      drag = {id:event.pointerId,x:event.clientX,start,min:start+bounds.left+12-box.left,max:start+bounds.right-12-box.right};
+      handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener('pointermove', event => {
+      if (event.pointerId !== drag?.id) return;
+      const offset = Math.min(drag.max, Math.max(drag.min, drag.start + event.clientX - drag.x));
+      toolbar.dataset.offset = offset;
+      toolbar.style.translate = offset + 'px';
+    });
+    handle.addEventListener('lostpointercapture', () => {drag = null;});
+    handle.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      resetToolbar();
+    });
+    handle.ondblclick = resetToolbar;
+    return handle;
+  };
+  function resetToolbar() {toolbar.style.translate = '';delete toolbar.dataset.offset;}
+  window.addEventListener('resize', resetToolbar);
+  const annotate = button('标注', 'brush', () => setEditing(true, 'brush'));
+  const comment = button('添加评论', 'comment', () => {setEditing(true, 'text');text.focus();});
+  const background = button('移除背景', 'background', () => {
+    const instruction = '移除背景并保留主体，输出透明背景。';
+    prompt.value = [prompt.value.trim(), instruction].filter(Boolean).join('\n').slice(0, prompt.maxLength);
+    prompt.dispatchEvent(new Event('input', {bubbles:true}));
+    prompt.focus();
+  });
+  const erase = button('擦除', 'erase', () => setEditing(true, 'erase'));
+  mainTools.append(grip(), annotate, comment, background, erase, size);
+
   const toolButtons = new Map();
   for (const [id, label, icon] of [
-    ['view', '浏览', 'image'], ['brush', '画笔', 'edit'], ['rectangle', '矩形', 'maximize'],
-    ['text', '文字', 'note'], ['erase', '擦除', 'minus'],
+    ['view', '浏览', 'cursor'], ['brush', '画笔', 'brush'], ['text', '文字', 'text'],
+    ['rectangle', '矩形', 'copy'], ['erase', '擦除', 'erase'],
   ]) {
     const control = button(label, icon, () => {
       setTool(id);
       if (id === 'text') text.focus();
     });
     toolButtons.set(id, control);
-    toolbar.append(control);
   }
-  const undo = button('撤销标注', 'back', () => moveHistory('marks', 'redo'));
-  const redo = button('重做标注', 'forward', () => moveHistory('redo', 'marks'));
-  toolbar.append(undo, redo);
+  const undo = button('撤销标注', 'undo', () => moveHistory('marks', 'redo'));
+  const redo = button('重做标注', 'redo', () => moveHistory('redo', 'marks'));
+  const finishEditing = button('退出标注', 'close', () => {setEditing(false);annotate.focus();});
+  annotateTools.append(grip(), ...[...toolButtons.values()].slice(0, 4), ink, toolButtons.get('erase'), undo, redo, finishEditing);
+  more.classList.add('image-preview-icon-only');
+  editActions.append(submit);
+  edit.append(more, prompt, editActions);
+  submit.addEventListener('click', event => {
+    if (!prompt.value.trim() || voice) {
+      event.preventDefault();
+      togglePreviewVoice();
+    }
+  });
+
+  function stopPreviewTracks(run) {
+    clearTimeout(run.timer);
+    run.stream?.getTracks().forEach(track => track.stop());
+    run.stream = null;
+  }
+  function cancelPreviewVoice() {
+    const run = voice;
+    if (!run) return;
+    voice = null;
+    run.controller.abort();
+    if (run.recorder?.state === 'recording') run.recorder.stop();
+    stopPreviewTracks(run);
+    message('');
+    controls();
+  }
+  async function togglePreviewVoice() {
+    if (!viewer.open || busy || !ready || !current.editable) return;
+    if (voice) {
+      if (voice.phase === 'permission') return cancelPreviewVoice();
+      if (voice.phase === 'recording') {
+        voice.phase = 'transcribing';
+        controls();
+        voice.recorder.stop();
+      }
+      return;
+    }
+    if (!sttSettings.base_url || !sttSettings.model) {message('请先配置 STT 接口');return;}
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {message('当前环境不支持录音');return;}
+    const run = {controller:new AbortController(), chunks:[], bytes:0, phase:'permission'};
+    voice = run;
+    controls();
+    message('正在请求麦克风权限…');
+    try {
+      run.stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      if (voice !== run) {stopPreviewTracks(run);return;}
+      const mime = ['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4'].find(type=>MediaRecorder.isTypeSupported(type));
+      if (!mime) throw Error('当前录音格式不受 STT 支持');
+      const recorder = run.recorder = new MediaRecorder(run.stream,{mimeType:mime,audioBitsPerSecond:64000});
+      recorder.ondataavailable = ({data}) => {
+        if (voice !== run) return;
+        run.bytes += data.size;
+        if (run.bytes > 5 * 1024 * 1024) {cancelPreviewVoice();message('录音超过 5 MB，请缩短后重试');}
+        else if (data.size) run.chunks.push(data);
+      };
+      recorder.onerror = () => {if (voice === run) {cancelPreviewVoice();message('录音失败，请检查麦克风');}};
+      recorder.onstop = async () => {
+        stopPreviewTracks(run);
+        if (voice !== run) return;
+        run.phase = 'transcribing';
+        controls();
+        message('正在转写…');
+        try {
+          if (!run.bytes) throw Error('录音为空');
+          const encoded = await new Promise((resolve,reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(new Blob(run.chunks,{type:recorder.mimeType}));
+          });
+          if (voice !== run) return;
+          const response = await fetch('/api/stt',{method:'POST',headers:{'Content-Type':'application/json','X-App-Token':state.token},
+            body:JSON.stringify({data:encoded,mime:recorder.mimeType}),signal:run.controller.signal});
+          const result = await response.json();
+          if (!response.ok || typeof result.text !== 'string' || !result.text.trim()) throw Error(result.error || '语音转写失败');
+          if (voice !== run) return;
+          prompt.value = [prompt.value.trimEnd(), result.text.trim()].filter(Boolean).join('\n').slice(0,prompt.maxLength);
+          prompt.dispatchEvent(new Event('input',{bubbles:true}));
+          prompt.focus();
+          message('');
+        } catch (error) {if (voice === run) report(error);}
+        finally {if (voice === run) {voice = null;controls();}}
+      };
+      recorder.start(250);
+      run.phase = 'recording';
+      controls();
+      run.timer = setTimeout(() => {if (voice === run && recorder.state === 'recording') togglePreviewVoice();}, 120000);
+      message('正在录音，再点一次结束 · Esc 取消');
+    } catch (error) {
+      if (voice === run) {cancelPreviewVoice();report(error);}
+    }
+  }
+  document.addEventListener('visibilitychange', () => {if (document.hidden) cancelPreviewVoice();});
+  window.addEventListener('pagehide', cancelPreviewVoice);
+
+  function togglePanel(panel, trigger) {
+    const show = panel.hidden;
+    dismissPanel();
+    if (!show) return;
+    if (panel === sizing) {
+      resizeWidth.value = image.naturalWidth;
+      resizeHeight.value = image.naturalHeight;
+    }
+    panel.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    openPanel = {panel, trigger};
+    reveal(panel, 1);
+    panel.querySelector('button:not([disabled]),input:not([disabled])')?.focus();
+  }
+  function dismissPanel(focus = false) {
+    if (!openPanel) return;
+    const {panel, trigger} = openPanel;
+    panel.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    openPanel = null;
+    if (focus) trigger.focus();
+  }
 
   function controls() {
     const editable = ready && current.editable && !busy;
@@ -128,7 +391,7 @@ const openImagePreview = (() => {
       control.disabled = id !== 'view' && !editable;
     }
     viewer.dataset.tool = tool;
-    brushOptions.hidden = !editable || tool === 'view';
+    brushOptions.hidden = !editable || !editing || !['brush', 'erase', 'text'].includes(tool);
     text.hidden = tool !== 'text';
     brushSize.hidden = tool === 'text' || tool === 'rectangle';
     ink.hidden = tool === 'erase';
@@ -139,16 +402,45 @@ const openImagePreview = (() => {
     exportImage.disabled = !editable || !marks.some(mark => mark.type !== 'erase');
     exportImage.hidden = !marks.length;
     rotate.disabled = !ready || busy;
+    for (const control of [annotate, comment, background, erase, size, effort]) control.disabled = !editable;
+    more.disabled = !ready || busy;
     original.disabled = !ready || busy;
+    dock.hidden = !current || !attachmentDownloadId(current.src);
+    dock.disabled = busy;
     prompt.disabled = !editable;
-    submit.disabled = !editable || !prompt.value.trim();
+    const hasDraft = !!prompt.value.trim();
+    appendVoice.hidden = !hasDraft || !!voice;
+    appendVoice.disabled = !editable;
+    const action = voice?.phase ?? (hasDraft ? 'send' : 'voice');
+    if (submit.dataset.action !== action) {
+      const [icon, label] = primaryActions[action];
+      submit.dataset.action = action;
+      submit.replaceChildren(icon);
+      submit.setAttribute('aria-label', uiText(label));
+      submit.title = uiText(label);
+      if (action === 'transcribing') submit.setAttribute('aria-disabled', 'true');
+      else submit.removeAttribute('aria-disabled');
+    }
+    submit.disabled = !editable;
     close.disabled = busy;
+  }
+
+  function setEditing(enabled, next = 'view') {
+    dismissPanel();
+    resetToolbar();
+    editing = enabled;
+    mainTools.hidden = enabled;
+    annotateTools.hidden = !enabled;
+    setTool(next);
+    reveal(enabled ? annotateTools : mainTools, 1);
+    if (enabled) toolButtons.get(next)?.focus({preventScroll:true});
   }
 
   function setTool(value) {
     gesture = null;
     tool = value;
     controls();
+    if (!brushOptions.hidden) reveal(brushOptions, 1);
     drawSoon();
   }
   function moveHistory(from, to) {
@@ -175,7 +467,26 @@ const openImagePreview = (() => {
     document.documentElement.dataset.motion !== 'reduced' && typeof viewer.animate === 'function';
   const chrome = [header, thumbs, footer];
   const galleryEase = 'cubic-bezier(.22,.78,.20,1)';
-  let origin = null, openingUntil = 0, motion = null;
+  function galleryTime(duration) {
+    const panel = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-panel'));
+    return Math.round(duration * (panel > 0 ? panel / 320 : 1));
+  }
+
+  let origin = null, returnFocus = null, openingUntil = 0, motion = null;
+  const localMotion = new WeakMap();
+  const localAnimations = new Set();
+  function animateLocal(node, frames, duration = 245) {
+    localMotion.get(node)?.cancel();
+    if (!canMove() || !viewer.open) return;
+    const animation = node.animate(frames, {duration: galleryTime(duration), easing: galleryEase});
+    localMotion.set(node, animation);
+    localAnimations.add(animation);
+    animation.finished.then(() => localAnimations.delete(animation), () => localAnimations.delete(animation));
+  }
+  function reveal(node, direction) {
+    animateLocal(node, [{opacity:0, transform:`translateY(${direction * 8}px) scale(.96,.92)`},
+      {opacity:1, transform:'translateY(-1px) scale(1.015,1)', offset:.72}, {opacity:1, transform:'none'}]);
+  }
 
   // Express the thumbnail crop in full-image coordinates, so scaling never stretches the photo.
   function thumbnailGeometry(source, src) {
@@ -227,14 +538,14 @@ const openImagePreview = (() => {
     animation.finished.then(() => {if (motion === run) settleMotion();}, () => {});
   }
   function animateChrome(run, shown, old = null) {
-    const duration = shown ? 220 : 150;
+    const duration = galleryTime(shown ? 220 : 150);
     const background = animatePart(run, scrim, [{opacity: old?.[0] ?? Number(!shown)}, {opacity: Number(shown)}],
       {duration, easing: 'ease-out', fill: 'both'}, 'scrim');
     chrome.forEach((node, i) => {
       const offset = i === 0 ? -6 : i === 1 ? 0 : 8;
       animatePart(run, node, [old?.[i + 1] ?? {opacity: Number(!shown), translate: `0 ${shown ? offset : 0}px`},
         {opacity: Number(shown), translate: `0 ${shown ? 0 : offset / 2}px`}],
-      {duration: shown ? 185 : 115, delay: shown ? 35 : 0, easing: 'ease-out', fill: 'both'}, 'chrome');
+      {duration: galleryTime(shown ? 185 : 115), delay: galleryTime(shown ? 35 : 0), easing: 'ease-out', fill: 'both'}, 'chrome');
     });
     return background;
   }
@@ -244,7 +555,8 @@ const openImagePreview = (() => {
     flight.alt = '';
     flight.setAttribute('aria-hidden', 'true');
     flight.src = image.currentSrc || image.src;
-    Object.assign(flight.style, {left: `${target.left}px`, top: `${target.top}px`,
+    const bounds = flights.getBoundingClientRect();
+    Object.assign(flight.style, {left: `${target.left - bounds.left}px`, top: `${target.top - bounds.top}px`,
       width: `${target.width}px`, height: `${target.height}px`});
     const sx = thumbnail.w / target.width, sy = thumbnail.h / target.height;
     const crop = thumbnail.crop.map((value, index) => `${Math.max(0, value / (index % 2 ? sx : sy))}px`).join(' ');
@@ -254,15 +566,19 @@ const openImagePreview = (() => {
     const full = {transform: 'translate(0px, 0px) scale(1, 1)', clipPath: 'inset(0px round 0px)'};
     run.flight = flight;
     run.source = source;
-    viewer.append(flight);
+    flights.append(flight);
     viewer.dataset.galleryFlight = run.phase;
     source.classList.add('image-preview-origin');
     const opening = run.phase === 'open';
-    return animatePart(run, flight, opening ? [tile, full] : [interrupted || full, tile],
-      {duration: opening ? 360 : interrupted ? 200 : 265, easing: opening ? galleryEase : 'cubic-bezier(.36,0,.24,1)', fill: 'both'}, 'photo');
+    const spring = {transform: `translate(${-target.width * .006}px, ${-target.height * .006}px) scale(1.012)`, clipPath: full.clipPath,
+      offset:.82, easing:'ease-out'};
+    return animatePart(run, flight, opening ? [{...tile,easing:galleryEase}, spring, full] : [interrupted || full, tile],
+      {duration: galleryTime(opening ? 380 : interrupted ? 200 : 265), easing: opening ? 'linear' : 'cubic-bezier(.36,0,.24,1)', fill: 'both'}, 'photo');
   }
   function requestClose() {
     if (busy || !viewer.open || motion?.phase === 'close') return;
+    if (reasoningPopover.parentElement === viewer) closeComposerControls();
+    cancelPreviewVoice();
     const flight = motion?.flight && getComputedStyle(motion.flight);
     const interrupted = flight && {transform: flight.transform, clipPath: flight.clipPath};
     const old = motion && [getComputedStyle(scrim).opacity, ...chrome.map(node => {
@@ -277,17 +593,24 @@ const openImagePreview = (() => {
       thumbnailGeometry(origin, current.src);
     const photo = thumbnail && animateFlight(run, origin, plane.getBoundingClientRect(), thumbnail, interrupted);
     if (!photo && ready) animatePart(run, plane, [{opacity: 1}, {opacity: 0}],
-      {duration: 140, easing: 'ease-out', fill: 'both'}, 'fallback');
+      {duration: galleryTime(140), easing: 'ease-out', fill: 'both'}, 'fallback');
     finishWith(run, photo || background);
   }
   function settleForInteraction() {if (motion?.phase !== 'close') settleMotion();}
-  function syncMotionPreference() {if (!canMove()) settleMotion();}
+  function syncMotionPreference() {if (!canMove()) {settleMotion();localAnimations.forEach(animation=>animation.cancel());}}
   motionPreference.addEventListener('change', syncMotionPreference);
   transparencyPreference.addEventListener('change', syncMotionPreference);
   new MutationObserver(syncMotionPreference).observe(document.documentElement, {attributes: true, attributeFilter: ['data-motion']});
   window.addEventListener('resize', () => {if (motion) settleMotion();});
   viewer.addEventListener('close', () => {
-    if (!viewer.open) {settleMotion(); origin = null;}
+    if (!viewer.open) {
+      if (reasoningPopover.parentElement === viewer) closeComposerControls();
+      settleMotion();
+      cancelPreviewVoice();
+      dismissPanel();
+      localAnimations.forEach(animation=>animation.cancel());
+      origin = returnFocus = null;
+    }
   });
 
   function layoutImage(center = false) {
@@ -295,8 +618,11 @@ const openImagePreview = (() => {
     const swap = rotation % 2;
     const width = image.naturalWidth, height = image.naturalHeight;
     const w = swap ? height : width, h = swap ? width : height;
-    const fit = Math.min(1, Math.max(1, stage.clientWidth - 28) / w, Math.max(1, stage.clientHeight - 28) / h);
+    const styles = getComputedStyle(frame);
+    const fit = Math.min(1, Math.max(1, stage.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight)) / w,
+      Math.max(1, stage.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom)) / h);
     const scale = zoom.value === 'fit' ? fit : Number(zoom.value);
+    zoomLabel.textContent = Math.max(1, Math.round(scale * 100)) + '%';
     extent.style.width = w * scale + 'px';
     extent.style.height = h * scale + 'px';
     plane.style.width = width * scale + 'px';
@@ -308,8 +634,18 @@ const openImagePreview = (() => {
     }
   }
   new ResizeObserver(() => layoutImage()).observe(stage);
-  zoom.onchange = () => {settleForInteraction(); layoutImage(true);};
-  viewer.addEventListener('pointerdown', event => {if (!close.contains(event.target)) settleForInteraction();}, true);
+  zoom.onchange = () => {
+    settleForInteraction();
+    const before = plane.offsetWidth;
+    layoutImage(true);
+    const after = plane.offsetWidth;
+    if (before && after && before !== after) animateLocal(plane, [{scale:String(before/after)}, {scale:'1'}], 190);
+  };
+  viewer.addEventListener('pointerdown', event => {
+    if (!close.contains(event.target)) settleForInteraction();
+    if (stage.contains(event.target)) localMotion.get(plane)?.cancel();
+    if (openPanel && !openPanel.panel.contains(event.target) && !openPanel.trigger.contains(event.target)) dismissPanel();
+  }, true);
   stage.addEventListener('wheel', settleForInteraction, {passive: true});
 
   function paint(canvas, marks, region = false) {
@@ -394,15 +730,15 @@ const openImagePreview = (() => {
   };
   overlay.onlostpointercapture = () => {gesture = null; drawSoon();};
 
-  function makeImage(kind) {
+  function makeImage(kind, targetWidth, targetHeight) {
     if (!ready || !current.editable) throw Error('这张图片无法进行本地编辑。');
     const width = image.naturalWidth, height = image.naturalHeight;
     if (width * height > 16_777_216 || Math.max(width, height) > 8192) {
       throw Error('请使用边长不超过 8192 且不超过 1600 万像素的图像。');
     }
     const result = elem('canvas');
-    result.width = width;
-    result.height = height;
+    result.width = targetWidth ?? width;
+    result.height = targetHeight ?? height;
     const ctx = result.getContext('2d');
     if (kind !== 'source') {
       paint(result, current.doc.marks, kind === 'mask');
@@ -418,7 +754,7 @@ const openImagePreview = (() => {
     }
     if (kind !== 'mask') {
       ctx.globalCompositeOperation = 'destination-over';
-      ctx.drawImage(image, 0, 0);
+      ctx.drawImage(image, 0, 0, result.width, result.height);
     }
     const url = result.toDataURL('image/png');
     if (url === 'data:,') throw Error('无法导出这张图。');
@@ -431,7 +767,7 @@ const openImagePreview = (() => {
   }
   async function sendEdit(event) {
     event.preventDefault();
-    if (busy || submit.disabled) return;
+    if (busy || voice || submit.disabled || !prompt.value.trim()) return;
     if (submitting || uploadBusy || state.pending.has(state.session?.id)) {
       message('请等待当前会话完成，再发送图像修改。');
       return;
@@ -490,10 +826,18 @@ const openImagePreview = (() => {
   }
   edit.onsubmit = sendEdit;
   prompt.oninput = () => {current.doc.prompt = prompt.value; controls();};
+  prompt.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+      event.preventDefault();
+      edit.requestSubmit();
+    }
+  });
 
   async function select(index, opening = false) {
     if (busy || !gallery[index] || motion?.phase === 'close') return;
     if (!opening) settleForInteraction();
+    localMotion.get(plane)?.cancel();
+    cancelPreviewVoice();
     const ticket = ++revision;
     ready = false;
     current = gallery[index];
@@ -504,7 +848,7 @@ const openImagePreview = (() => {
     current.doc = documents.get(current.src);
     const url = new URL(current.src);
     current.editable = isEditable(url);
-    filename.textContent = current.alt || '图像 ' + (index + 1);
+    galleryToggle.title = current.alt || '图像 ' + (index + 1);
     for (const [number, control] of [...thumbs.children].entries()) {
       control.setAttribute('aria-current', number === index ? 'true' : 'false');
     }
@@ -512,7 +856,7 @@ const openImagePreview = (() => {
     zoom.value = 'fit';
     prompt.value = current.doc.prompt;
     mask.checked = false;
-    setTool('view');
+    setEditing(false);
     message('正在加载图片…');
     image.alt = current.alt || '预览图像';
     image.src = current.src;
@@ -531,19 +875,35 @@ const openImagePreview = (() => {
         const thumbnail = thumbnailGeometry(origin, current.src);
         const photo = thumbnail && animateFlight(motion, origin, plane.getBoundingClientRect(), thumbnail);
         if (photo) finishWith(motion, photo);
-      }
+        else reveal(plane, 1);
+      } else reveal(plane, 1);
       message(current.editable ? '' : '这张图可预览和下载，本地图片附件可继续编辑。');
     } catch {
       if (revision === ticket) message('图片加载失败。');
     }
     if (revision === ticket) controls();
   }
-  viewer.addEventListener('cancel', event => {event.preventDefault(); requestClose();});
+  function dismissPreviewLayer() {
+    if (voice) cancelPreviewVoice();
+    else if (openPanel) dismissPanel(true);
+    else if (editing) {setEditing(false);annotate.focus();}
+    else requestClose();
+  }
+  viewer.addEventListener('cancel', event => {
+    event.preventDefault();
+    dismissPreviewLayer();
+  });
   viewer.addEventListener('click', event => {
     if (motion?.phase === 'close') {event.preventDefault(); event.stopImmediatePropagation();}
     else if (!close.contains(event.target)) settleForInteraction();
   }, true);
   viewer.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !event.defaultPrevented && !event.isComposing) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) dismissPreviewLayer();
+      return;
+    }
     if (event.target.closest('input,textarea,select') || !current || busy || motion?.phase === 'close') return;
     if ((event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) {
       event.preventDefault();
@@ -570,6 +930,8 @@ const openImagePreview = (() => {
     settleMotion();
     const entering = !viewer.open;
     gallery = [...unique.values()];
+    thumbs.hidden = gallery.length < 2;
+    galleryToggle.setAttribute('aria-expanded', String(!thumbs.hidden));
     let activeSrc;
     try {activeSrc = new URL(active, location.href).href;} catch {}
     const index = Math.max(0, gallery.findIndex(item => item.src === activeSrc));
@@ -585,6 +947,9 @@ const openImagePreview = (() => {
       return control;
     }));
     if (entering) {
+      closeComposerControls();
+      syncComposerControls();
+      returnFocus = document.activeElement;
       viewer.showModal();
       if (canMove()) {
         openingUntil = performance.now() + 110;
@@ -600,7 +965,7 @@ const openImagePreview = (() => {
 document.addEventListener('click', event => {
   const selector = '.attachment-card img,.markdown img,.file-preview img';
   const target = event.target.closest(selector);
-  if (!target || target.closest('.asset-preview,.image-preview')) return;
+  if (!target || target.closest('.asset-preview,.image-preview,.attachment-side-preview')) return;
   event.preventDefault();
   const gallery = [...document.querySelectorAll(selector)]
     .filter(image => image.getClientRects().length)

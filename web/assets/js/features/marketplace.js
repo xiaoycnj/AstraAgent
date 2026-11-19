@@ -154,13 +154,15 @@ async function installMarketPlugin(entry) {
     ))
   )
     return;
-  marketData.state = await api("/api/marketplace/install", "POST", {
-    kind: entry.kind,
-    id: entry.id,
-    sha256: entry.sha256,
+  await withPluginReload(async () => {
+    marketData.state = await api("/api/marketplace/install", "POST", {
+      kind: entry.kind,
+      id: entry.id,
+      sha256: entry.sha256,
+    });
+    await reloadCapabilities();
+    renderMarketCards();
   });
-  await reloadCapabilities();
-  renderMarketCards();
   toast("插件已安装并启用");
 }
 function marketDetails(entry) {
@@ -272,12 +274,15 @@ function renderMarketCards() {
           async () => {
             if (!(await appConfirm("卸载 " + entry.name + "？"))) return;
             if (active) await resetMarketSkin();
-            marketData.state = await api("/api/marketplace/uninstall", "POST", {
-              kind: entry.kind,
-              id: entry.id,
-            });
-            await reloadCapabilities();
-            renderMarketCards();
+            const uninstall = async () => {
+              marketData.state = await api("/api/marketplace/uninstall", "POST", {
+                kind: entry.kind,
+                id: entry.id,
+              });
+              await reloadCapabilities();
+              renderMarketCards();
+            };
+            await (entry.kind === 'plugin' ? withPluginReload(uninstall) : uninstall());
           },
           "secondary",
         ),
@@ -301,10 +306,13 @@ async function renderMarketplacePage() {
     const retry = actionButton('重新检查并恢复', async () => {
       retry.disabled = true;
       try {
-        const result = await api('/api/extensions/safety', 'POST', {action:'retry'});
-        if (!result.active) location.reload();
-        else { panel.querySelector('p').textContent = result.reason; retry.disabled = false; }
-      } catch (error) { toast(error.message); retry.disabled = false; }
+        await withPluginReload(async () => {
+          const result = await api('/api/extensions/safety', 'POST', {action:'retry'});
+          if (!result.active) reloadWorkspace();
+          else panel.querySelector('p').textContent = result.reason;
+        });
+      } catch (error) { toast(error.message); }
+      finally { retry.disabled = false; }
     }, 'primary');
     panel.append(retry); destinationBody.append(panel);
     try {
@@ -546,12 +554,15 @@ marketImporter.onchange = async () => {
       ))
     )
       return;
-    marketData = {
-      ...(marketData || {}),
-      state: await api("/api/marketplace/import", "POST", entry),
+    const install = async () => {
+      marketData = {
+        ...(marketData || {}),
+        state: await api("/api/marketplace/import", "POST", entry),
+      };
+      await reloadCapabilities();
+      await renderMarketplacePage();
     };
-    await reloadCapabilities();
-    await renderMarketplacePage();
+    await (entry.kind === 'plugin' ? withPluginReload(install) : install());
     toast("作品已导入");
   } catch (error) {
     toast(error.message);
@@ -622,11 +633,12 @@ const marketReady = Promise.resolve(studioReady)
         restoreSkinAppearance(before);
         flagExtensionSafety();
         const result = await api('/api/extensions/safety','POST',{action:'skin_error',id:active.id});
-        if (result.active) location.reload();
+        if (result.active) reloadWorkspace();
       }
     }
   })
   .catch((error) => console.warn("Marketplace initialization", error.message));
+window.workspaceLoading?.track(marketReady);
 
 // Manual appearance changes take ownership back from the installed theme.
 async function releaseMarketAppearance() {

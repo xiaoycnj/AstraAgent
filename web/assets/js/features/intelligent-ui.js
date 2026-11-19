@@ -105,7 +105,10 @@ function iuiTable(block, section) {
     body.replaceChildren();
     for (const row of rows) { const tr = elem('tr'); for (const cell of row) tr.append(elem('td', '', iuiNumber(cell))); body.append(tr); }
     if (!rows.length) { const cell = elem('td', '', iuiText('没有匹配结果')); cell.colSpan = block.columns.length; const row = elem('tr'); row.append(cell); body.append(row); }
-    [...heading.children].forEach((cell, index) => cell.setAttribute('aria-sort', sort === index ? ascending ? 'ascending' : 'descending' : 'none'));
+    [...heading.children].forEach((cell, index) => {
+      if (sort === index) cell.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+      else cell.removeAttribute('aria-sort');
+    });
   }
   block.columns.forEach((column, index) => {
     const cell = elem('th'); cell.scope = 'col';
@@ -136,7 +139,7 @@ function iuiChart(block, section) {
     });
   }
   block.series.forEach((series, index) => {
-    const button = iuiButton(series.label, () => { if (visible.has(index)) visible.delete(index); else visible.add(index); button.setAttribute('aria-pressed', String(visible.has(index))); draw(); });
+    const button = iuiButton(series.label, () => { if (visible.has(index)) visible.delete(index); else visible.add(index); button.setAttribute('aria-pressed', String(visible.has(index))); plot.dataset.updated = ''; draw(); });
     button.setAttribute('aria-pressed', 'true'); toggles.append(button);
   });
   section.append(toggles, plot); draw();
@@ -241,7 +244,7 @@ async function iuiSubmitAnswer(entry, decision) {
 }
 function iuiMount(host, entry) {
   const view = {host, number: ++iuiViewNumber, controls: [], outputs: new Map()};
-  host.replaceChildren(); host.dataset.iuiReady = 'true';
+  host.replaceChildren(); host.dataset.iuiReady = 'true'; host.removeAttribute('aria-busy');
   const document = entry.data.document, heading = elem('header', 'iui-heading');
   const purpose = document.purpose || 'display'; host.dataset.iuiPurpose = purpose;
   heading.append(elem('h3', '', document.title)); host.append(heading);
@@ -294,7 +297,7 @@ async function iuiHydrate(host, id, session) {
   }
   try { await entry.loading; iuiMount(host, entry); }
   catch (error) {
-    iuiDocuments.delete(key); host.replaceChildren(elem('p', '', iuiText('智能界面暂时无法加载')), iuiButton('重试', () => iuiHydrate(host, id, session)));
+    iuiDocuments.delete(key); host.removeAttribute('aria-busy'); host.replaceChildren(elem('p', '', iuiText('智能界面暂时无法加载')), iuiButton('重试', () => iuiHydrate(host, id, session)));
   }
 }
 const markdownBeforeIui = markdown;
@@ -310,7 +313,7 @@ markdown = function(text) {
       const match = /^\[\[iui:([a-f0-9]{32})\]\]$/.exec(part);
       if (!match) { fragment.append(document.createTextNode(part)); continue; }
       if (seen.has(match[1])) continue; seen.add(match[1]);
-      const host = elem('section', 'intelligent-ui'); host.dataset.iuiId = match[1]; host.setAttribute('aria-label', iuiText('智能交互界面'));
+      const host = elem('section', 'intelligent-ui'); host.dataset.iuiId = match[1]; host.setAttribute('aria-label', iuiText('智能交互界面')); host.setAttribute('aria-busy', 'true');
       host.append(elem('p', 'iui-status', iuiText('正在加载智能界面…'))); fragment.append(host); iuiHydrate(host, match[1], session);
     }
     if (node.parentElement.tagName === 'P' && node.parentElement.childNodes.length === 1) node.parentElement.replaceWith(fragment);

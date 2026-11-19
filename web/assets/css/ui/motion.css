@@ -9,6 +9,10 @@
   --motion-spatial: cubic-bezier(.18, .8, .2, 1);
   --motion-spring: cubic-bezier(.24, 1.26, .5, 1);
   --motion-release: 290ms;
+  --motion-message: 150ms;
+  --motion-rail: 420ms;
+  --motion-scale-press: .98 .94;
+  --motion-scale-enter: .96 .84;
 }
 @supports (animation-timing-function: linear(0, 1)) {
   :root {
@@ -16,6 +20,29 @@
     --motion-spring: linear(0, .15 9%, .48 18%, .79 27%, .98 36%, 1.064 47%,
       1.069 53%, 1.038 65%, 1.006 77%, .996 89%, 1);
   }
+}
+/* Set presets after the spring fallback so CSS and WAAPI read the same values. */
+:root:where([data-motion-style="quick"]) {
+  --motion-feedback: 70ms;
+  --motion-control: 100ms;
+  --motion-panel: 170ms;
+  --motion-page: 175ms;
+  --motion-exit: 100ms;
+  --motion-release: 145ms;
+  --motion-message: 100ms;
+  --motion-rail: 230ms;
+  --motion-spring: var(--motion-ease);
+  --motion-scale-press: .99;
+  --motion-scale-enter: .99;
+}
+:root:where([data-motion-style="standard"]) {
+  --motion-panel: 240ms;
+  --motion-page: 230ms;
+  --motion-release: 200ms;
+  --motion-rail: 300ms;
+  --motion-spring: var(--motion-spatial);
+  --motion-scale-press: .98;
+  --motion-scale-enter: .985;
 }
 :where(button, [role="button"], summary, a[href], input, textarea, select, [tabindex="0"]) {
   transition-property: background-color, border-color, color, box-shadow, opacity, outline-color, filter, transform, translate, scale;
@@ -33,14 +60,14 @@
   transition-duration: var(--motion-feedback);
 }
 /* Return from a slightly compressed shape while preserving positioning transforms. */
-:is(.ui-button, .app-menu-button, .conversation-latest, .iui-choice, .model-choice, .command-launcher, .custom-select):not(:disabled):not([aria-disabled="true"]) {
+:is(.ui-button, .app-menu-button, .conversation-latest, .iui-choice, .model-choice, .command-launcher, .custom-select, .intelligent-ui button, .iui-option):not(:disabled):not([aria-disabled="true"]) {
   transition: background-color var(--motion-control) var(--motion-ease),
     border-color var(--motion-control) var(--motion-ease), color var(--motion-control) var(--motion-ease),
     box-shadow var(--motion-control) var(--motion-ease), opacity var(--motion-control) var(--motion-ease),
     scale var(--motion-release) var(--motion-spring);
 }
-:is(.ui-button, .app-menu-button, .conversation-latest, .iui-choice, .model-choice, .command-launcher, .custom-select):active:not(:disabled):not([aria-disabled="true"]) {
-  scale: .98 .94;
+:is(.ui-button, .app-menu-button, .conversation-latest, .iui-choice, .model-choice, .command-launcher, .custom-select, .intelligent-ui button, .iui-option):active:not(:disabled):not([aria-disabled="true"]) {
+  scale: var(--motion-scale-press);
   transition-duration: var(--motion-feedback);
   transition-timing-function: var(--motion-ease);
 }
@@ -66,18 +93,19 @@
 }
 /* Avoid even a one-frame shape change when spatial feedback is disabled. */
 :root[data-motion="reduced"] {
-  --motion-feedback: 0ms; --motion-control: 0ms; --motion-panel: 0ms; --motion-page: 0ms; --motion-release: 0ms;
+  --motion-feedback: 0ms; --motion-control: 0ms; --motion-panel: 0ms; --motion-page: 0ms; --motion-release: 0ms; --motion-exit: 0ms; --motion-message: 0ms; --motion-rail: 0ms;
 }
 :root[data-motion="reduced"] :is(button, [role="button"], summary):active,
+:root[data-motion="reduced"] .iui-option:active,
 :root[data-motion="reduced"] .ui-switch:active::before { scale: none !important; }
 :root[data-motion="reduced"] :where(button, [role="button"], summary, a[href], input, textarea, select, [tabindex="0"]) { transition-duration: 0ms !important; }
 @media (prefers-reduced-motion: reduce) {
-  :is(button, [role="button"], summary):active, .ui-switch:active::before { scale: none !important; }
-  :root { --motion-feedback: 0ms; --motion-control: 0ms; --motion-panel: 0ms; --motion-page: 0ms; --motion-release: 0ms; }
+  :is(button, [role="button"], summary):active, .iui-option:active, .ui-switch:active::before { scale: none !important; }
+  :root { --motion-feedback: 0ms; --motion-control: 0ms; --motion-panel: 0ms; --motion-page: 0ms; --motion-release: 0ms; --motion-exit: 0ms; --motion-message: 0ms; --motion-rail: 0ms; }
   :where(button, [role="button"], summary, a[href], input, textarea, select, [tabindex="0"]) { transition-duration: 0ms !important; }
 }
 :is(.asset-card, .market-card, .provider-card, .starter-card, .layout-home-shortcut,
-    .skin-module-row, .iui-choice, .iui-block, .model-choice, .settings-nav button) {
+    .skin-module-row, .iui-block, .settings-nav button) {
   transition: background-color var(--motion-control) var(--motion-ease),
     border-color var(--motion-control) var(--motion-ease),
     box-shadow var(--motion-control) var(--motion-ease),
@@ -97,7 +125,7 @@
     translate: 0 0;
     scale: 1;
     transition:
-      opacity 160ms var(--motion-ease),
+      opacity var(--motion-control) var(--motion-ease),
       translate var(--motion-panel) var(--motion-spring),
       scale var(--motion-panel) var(--motion-spring),
       display var(--motion-exit) allow-discrete;
@@ -110,7 +138,7 @@
     translate: var(--menu-x) var(--menu-y);
     scale: var(--menu-scale, .96 .86);
     transition:
-      opacity 120ms ease-in,
+      opacity var(--motion-feedback) ease-in,
       translate var(--motion-exit) var(--motion-spatial),
       scale var(--motion-exit) var(--motion-spatial),
       display var(--motion-exit) allow-discrete;
@@ -143,13 +171,14 @@
 /* Narrow panes slide over the viewport without resizing the reader. The pane's
    existing inert state handles focus throughout both directions of travel. */
 @media (max-width: 760px) {
+  body.has-navigation-rail:not(.layout-navigation-custom) #app { transition-property: none; }
   .has-navigation-rail:not(.layout-navigation-custom) #conversation-sidebar {
     transform: translateX(0);
-    transition: transform 350ms var(--motion-spring), opacity 180ms var(--motion-ease), visibility 350ms;
+    transition: transform var(--motion-panel) var(--motion-spring), opacity var(--motion-control) var(--motion-ease), visibility var(--motion-panel);
   }
   .has-navigation-rail.conversation-collapsed:not(.layout-navigation-custom) #conversation-sidebar {
     transform: translateX(-110%);
-    transition: transform 220ms var(--motion-spatial), opacity 180ms ease-in, visibility 220ms;
+    transition: transform var(--motion-exit) var(--motion-spatial), opacity var(--motion-control) ease-in, visibility var(--motion-exit);
   }
 }
 
@@ -200,3 +229,21 @@ dialog:not(.image-preview)[open]::backdrop { opacity: 1; }
 }
 /* Rich content and canvas coordinates retain their own geometry. */
 .viewport, .world, .node, .CodeMirror, .CodeMirror * { scale: none; }
+
+/* Only chart updates initiated through the legend get an entrance. */
+.iui-chart[data-updated] .iui-chart-bar {
+  transform-origin: left center;
+  animation: iui-chart-reveal var(--motion-panel) var(--motion-spatial) both;
+}
+.iui-chart[data-updated] .iui-chart-bar[data-negative=true] { transform-origin: right center; }
+@keyframes iui-chart-reveal {
+  from { scale: .3 1; opacity: .45; }
+  to { scale: 1; opacity: 1; }
+}
+
+/* Caption controls must keep their hit targets, including on mouse release. */
+.custom-titlebar .window-controls button {
+  scale: none;
+  transition: background-color var(--motion-control) var(--motion-ease),
+    color var(--motion-control) var(--motion-ease);
+}

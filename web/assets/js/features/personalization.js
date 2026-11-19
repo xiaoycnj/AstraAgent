@@ -324,9 +324,11 @@ function applyPersonalIcons() {
   }
 }
 new MutationObserver(() => applyPersonalIcons()).observe($('#send'), {childList: true});
-const appearanceReady = api('/api/appearance').then(value => {
+const appearanceReady = workspaceBoot.then(() => api('/api/appearance')).then(value => {
   appearanceDraft = value;
   applyPersonalAppearance(); syncAppearanceControls(); appearanceControls.disabled = false;
+  const image = wallpaper.firstElementChild;
+  if (window.workspaceLoading.active && image?.tagName === 'IMG') return image.decode().catch(() => {});
 }).catch(error => {
   appearanceFeedback.textContent = error.message;
   retryAppearance.hidden = false;
@@ -340,3 +342,5 @@ const appearanceReady = api('/api/appearance').then(value => {
     retryAppearance.onclick = safely(() => flushAppearance());
   });
 });
+
+window.workspaceLoading?.track(appearanceReady);

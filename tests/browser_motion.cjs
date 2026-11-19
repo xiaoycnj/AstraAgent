@@ -273,6 +273,26 @@ async function main() {
       return document.querySelector('[data-panel=general]').getAnimations().some(animation=>animation.id==='astra-enter');
     });
     assert.equal(enter, true, 'settings panel has one entry animation');
+    await page.evaluate(()=>selectSettingsTab('appearance'));
+    const styles = page.getByRole('group',{name:'动效风格'});
+    for (const [name, duration] of [['轻快',170], ['平滑',240], ['弹性',320]]) {
+      await styles.getByRole('button',{name,exact:true}).click();
+      assert.equal(await styles.getByRole('button',{name,exact:true}).getAttribute('aria-pressed'),'true');
+      const actual = await page.evaluate(async () => {
+        selectSettingsTab('general');
+        await new Promise(requestAnimationFrame);
+        const panel = document.querySelector('[data-panel=general]');
+        const animation = panel.getAnimations().find(a=>a.id==='astra-enter');
+        return animation?.effect.getTiming().duration;
+      });
+      // Settings panels use panel timing. The actual WAAPI effect must change, not just the CSS value.
+      assert.equal(actual, duration);
+      await page.evaluate(()=>selectSettingsTab('appearance'));
+    }
+    await styles.getByRole('button',{name:'弹性',exact:true}).focus();
+    await page.keyboard.press('Home');
+    assert.equal(await styles.getByRole('button',{name:'轻快',exact:true}).getAttribute('aria-pressed'),'true');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('astra-motion-style')), 'quick');
     await page.evaluate(()=>{appConfirm('检查全局弹窗动效');});
     await page.locator('dialog[open]').waitFor();
     assert.ok(await page.locator('dialog[open]').evaluate(node=>getComputedStyle(node).transitionProperty.includes('opacity')));
@@ -282,9 +302,10 @@ async function main() {
     const reduced = await page.evaluate(async () => {
       selectSettingsTab('appearance');
       await new Promise(requestAnimationFrame);
-      return {animations:document.getAnimations().filter(animation=>animation.id==='astra-enter').length, duration:getComputedStyle(document.querySelector('#settings-close')).transitionDuration, backdrop:getComputedStyle(document.querySelector('.interactive-preview'),'::backdrop').transitionDuration};
+      return {animations:document.getAnimations().filter(animation=>animation.id==='astra-enter').length, duration:getComputedStyle(document.querySelector('#settings-close')).transitionDuration, backdrop:getComputedStyle(document.querySelector('.interactive-preview'),'::backdrop').transitionDuration, preset:getComputedStyle(document.documentElement).getPropertyValue('--motion-panel').trim()};
     });
     assert.equal(reduced.animations,0);
+    assert.equal(reduced.preset,'0ms');
     assert.equal(parseFloat(reduced.duration),0);
     assert.equal(parseFloat(reduced.backdrop),0);
     await page.emulateMedia({reducedMotion:'no-preference'});

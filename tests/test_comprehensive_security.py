@@ -1,5 +1,6 @@
 """Cross-entry security regressions, using isolated data and synthetic credentials."""
 import ast
+import io
 import http.client
 import inspect
 import json
@@ -11,6 +12,7 @@ import unittest
 from unittest.mock import patch
 from urllib.error import URLError
 import backend
+import personalization
 import security_net
 import security_audit
 import runtime_engine
@@ -66,6 +68,28 @@ class ComprehensiveSecurity(unittest.TestCase):
         for headers in [{'Origin':'http://evil.example'},{'Sec-Fetch-Site':'cross-site'},{'Host':'evil.example'}]:
             self.assertEqual(self.request(server,'/api/bootstrap',headers={'X-App-Token':backend.TOKEN,**headers}),403)
         self.assertEqual(self.request(server,'/api/bootstrap',headers={'X-App-Token':backend.TOKEN}),200)
+
+    def test_private_appearance_assets_require_a_scoped_cookie(self):
+        html = b'<h1>Test wallpaper</h1>'
+        asset = personalization.store_asset(self.data, io.BytesIO(html), len(html), 'fixture.html')
+        path = '/appearance-assets/' + asset['id']
+        server = self.server()
+        connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+        try:
+            connection.request('GET', '/api/bootstrap', headers={'X-App-Token': backend.TOKEN})
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            jar = {cookie.split('=', 1)[0]: cookie.split(';', 1)[0]
+                   for name, cookie in response.getheaders() if name.lower() == 'set-cookie'}
+            response.read()
+        finally:
+            connection.close()
+        api_name = f'astra_{server.server_port}'
+        asset_name = f'astra_assets_{server.server_port}'
+        self.assertEqual(self.request(server, path), 403)
+        self.assertEqual(self.request(server, path, headers={'Cookie': jar[api_name]}), 403)
+        self.assertEqual(self.request(server, path, headers={'Cookie': jar[asset_name]}), 200)
+        self.assertEqual(self.request(server, '/api/settings', headers={'Cookie': jar[asset_name]}), 403)
 
     def test_default_initialization_and_local_reads_do_not_connect_externally(self):
         server=self.server()

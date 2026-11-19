@@ -4,7 +4,10 @@ capabilitiesPanel.querySelector('h2').textContent='插件与技能';
 const integrationBar=elem('div','integration-toolbar');
 const integrationTabs=elem('div','integration-tabs');integrationTabs.setAttribute('role','tablist');
 const integrationSearch=elem('input');integrationSearch.type='search';integrationSearch.placeholder='搜索插件、技能和服务';integrationSearch.setAttribute('aria-label','搜索能力');
-integrationBar.append(integrationTabs,integrationSearch,actionButton('重新扫描',async()=>{await reloadCapabilities();await loadMcp();renderIntegrationSkills();},'secondary'));
+integrationBar.append(integrationTabs,integrationSearch,actionButton('重新扫描',async()=>{
+ try {await withPluginReload(async()=>{await reloadCapabilities();await loadMcp();});}
+ catch(error){integrationNotice.textContent=error.message;}
+},'secondary'));
 capabilitiesPanel.children[1].after(integrationBar);
 const integrationPanes={},integrationButtons={};let integrationCurrent='plugins';
 for(const [id,label] of [['plugins','插件'],['skills','Skills'],['mcp','MCP'],['tools','Tools']]){
@@ -16,7 +19,7 @@ integrationPanes.plugins.append(pluginSection);
 const integrationSkills=elem('div','integration-skill-list');integrationPanes.skills.append(integrationSkills,skillEditor,skillFeedback);
 integrationPanes.mcp.append(...Array.from(mcpPanel.children));mcpPanel.remove();$('[data-settings-tab=mcp]')?.remove();
 integrationPanes.tools.append(legacyCapabilities,toolCatalogSection);
-const integrationNotice=elem('p','hint');capabilitiesPanel.append(integrationNotice);
+const integrationNotice=elem('p','hint integration-notice');integrationNotice.setAttribute('role','status');capabilitiesPanel.append(integrationNotice);
 function selectIntegration(id){
  integrationCurrent=id;for(const key of Object.keys(integrationPanes)){integrationPanes[key].hidden=key!==id;integrationButtons[key].setAttribute('aria-selected',String(key===id));integrationButtons[key].classList.toggle('active',key===id);}
  filterIntegrations();
@@ -40,10 +43,13 @@ function renderIntegrationSkills(){
  integrationButtons.plugins.textContent='插件 '+capabilityCatalog.plugins.length;integrationButtons.skills.textContent='Skills '+Object.keys(capabilityCatalog.all_skills||capabilityCatalog.skills).length;
  integrationNotice.textContent=(capabilityCatalog.errors||[]).join(' · ');filterIntegrations();
 }
-const previousIntegrationReload=reloadCapabilities;reloadCapabilities=async function(){await previousIntegrationReload();renderIntegrationSkills();};
+const previousIntegrationReload=reloadCapabilities;reloadCapabilities=async function(initial){
+ if(!await previousIntegrationReload(initial))return false;
+ renderIntegrationSkills();return true;
+};
 const previousIntegrationMcp=loadMcp;loadMcp=async function(){await previousIntegrationMcp();integrationButtons.mcp.textContent='MCP '+mcpCards.querySelectorAll('.mcp-card').length;filterIntegrations();};
 const previousIntegrationSelect=selectSettingsTab;selectSettingsTab=function(name){previousIntegrationSelect(name==='mcp'?'capabilities':name);if(name==='mcp')selectIntegration('mcp');if(name==='capabilities'||name==='mcp'){reloadCapabilities().catch(e=>toast(e.message));loadMcp().catch(e=>toast(e.message));}};
-selectIntegration('plugins');studioReady.then(()=>reloadCapabilities()).catch(e=>toast(e.message));
+selectIntegration('plugins');
 
 // Copyright originals stay in a single accessible modal, outside the About scroll.
 const licenseDialog=elem('dialog','license-dialog');licenseDialog.id='license-dialog';licenseDialog.setAttribute('aria-label','开源版权声明');

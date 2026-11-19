@@ -90,18 +90,28 @@ def install(window):
     common.DefSubclassProc.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM];common.DefSubclassProc.restype=Result
     common.RemoveWindowSubclass.argtypes=[wintypes.HWND,Callback,UIntPtr]
     user.PostMessageW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
+    user.DefWindowProcW.argtypes=[wintypes.HWND,wintypes.UINT,wintypes.WPARAM,wintypes.LPARAM]
+    user.DefWindowProcW.restype=Result
+    def resize_edge():
+        return max(5, round(6 * user.GetDpiForWindow(handle) / 96))
+
     class Frame:
         def __init__(self):
             self.maximize_rect=None;self.drag_rects=[];self.calculations=0
             self.callback=Callback(self.dispatch);self.identifier=id(self)
         def dispatch(self,hwnd,code,wparam,lparam,identifier,reference):
             try:
-                if code==0x83 and wparam:
+                if code==0x83:
                     self.calculations+=1
+                    rect=wintypes.RECT.from_address(lparam)
                     if user.IsZoomed(handle):
                         work=monitor_info(user,handle).work
-                        rect=wintypes.RECT.from_address(lparam)
                         rect.left=work.left;rect.top=work.top;rect.right=work.right;rect.bottom=work.bottom
+                    else:
+                        # A real non-client rim keeps WebView2 child HWNDs outside the resize hit area.
+                        edge=resize_edge()
+                        if rect.right-rect.left>2*edge and rect.bottom-rect.top>2*edge:
+                            rect.left+=edge;rect.top+=edge;rect.right-=edge;rect.bottom-=edge
                     return 0
                 if code==0x24:
                     result=common.DefSubclassProc(hwnd,code,wparam,lparam)
@@ -111,17 +121,23 @@ def install(window):
                     return result
                 if code==0x84:
                     point=Point(ctypes.c_short(lparam&0xffff).value,ctypes.c_short((lparam>>16)&0xffff).value)
-                    user.ScreenToClient(handle,ctypes.byref(point));x,y=point.x,point.y
-                    bounds=wintypes.RECT();user.GetWindowRect(handle,ctypes.byref(bounds));width=bounds.right-bounds.left;height=bounds.bottom-bounds.top
-                    edge=max(5,round(6*user.GetDpiForWindow(handle)/96))
                     if not user.IsZoomed(handle):
-                        left,right,top,bottom=x<edge,x>=width-edge,y<edge,y>=height-edge
+                        bounds=wintypes.RECT();user.GetWindowRect(handle,ctypes.byref(bounds))
+                        edge=resize_edge()
+                        left,right=point.x<bounds.left+edge,point.x>=bounds.right-edge
+                        top,bottom=point.y<bounds.top+edge,point.y>=bounds.bottom-edge
                         hit=13 if top and left else 14 if top and right else 16 if bottom and left else 17 if bottom and right else 10 if left else 11 if right else 12 if top else 15 if bottom else 0
                         if hit:return hit
+                    user.ScreenToClient(handle,ctypes.byref(point));x,y=point.x,point.y
                     rect=self.maximize_rect
                     if rect and rect[0]<=x<rect[2] and rect[1]<=y<rect[3]:return 9
                     if any(r[0]<=x<r[2] and r[1]<=y<r[3] for r in self.drag_rects):return 2
                     return 1
+                if code==0x112 and (wparam & 0xfff0)==0xF000:
+                    # WinForms sees a borderless FormBorderStyle; let the OS run its sizing loop.
+                    return user.DefWindowProcW(hwnd,code,wparam,lparam)
+                if code==0x21 and (lparam & 0xffff)==1:
+                    return 1  # MA_ACTIVATE: deliver the first click to the client as it gains focus.
                 if code==0xA1 and wparam==9:return 0
                 if code==0xA2 and wparam==9:
                     user.PostMessageW(handle,0x112,0xF120 if user.IsZoomed(handle) else 0xF030,0);return 0

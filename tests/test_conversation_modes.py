@@ -127,6 +127,65 @@ class ConversationModes(unittest.TestCase):
         self.assertIn("render_iui", names)
         self.assertIn("image_gen", names)
 
+    def test_web_search_is_opt_in_in_both_modes_and_returns_sources(self):
+        import web_search
+
+        result = {"provider": "Brave Search", "results": [
+            {"title": "Source", "url": "https://example.org/news", "snippet": "Test result"}
+        ]}
+        for mode in ("chat", "agent"):
+            with self.subTest(mode=mode), patch.object(web_search, "configured", return_value=True), \
+                    patch.object(web_search, "search", return_value=result) as search:
+                requests = []
+
+                def model(config, path, payload):
+                    requests.append(copy.deepcopy(payload))
+                    if len(requests) == 1:
+                        return tool_result("web_search", {"query": "public news"})
+                    return {"choices": [{"message": {"content": "找到相关结果。"}}]}
+
+                with patch.object(backend, "upstream", side_effect=model):
+                    answer = backend.completion(self.config(mode, web_search_enabled=True, allow_tools=False), [])
+                self.assertIn("https://example.org/news", answer)
+                self.assertIn("web_search", [tool["function"]["name"] for tool in requests[0]["tools"]])
+                self.assertIn("Test result", requests[1]["messages"][-1]["content"])
+                search.assert_called_once_with(backend.DATA, {"query": "public news"})
+
+    def test_web_search_cannot_be_called_when_disabled_or_unconfigured(self):
+        import web_search
+
+        for configured, enabled in ((True, False), (False, True)):
+            with self.subTest(configured=configured, enabled=enabled), \
+                    patch.object(web_search, "configured", return_value=configured), \
+                    patch.object(web_search, "search") as search, \
+                    patch.object(backend, "upstream", return_value=tool_result("web_search", {"query": "news"})):
+                with self.assertRaises(backend.ApiError):
+                    backend.completion(self.config(web_search_enabled=enabled), [])
+                search.assert_not_called()
+
+    def test_web_search_waits_for_approval_after_external_content(self):
+        import web_search
+
+        for allow in (False, True):
+            with self.subTest(allow=allow), patch.object(web_search, 'configured', return_value=True), \
+                    patch.object(web_search, 'search', return_value={'results': []}) as search, \
+                    patch.object(backend, 'stream_upstream', side_effect=[
+                        tool_result('web_search', {'query': 'public news'}),
+                        {'choices': [{'message': {'content': 'Done'}}]},
+                    ]):
+                def confirm(name, args, emit, token):
+                    search.assert_not_called()
+                    self.assertEqual(name, 'web_search')
+                    self.assertEqual(args, {'query': 'public news'})
+                    return allow
+
+                config = self.config(web_search_enabled=True, access_policy='full')
+                config['_untrusted_context'] = True
+                with patch.object(backend, 'approve_tool', side_effect=confirm) as approval:
+                    self.assertEqual(backend.completion(config, [], emit=lambda event: None), 'Done')
+                approval.assert_called_once()
+                self.assertEqual(search.call_count, int(allow))
+
     def test_forged_tools_are_rejected_before_execution(self):
         for name in (
             "read_file",

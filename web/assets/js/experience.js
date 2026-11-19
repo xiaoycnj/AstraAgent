@@ -4,7 +4,44 @@ const permissionLabel=elem('label','permission-label','文件权限');const perm
 for(const [value,name] of [['read_file','读取文件'],['write_file','写入文件'],['list_files','列出文件']]){const label=elem('label');const input=elem('input');input.type='checkbox';input.value=value;input.onchange=saveRuntime;label.append(input,document.createTextNode(name));$('.tool-picks').append(label)}
 const oldRuntimeOptions=runtimeOptions;runtimeOptions=function(){return {...oldRuntimeOptions(),file_permission:permissionSelect.value}};
 const approvalDialog=elem('dialog','approval-dialog');const approvalHeading=elem('h2','','Agent 请求文件访问');const approvalDetails=elem('pre');const approvalActions=elem('div','approval-actions');const rejectApproval=elem('button','secondary','拒绝');const acceptApproval=elem('button','primary','允许本次');approvalActions.append(rejectApproval,acceptApproval);approvalDialog.append(approvalHeading,elem('p','hint','仅访问 data/files 工作目录。请核对路径和写入内容。'),approvalDetails,approvalActions);document.body.append(approvalDialog);
-let approvalQueue=Promise.resolve();function requestApproval(event){approvalQueue=approvalQueue.then(()=>new Promise(resolve=>{const imageRequest=['image_gen','generate_image'].includes(event.name);approvalHeading.textContent=imageRequest?'允许这次图像生成或编辑？':event.name==='remember_memory'?'保存这条长期记忆？':event.name==='execute_command'?'允许执行此命令？':'Agent 请求文件访问';approvalDialog.querySelector('.hint').textContent=imageRequest?'所选参考图和修改说明会发送到图片服务商。本次调用可能产生费用。':event.name==='remember_memory'?'记忆将保存在 memory/，并在启用记忆时用于后续对话。':event.name==='execute_command'?'请核对命令参数和模式。本机模式不具备系统隔离。':'仅访问受控目录。请核对路径和写入内容。';approvalDetails.textContent=event.name+'\n'+JSON.stringify(event.args,null,2);acceptApproval.disabled=rejectApproval.disabled=false;approvalDialog.showModal();let submitting=false;const finish=async allow=>{if(submitting)return;submitting=true;acceptApproval.disabled=rejectApproval.disabled=true;try{await api('/api/approvals','POST',{id:event.id,allow});approvalDialog.close();resolve()}catch(e){approvalDialog.querySelector('.hint').textContent='未能提交选择：'+e.message+'。请重试或关闭后重试。';toast(e.message);submitting=false;acceptApproval.disabled=rejectApproval.disabled=false}};rejectApproval.onclick=()=>finish(false);acceptApproval.onclick=()=>finish(true);approvalDialog.oncancel=e=>{e.preventDefault();finish(false)}}));return approvalQueue}
+const defaultApprovalCopy = ['Agent 请求文件访问', '仅访问受控目录。请核对路径和写入内容。'];
+const imageApprovalCopy = ['允许这次图像生成或编辑？', '所选参考图和修改说明会发送到图片服务商。本次调用可能产生费用。'];
+const approvalCopy = new Map([
+  ['image_gen', imageApprovalCopy], ['generate_image', imageApprovalCopy],
+  ['remember_memory', ['保存这条长期记忆？', '记忆将保存在 memory/，并在启用记忆时用于后续对话。']],
+  ['execute_command', ['允许执行此命令？', '请核对命令参数和模式。本机模式不具备系统隔离。']],
+  ['web_search', ['将这条搜索词发送给 Brave Search？', '请核对搜索词，避免发送私人信息。']],
+]);
+let approvalQueue = Promise.resolve();
+function requestApproval(event) {
+  approvalQueue = approvalQueue.then(() => new Promise(resolve => {
+    const [title, copy] = approvalCopy.get(event.name) || defaultApprovalCopy;
+    const hint = approvalDialog.querySelector('.hint');
+    approvalHeading.textContent = title;
+    hint.textContent = copy;
+    approvalDetails.textContent = event.name + '\n' + JSON.stringify(event.args, null, 2);
+    acceptApproval.disabled = rejectApproval.disabled = false;
+    approvalDialog.showModal();
+    let submitting = false;
+    async function finish(allow) {
+      if (submitting) return;
+      submitting = acceptApproval.disabled = rejectApproval.disabled = true;
+      try {
+        await api('/api/approvals', 'POST', {id: event.id, allow});
+        approvalDialog.close();
+        resolve();
+      } catch (error) {
+        hint.textContent = '未能提交选择：' + error.message + '。请重试或关闭后重试。';
+        toast(error.message);
+        submitting = acceptApproval.disabled = rejectApproval.disabled = false;
+      }
+    }
+    rejectApproval.onclick = () => finish(false);
+    acceptApproval.onclick = () => finish(true);
+    approvalDialog.oncancel = event => { event.preventDefault(); finish(false); };
+  }));
+  return approvalQueue;
+}
 const automaticReviews = new Set();
 async function reviewDeliveredFiles(sid, attachmentIds, options) {
   const pendingIds = attachmentIds.filter(id => !automaticReviews.has(id));
@@ -66,7 +103,7 @@ $('#model-pill').setAttribute('aria-controls','reasoning-popover');
 reasoningModel.setAttribute('aria-controls','model-picker');
 function chevron(){const svg=svgIcon('chevron');svg.classList.add('chevron');return svg}
 const previousSyncComposer=syncComposerControls;syncComposerControls=function(){previousSyncComposer();const index=Math.max(0,strengths.indexOf($('#reasoning-select').value));$('#model-pill').replaceChildren(elem('span','model-name',chosenModel()||'选择模型'),elem('span','model-strength',strengthNames[index]),chevron());reasoningModel.replaceChildren(elem('span','',chosenModel()||'选择模型'),chevron());$('#model-pill').classList.toggle('maxed',index===7)};
-function openReasoning(){const wasOpen=!reasoningPopover.hidden;closeComposerControls();if(wasOpen)return;syncComposerControls();reasoningPopover.hidden=false;$('#model-pill').setAttribute('aria-controls','reasoning-popover');$('#model-pill').setAttribute('aria-expanded','true');placeControl(reasoningPopover,$('#model-pill'));slider.focus({preventScroll:true})}
+function openReasoning(){toggleReasoningControl($('#model-pill'))}
 $('#model-pill').onclick=openReasoning;reasoningModel.onclick=openModelPicker;syncComposerControls();
 // Accessible custom select menus, with the native select retained as the data source.
 const selectMenu=elem('div','select-menu floating-control');selectMenu.hidden=true;selectMenu.id='custom-select-menu';selectMenu.setAttribute('role','listbox');document.body.append(selectMenu);let selectOwner=null,selectTrigger=null;

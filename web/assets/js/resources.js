@@ -60,7 +60,10 @@ function resourceRow(item){
     button.append(icon,label);
     button.title=item.name;
     if(item.staged)button.append(elem('small','','待发送'));
-    button.onclick=safely(()=>previewResource(item));
+    button.onclick=safely(()=>{
+        closeResources();
+        previewResource(item,resourceButton);
+    });
     row.append(button);
     if(!item.unavailable){
         const downloadLink=elem('a','resource-download');
@@ -110,39 +113,145 @@ document.addEventListener('click',event=>{
     if(!resourcePanel.contains(event.target)&&!resourceButton.contains(event.target))closeResources();
 });
 document.addEventListener('keydown',event=>{
-    if(event.key==='Escape'&&!resourcePanel.hidden){closeResources();resourceButton.focus();}
+    if(event.key==='Escape'&&!resourcePanel.hidden){event.preventDefault();closeResources();resourceButton.focus();}
 });
 
-const resourcePreview=elem('dialog','resource-preview');
-const resourcePreviewHead=elem('header');
-const resourcePreviewTitle=elem('strong');
-resourcePreviewTitle.dataset.i18nIgnore='';
-const resourcePreviewBody=elem('div','resource-preview-body');
-const resourcePreviewClose=actionButton('关闭',()=>resourcePreview.close(),'secondary');
-resourcePreviewHead.append(resourcePreviewTitle,resourcePreviewClose);
-resourcePreview.append(resourcePreviewHead,resourcePreviewBody);
-document.body.append(resourcePreview);
-let resourcePreviewRequest=0;
-resourcePreview.addEventListener('close',()=>resourcePreviewRequest++);
+function attachmentDownloadId(href){
+    let url;
+    try{url=new URL(href,location.href);}catch{return;}
+    return url.origin===location.origin&&!url.search&&!url.hash
+        ? /^\/api\/attachments\/([a-f0-9]{32})\/content$/.exec(url.pathname)?.[1] : undefined;
+}
 
-async function previewResource(item){
-    if(item.kind==='image'){
-        const collection=[...resourceSources(),...resourceData.outputs].filter(row=>row.kind==='image'&&!row.unavailable);
-        openImagePreview([item,...collection].map(imagePreviewAsset));
-        return;
-    }
-    const ticket=++resourcePreviewRequest;
-    resourcePreviewTitle.textContent=item.name;
-    resourcePreviewBody.textContent=uiText('正在加载附件…');
-    if(!resourcePreview.open)resourcePreview.showModal();
+let attachmentSavePending=false;
+async function saveNativeAttachment(id,bridge,control){
+    if(attachmentSavePending)return;
+    attachmentSavePending=true;
+    control?.setAttribute('aria-busy','true');
     try{
-        const result=await api('/api/attachments/'+item.id+'/preview');
-        if(ticket!==resourcePreviewRequest||!resourcePreview.open)return;
-        const content=item.name.toLowerCase().endsWith('.md')?markdown(result.text):elem('pre','',result.text);
-        content.dataset.i18nIgnore='';
-        resourcePreviewBody.replaceChildren(content);
+        if(await bridge.save_attachment(id))toast(uiText('附件已保存'));
     }catch(error){
-        if(ticket===resourcePreviewRequest)resourcePreviewBody.textContent=error.message;
+        toast(error.message||uiText('无法保存附件'));
+    }finally{
+        attachmentSavePending=false;
+        control?.removeAttribute('aria-busy');
+    }
+}
+
+// Keep real links for the browser; the desktop host uses its native save dialog.
+document.addEventListener('click',event=>{
+    const link=event.target.closest('a[download][href]');
+    const bridge=window.pywebview?.api;
+    if(!link||typeof bridge?.save_attachment!=='function')return;
+    const id=attachmentDownloadId(link.href);
+    if(!id)return;
+    event.preventDefault();
+    saveNativeAttachment(id,bridge,link);
+});
+
+const attachmentWorkspace=$('#app>main');
+const attachmentPane=elem('aside','attachment-side-preview');
+attachmentPane.id='attachment-side-preview';
+attachmentPane.hidden=true;
+attachmentPane.setAttribute('aria-label','附件预览');
+const attachmentPaneHeading=elem('header');
+const attachmentPaneTitle=elem('h2');
+attachmentPaneTitle.dataset.i18nIgnore='';
+const attachmentPaneActions=elem('div','attachment-preview-actions');
+const attachmentPaneBody=elem('div','attachment-preview-body');
+attachmentPaneBody.tabIndex=0;
+attachmentPaneBody.setAttribute('aria-label','附件内容');
+const attachmentPaneClose=actionButton('',()=>closeAttachmentPreview(),'attachment-preview-control');
+attachmentPaneClose.title='关闭附件预览';
+attachmentPaneClose.setAttribute('aria-label','关闭附件预览');
+attachmentPaneClose.append(svgIcon('close'));
+attachmentPaneHeading.append(attachmentPaneTitle,attachmentPaneActions);
+attachmentPane.append(attachmentPaneHeading,attachmentPaneBody);
+attachmentWorkspace.append(attachmentPane);
+
+let attachmentPreviewRequest=0,attachmentPreviewFocus=null,attachmentPreviewContext=null;
+function closeAttachmentPreview(restoreFocus=true){
+    if(attachmentPane.hidden)return;
+    attachmentPreviewRequest++;
+    attachmentPane.hidden=true;
+    attachmentWorkspace.classList.remove('with-attachment-preview');
+    attachmentPaneActions.replaceChildren();
+    attachmentPaneBody.replaceChildren();
+    if(restoreFocus){
+        const target=attachmentPreviewFocus?.getClientRects().length?attachmentPreviewFocus:
+            [resourceButton,$('#asset-search'),$('#chat-input')].find(control=>control?.getClientRects().length);
+        target?.focus({preventScroll:true});
+    }
+    attachmentPreviewFocus=attachmentPreviewContext=null;
+}
+
+function attachmentViewKey(){
+    return appPage==='home'?`${state.mode}:${state.session?.id||''}`:appPage;
+}
+
+function syncAttachmentPreview(){
+    if(!attachmentPane.hidden&&(!$('#settings').hidden||attachmentPreviewContext!==attachmentViewKey()))closeAttachmentPreview(false);
+}
+
+document.addEventListener('keydown',event=>{
+    if(event.key!=='Escape'||event.defaultPrevented||attachmentPane.hidden||
+       !resourcePanel.hidden||document.querySelector('dialog[open]'))return;
+    event.preventDefault();
+    closeAttachmentPreview();
+});
+
+async function previewResource(item,source=document.activeElement){
+    if(item.unavailable||!/^[a-f0-9]{32}$/.test(item.id))return;
+    const ticket=++attachmentPreviewRequest;
+    const active=()=>ticket===attachmentPreviewRequest&&!attachmentPane.hidden;
+    const path='/api/attachments/'+item.id;
+    let name=item.name||uiText('附件预览');
+    if(!attachmentPane.contains(source)) attachmentPreviewFocus=source;
+    attachmentPreviewContext=attachmentViewKey();
+    attachmentPaneTitle.textContent=name;
+    attachmentPaneTitle.title=name;
+    const save=elem('a','attachment-preview-control');
+    save.href=path+'/content';
+    save.download=item.name||'';
+    save.title='下载原文件';
+    save.setAttribute('aria-label','下载原文件');
+    save.append(svgIcon('download'));
+    attachmentPaneActions.replaceChildren(save,attachmentPaneClose);
+    const status=elem('p','attachment-preview-status',uiText('正在加载附件…'));
+    status.setAttribute('role','status');
+    attachmentPaneBody.replaceChildren(status);
+    attachmentPaneBody.scrollTop=0;
+    attachmentWorkspace.classList.add('with-attachment-preview');
+    attachmentPane.hidden=false;
+    attachmentPaneClose.focus({preventScroll:true});
+    try{
+        if(item.kind==='image'){
+            const img=elem('img');
+            img.src=save.href;
+            img.alt=name;
+            await img.decode();
+            if(!active())return;
+            const edit=actionButton('',()=>openImagePreview([{src:img.src,alt:name}],img.src,img),'attachment-preview-control');
+            edit.title='在图像工作台打开';
+            edit.setAttribute('aria-label','在图像工作台打开');
+            edit.append(svgIcon('image'));
+            attachmentPaneActions.prepend(edit);
+            attachmentPaneBody.replaceChildren(img);
+            return;
+        }
+        const result=await api(path+'/preview');
+        if(!active())return;
+        name=result.name||name;
+        attachmentPaneTitle.textContent=attachmentPaneTitle.title=name;
+        if(result.text?.trim()){
+            const content=/\.md$/i.test(name)?markdown(result.text):elem('pre','',result.text);
+            content.dataset.i18nIgnore='';
+            attachmentPaneBody.replaceChildren(content);
+        }else if(result.kind==='pdf'){
+            status.textContent=uiText('此 PDF 没有可预览的文字。');
+        }else status.textContent=uiText('附件没有可预览的内容。');
+    }catch(error){
+        if(active())status.textContent=uiText('无法预览附件。请重试，或下载原文件。');
     }
 }
 
@@ -217,7 +326,7 @@ function scheduleSessionResources(){
 }
 new MutationObserver(scheduleSessionResources).observe(conversationList,{childList:true});
 const beforeResourceHeader=updateHeader;
-updateHeader=function(){beforeResourceHeader();scheduleSessionResources();};
+updateHeader=function(){beforeResourceHeader();syncAttachmentPreview();scheduleSessionResources();};
 const beforeResourceTray=renderAttachmentTray;
 renderAttachmentTray=function(){beforeResourceTray();if(!resourcePanel.hidden)renderResources();};
 syncSessionResources();

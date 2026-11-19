@@ -78,6 +78,37 @@ async function main() {
     assert.equal(await page.evaluate(()=>runtimeOptions().file_permission),'none');
     assert.equal(await page.evaluate(()=>runtimeOptions().command_permission),'none');
     assert.equal(await page.evaluate(()=>shelfProject.hidden),true);
+    const searchToggle = page.locator('.composer-web-search');
+    await page.locator('.composer-options > summary').click();
+    await searchToggle.click();
+    const searchKey = page.locator('#web-search-key');
+    for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
+      await page.setViewportSize(viewport);
+      const geometry=await searchKey.evaluate(input=>{
+        const note=document.querySelector('#web-search-note');
+        const label=input.labels[0].getBoundingClientRect();
+        const field=input.getBoundingClientRect(), copy=note.getBoundingClientRect();
+        const style=getComputedStyle(note);
+        return {stacked:label.bottom<=field.top&&field.bottom<=copy.top,
+          readable:copy.width>140&&copy.height<=4*parseFloat(style.lineHeight),
+          fits:field.right<=document.documentElement.clientWidth+1};
+      });
+      assert.deepEqual(geometry,{stacked:true,readable:true,fits:true},JSON.stringify(viewport));
+    }
+    await page.setViewportSize({width:1440,height:1000});
+    await searchKey.fill('fixture-brave-key');
+    await page.getByRole('button',{name:'保存密钥',exact:true}).click();
+    await page.getByText('已配置密钥。',{exact:false}).waitFor();
+    assert.equal(await searchKey.inputValue(), '');
+    assert.deepEqual(await page.evaluate(()=>api('/api/web-search/settings')), {configured:true});
+    await page.evaluate(()=>closeSettingsPage());
+    await page.locator('.composer-options > summary').click();
+    await searchToggle.click();
+    assert.equal(await searchToggle.getAttribute('aria-pressed'),'true');
+    assert.equal(await page.evaluate(()=>runtimeOptions().web_search_enabled),true);
+    await searchToggle.click();
+    assert.equal(await page.evaluate(()=>runtimeOptions().web_search_enabled),false);
+    await page.keyboard.press('Escape');
     await page.locator('.conversation-mode-picker>summary').click();
     await page.getByRole('button',{name:'Agent',exact:true}).click();
     await page.waitForFunction(()=>getConversationMode()==='agent'&&!conversationModeSaving);
@@ -288,6 +319,7 @@ async function main() {
       const preview=page.getByRole('dialog',{name:'图像工作台'});
       const canvas=preview.locator('.image-preview-plane canvas');
       await canvas.waitFor();
+      await preview.getByRole('button',{name:'标注',exact:true}).click();
       await preview.getByRole('button',{name:'矩形',exact:true}).click();
       const bounds=await canvas.boundingBox();
       assert.ok(bounds.width>100&&bounds.height>100,bounds);
@@ -295,13 +327,18 @@ async function main() {
       await page.mouse.down();
       await page.mouse.move(bounds.x+bounds.width*.6,bounds.y+bounds.height*.5,{steps:5});
       await page.mouse.up();
+      const imageOptions=preview.getByRole('button',{name:'更多图像选项',exact:true});
+      await imageOptions.click();
       const downloadEvent=page.waitForEvent('download');
       await preview.getByRole('button',{name:'导出标注',exact:true}).click();
       assert.equal((await downloadEvent).suggestedFilename(),'astra-annotated.png');
+      await page.keyboard.press('Escape');
       await preview.getByRole('button',{name:'撤销标注',exact:true}).click();
       assert.equal(await preview.getByRole('button',{name:'重做标注',exact:true}).isEnabled(),true);
       await preview.getByRole('button',{name:'重做标注',exact:true}).click();
+      await imageOptions.click();
       await preview.locator('.image-preview-mask input').check();
+      await page.keyboard.press('Escape');
       await preview.getByRole('textbox',{name:'图像修改说明'}).fill('修改测试图像');
       await page.screenshot({path:path.join(root,'work/image-preview-desktop.png')});
       await page.setViewportSize({width:390,height:844});

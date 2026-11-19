@@ -10,11 +10,11 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from runtime_paths import APP_VERSION as VERSION
-ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe dlc_manager.py model_catalog.py model_registry.py auto_router.py model_adapters.py anthropic_messages.py marketplace.py personalization.py layout_config.py application_plugins.py release_feed.py document_understanding.py document_worker.py updater.py local_stt.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py cli_render.py desktop.py
+ROOT_FILES = '''AstraAgent.exe AstraAgent.CLI.exe dlc_manager.py model_catalog.py model_registry.py auto_router.py model_adapters.py anthropic_messages.py marketplace.py personalization.py layout_config.py application_plugins.py release_feed.py document_understanding.py document_worker.py updater.py local_stt.py execution_state.py task_graph.py native_frame.py tool_provenance.py agent_environment.py agent_hub.py attachments.py backend.py cli.py cli_render.py desktop.py desktop_tray.py
 container_runtime.py task_evaluations.py creation_store.py browser_checks.py story_projects.py task_scheduler.py
 security_core.py security_audit.py security_net.py security_server.py extensions.py extension_safety.py marketplace_author.py openai_oauth.py openai_responses.py local_account.py mcp_client.py project_workspace.py runtime_engine.py
 runtime_paths.py sandbox_worker.py server.py storage_manager.py stream_journal.py
-task_control.py usage_meter.py performance_stats.py intelligent_ui.py ui_locale.py watchdog.py workbench.py workspace_tools.py
+task_control.py usage_meter.py performance_stats.py intelligent_ui.py web_search.py ui_locale.py watchdog.py workbench.py workspace_tools.py
 start.bat 启动.bat astra.bat CLI.bat python.bat node.bat README.md CHANGELOG.md
 requirements-desktop.txt requirements-stt.txt requirements-document.txt LICENSE SECURITY.md'''.split()
 SKILLS = ('engineer', 'general', 'planner', 'study', 'writer')

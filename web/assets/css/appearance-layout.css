@@ -127,3 +127,7 @@ body.appearance-custom .appearance-font-sample p { font-family: var(--appearance
 @media (pointer: coarse) {
   .appearance-segmented > button, .appearance-advanced .glass-variant, .personalization-actions .ui-button { min-height: 44px; }
 }
+
+.appearance-experience .appearance-segmented { min-width: 0; }
+.appearance-experience .appearance-segmented > button { overflow-wrap: anywhere; }
+.appearance-experience-note { margin-block: 6px 0; color: var(--muted); font-size: var(--ui-caption); line-height: var(--ui-body-leading); }

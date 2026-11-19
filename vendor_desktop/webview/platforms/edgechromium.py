@@ -224,6 +224,8 @@ class EdgeChrome:
 
     def on_script_notify(self, _, args):
         try:
+            if not self.is_trusted_page(str(args.Source)):
+                return
             return_value = args.get_WebMessageAsJson()
 
             if return_value == '"FilesDropped"':
@@ -256,7 +258,9 @@ class EdgeChrome:
         args.set_Handled(True)
 
         if webview_settings['OPEN_EXTERNAL_LINKS_IN_BROWSER']:
-            webbrowser.open(str(args.get_Uri()))
+            uri = str(args.get_Uri())
+            if uri.lower().startswith(('https://', 'http://', 'mailto:')):
+                webbrowser.open(uri)
         else:
             self.load_url(str(args.get_Uri()))
 
@@ -343,7 +347,15 @@ class EdgeChrome:
         else:
             args.Cancel = True
 
+    def is_trusted_page(self, url):
+        # The host may restrict navigation and bridge messages to its own documents.
+        policy = getattr(self.pywebview_window._js_api, '_allows_page', None)
+        return policy is None or policy(url)
+
     def on_navigation_start(self, sender, args):
+        if not self.is_trusted_page(str(args.Uri)):
+            args.Cancel = True
+            return
         if self.pywebview_window.transparent:
             self.form.Show()
             self.form.Activate()
@@ -386,4 +398,5 @@ class EdgeChrome:
         url = str(sender.Source)
         self.url = None if self.ishtml else url
 
-        inject_pywebview(renderer, self.pywebview_window)
+        if self.is_trusted_page(url):
+            inject_pywebview(renderer, self.pywebview_window)

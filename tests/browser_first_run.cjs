@@ -29,10 +29,70 @@ async function main() {
     {cwd: root, windowsHide: true, encoding: 'utf8'}).trim();
     browser = await chromium.launch({headless: true, executablePath: process.env.ASTRA_TEST_BROWSER ||
       'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
+    const animated = await browser.newPage({locale: 'zh-CN', reducedMotion: 'no-preference', viewport: {width: 1000, height: 650}});
+    await animated.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => { window.startupDomReady = performance.now(); }, {once: true});
+    });
+    await animated.goto(url + '/?desktop-loading=1#access=' + token, {waitUntil:'domcontentloaded'});
+    const movement = await animated.locator('#workspace-loading').evaluate(async loader => {
+      const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const icon = loader.querySelector('.loading-brand img');
+      const title = loader.querySelector('.loading-brand strong');
+      const field = loader.querySelector('.loading-particles');
+      const sample = () => [getComputedStyle(icon).transform, getComputedStyle(title).transform,
+        getComputedStyle(field, '::before').transform, getComputedStyle(field, '::after').transform];
+      await frames();
+      const first = sample();
+      await new Promise(resolve => setTimeout(resolve, 180));
+      await frames();
+      const second = sample();
+      return {stage:document.documentElement.dataset.workspaceLoading,
+        logo:first[0] !== second[0], wordmark:first[1] !== second[1],
+        particles:first[2] !== second[2] && first[3] !== second[3], depth:second[2] !== second[3],
+        first, second, names:[getComputedStyle(icon).animationName,getComputedStyle(title).animationName]};
+    });
+    assert.ok(movement.stage === 'waiting' && movement.logo && movement.wordmark && movement.particles && movement.depth,
+      JSON.stringify(movement));
+    await animated.waitForFunction(() => document.documentElement.dataset.workspaceLoading === 'leaving');
+    assert.ok(await animated.evaluate(() => performance.now() - window.startupDomReady >= 850), 'warm startup leaves time for the brand entrance');
+    await animated.locator('#workspace-loading').waitFor({state:'hidden'});
+    let releasePlugins;
+    const pluginsGate = new Promise(resolve => { releasePlugins = resolve; });
+    await animated.route('**/api/capabilities', async route => { await pluginsGate; await route.continue(); });
+    try {
+      await animated.reload({waitUntil:'domcontentloaded'});
+      const reloadMask = animated.locator('#workspace-loading');
+      await reloadMask.getByRole('status').getByText('正在重新加载工作空间', {exact:true}).waitFor();
+      // The former deadline was 3.2 seconds. A blocked plugin scan must outlast it.
+      await new Promise(resolve => setTimeout(resolve, 3400));
+      assert.equal(await animated.evaluate(() => document.documentElement.dataset.workspaceLoading), 'waiting');
+      assert.equal(await animated.locator('#app').isVisible(), false);
+      releasePlugins();
+      await reloadMask.waitFor({state:'hidden'});
+    } finally { releasePlugins(); }
+    await animated.close();
     const page = await browser.newPage({locale: 'zh-CN', reducedMotion: 'reduce'});
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(url + '/#access=' + token);
+    let releaseAppearance;
+    const waitingForAppearance = new Promise(resolve => { releaseAppearance = resolve; });
+    const appearanceRoute = '**/api/appearance';
+    await page.route(appearanceRoute, async route => { await waitingForAppearance; await route.continue(); });
+    await page.goto(url + '/?desktop-loading=1#access=' + token);
+    const loading = page.locator('#workspace-loading');
+    await loading.waitFor();
+    assert.equal(await loading.locator('.loading-brand strong').textContent(),'AstraAgent');
+    assert.deepEqual(await loading.evaluate(node => {
+      const layers = node.querySelector('.loading-particles');
+      return [getComputedStyle(node.querySelector('img')).animationName,
+        getComputedStyle(node.querySelector('strong')).animationName,
+        getComputedStyle(layers, '::before').animationName,
+        getComputedStyle(layers, '::after').animationName];
+    }), ['none', 'none', 'none', 'none']);
+    assert.equal(await page.evaluate(()=>document.documentElement.dataset.workspaceLoading),'waiting');
+    releaseAppearance();
+    await loading.waitFor({state:'hidden'});
+    await page.unroute(appearanceRoute);
     const wizard = page.locator('#first-run');
     const next = step => wizard.locator(`[data-first-step="${step}"] [data-first-next]`);
     await wizard.waitFor({state: 'visible'});

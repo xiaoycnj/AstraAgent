@@ -270,6 +270,40 @@ state.close();db.close()
     await page.locator('[data-resume-execution]').click();
     await page.waitForFunction(()=>state.messages.some(m=>m.content==='Recovered from checkpoint'));
     assert.equal(await page.locator('.execution-recovery').isVisible(),false);
+    // A blocked task can be abandoned without resolving or replaying its unknown step.
+    execFileSync(python,['-c',`
+import sqlite3,sys
+from pathlib import Path
+db=sqlite3.connect(Path(sys.argv[1])/'workspace.sqlite3')
+db.execute("INSERT INTO runs(id,session_id,status,events) VALUES('abandon-run',?,'failed','[]')",(sys.argv[2],))
+db.execute("INSERT INTO stream_requests(id,session_id,hash,run_id,status,input) VALUES('abandon-fixture',?,'abandon','abandon-run','failed','{}')",(sys.argv[2],))
+db.execute("INSERT INTO executions(request_id,session_id,options,boundary,status,error) VALUES('abandon-fixture',?,'{}',0,'blocked','fixture failure')",(sys.argv[2],))
+db.execute("INSERT INTO execution_steps(request_id,step,kind,name,fingerprint,status) VALUES('abandon-fixture','tool:0:0','tool','fixture','abandon','unknown')")
+db.commit();db.close()
+`,data,recoverySession.id],{cwd:root,windowsHide:true});
+    await page.evaluate(()=>refreshExecutionRecovery());
+    const abandon = page.getByRole('button',{name:'放弃任务',exact:true});
+    await abandon.click();
+    await page.locator('.app-dialog').getByRole('button',{name:'取消',exact:true}).click();
+    await abandon.click();
+    await page.locator('.app-dialog').getByRole('button',{name:'确认',exact:true}).click();
+    await page.locator('.execution-recovery').waitFor({state:'hidden'});
+    const abandoned = await page.evaluate(async()=>{
+      const route='/api/executions/abandon-fixture';
+      await refreshExecutionRecovery();
+      const record=await api(route);
+      const codes=[];
+      for(const action of ['resume','resolve']){
+        try{await api(route+'/'+action,'POST',{step:'tool:0:0',action:'retry',acknowledged:true});codes.push(200);}
+        catch(error){codes.push(error.status);}
+      }
+      return {record,codes,hidden:recoveryPanel.hidden};
+    });
+    assert.equal(abandoned.record.status,'abandoned');
+    assert.equal(abandoned.record.resumable,false);
+    assert.equal(abandoned.record.steps[0].status,'unknown');
+    assert.equal(abandoned.hidden,true);
+    assert.deepEqual(abandoned.codes,[409,409]);
     // Application dialogs must preserve dirty settings and editor cancellation.
     const nativeDialogs=[];page.on('dialog',dialog=>{nativeDialogs.push(dialog.type());dialog.dismiss();});
     await page.evaluate(()=>{showSettings();settingsDirty=true;window.closedSettings=undefined;void closeSettingsPage().then(v=>window.closedSettings=v);});

@@ -9,7 +9,8 @@ $('#provider-edit').onchange=()=>{const c=providerRows.find(x=>x.id===$('#provid
 $('#provider-save').onclick=safely(async()=>{const b=$('#provider-save');busyButton(b,true,'保存中…');try{const result=await api('/api/providers','POST',{...configForm(),id:$('#provider-edit').value,name:$('#provider-name').value});await loadProviders();$('#provider-edit').value=result.id;$('#provider-select').value=result.id;selectProvider();$('#api-key').value='';$('#clear-key').checked=false;settingsDirty=false;$('#settings-feedback').textContent='API 配置已保存并选用于下一条消息。';toast('API 配置已保存')}finally{busyButton(b,false)}});
 $('#provider-delete').onclick=safely(async()=>{const id=$('#provider-edit').value;if(!id)return;if(!await appConfirm('删除此 API 配置？'))return;await api('/api/providers/'+id,'DELETE');await loadProviders();$('#provider-edit').onchange();selectProvider();toast('API 配置已删除')});
 $('#settings-open').addEventListener('click',()=>{$('#provider-edit').value='';$('#provider-name').value=''});$('#model-pill').addEventListener('click',()=>{$('#provider-edit').value='';$('#provider-name').value=''});
-async function initializeStudio(){try{await loadProviders();const capabilities=await api('/api/capabilities');$('#skill-select').replaceChildren(...Object.entries(capabilities.skills).map(([id,v])=>new Option(v.name,id)));if(capabilities.skills.general)$('#skill-select').value='general';const describe=()=>{$('#skill-description').textContent=capabilities.skills[$('#skill-select').value]?.prompt||'';saveRuntime()};$('#skill-select').onchange=describe;$$('.tool-picks input').forEach(x=>x.onchange=saveRuntime);try{const saved=JSON.parse(localStorage.getItem('astra-runtime')||'{}');if(providerRows.some(p=>p.id===saved.provider))$('#provider-select').value=saved.provider;$('#runtime-model').value=saved.model||'';$('#reasoning-select').value=['none','minimal','low','medium','high','xhigh','max'].includes(saved.reasoning)?saved.reasoning:'default';if(capabilities.skills[saved.skill])$('#skill-select').value=saved.skill;$$('.tool-picks input').forEach(x=>x.checked=(saved.tools||[]).includes(x.value))}catch(e){}describe()}catch(e){toast(e.message)}}
+const initialCapabilities=api('/api/capabilities');
+async function initializeStudio(){try{const [,capabilities]=await Promise.all([loadProviders(),initialCapabilities]);$('#skill-select').replaceChildren(...Object.entries(capabilities.skills).map(([id,v])=>new Option(v.name,id)));if(capabilities.skills.general)$('#skill-select').value='general';const describe=()=>{$('#skill-description').textContent=capabilities.skills[$('#skill-select').value]?.prompt||'';saveRuntime()};$('#skill-select').onchange=describe;$$('.tool-picks input').forEach(x=>x.onchange=saveRuntime);try{const saved=JSON.parse(localStorage.getItem('astra-runtime')||'{}');if(providerRows.some(p=>p.id===saved.provider))$('#provider-select').value=saved.provider;$('#runtime-model').value=saved.model||'';$('#reasoning-select').value=['none','minimal','low','medium','high','xhigh','max'].includes(saved.reasoning)?saved.reasoning:'default';if(capabilities.skills[saved.skill])$('#skill-select').value=saved.skill;$$('.tool-picks input').forEach(x=>x.checked=(saved.tools||[]).includes(x.value))}catch(e){}describe()}catch(e){toast(e.message)}}
 const studioReady=initializeStudio();
 const sidebarIconPaths={chat:'M5 5h14v10H9l-4 4V5Z',canvas:'m12 3 9 9-9 9-9-9 9-9Z',settings:'M4 7h16M4 17h16M8 4v6m8 4v6',sun:'M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',plus:'M12 5v14M5 12h14',send:'m5 12 7-7 7 7M12 5v15',review:'M9 4h6l1 3h4v13H4V7h4l1-3Zm-1 9 3 3 5-6',tools:'m14 5 5 5M4 20l8-8m-6 0L3 9l6-6 3 3m0 12 3 3 6-6-3-3',close:'m6 6 12 12M6 18 18 6',note:'M5 3h14v18H5V3Zm4 5h6m-6 4h6m-6 4h4',link:'m10 14 4-4M8 16l-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 12a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6'};
 const iconPaths = {
@@ -39,6 +40,7 @@ const iconPaths = {
   back: 'M20 12H4m6-6-6 6 6 6',
   forward: 'M4 12h16m-6-6 6 6-6 6',
   panel: 'M6 4h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Zm3 0v16',
+  'panel-right': 'M6 4h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Zm9 0v16',
   maximize: 'M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z',
   window: 'M6 4h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Zm-3 5h18',
   download: 'M12 3v12m-4-4 4 4 4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2',
@@ -100,20 +102,55 @@ const slider=elem('input','reasoning-slider');slider.type='range';slider.min='0'
 const strengths=['default','none','minimal','low','medium','high','xhigh','max'],strengthNames=['默认','关闭','极低','低','中','高','超高','最高'];let availableModels=[],modelFetch=0;
 function chosenModel(){return $('#runtime-model').value.trim()||(providerRows.find(p=>p.id===$('#provider-select').value)||state.settings).model||''}
 function syncComposerControls(){const model=chosenModel();$('#model-pill').textContent=(model||'选择模型')+' ⌄';$('#model-pill').title=model||'选择模型';reasoningModel.textContent=(model||'尚未选择模型')+' ›';const index=Math.max(0,strengths.indexOf($('#reasoning-select').value));slider.value=index;slider.setAttribute('aria-valuetext',strengthNames[index]);strengthLabel.textContent=strengthNames[index];reasoningButton.textContent='思考 · '+strengthNames[index]+' ⌄';rail.style.setProperty('--progress',(index/7*100)+'%');rail.classList.toggle('maxed',index===7);reasoningPopover.classList.toggle('maxed',index===7);reasoningButton.classList.toggle('maxed',index===7)}
-function placeControl(panel,anchor){const r=anchor.getBoundingClientRect();panel.style.width=Math.min(panel===picker?310:294,innerWidth-24)+'px';panel.style.maxHeight=Math.max(180,Math.min(420,innerHeight-24))+'px';const height=panel.offsetHeight;panel.style.left=Math.max(12,Math.min(r.right-panel.offsetWidth,innerWidth-panel.offsetWidth-12))+'px';panel.style.top=Math.max(12,r.top-height-10)+'px'}
-function closeComposerControls(focus=false){picker.hidden=true;reasoningPopover.hidden=true;$('#model-pill').setAttribute('aria-expanded','false');$('#model-pill').setAttribute('aria-controls',reasoningButton.hidden?'reasoning-popover':'model-picker');reasoningButton.setAttribute('aria-expanded','false');if(focus)$('#model-pill').focus()}
+function placeControl(panel,anchor){
+ const r=anchor.getBoundingClientRect();
+ const dialog=panel.parentElement.matches('dialog[open]')?panel.parentElement:null;
+ const bounds=dialog?.getBoundingClientRect();
+ const left=bounds?bounds.left+dialog.clientLeft:0,top=bounds?bounds.top+dialog.clientTop:0;
+ const width=dialog?.clientWidth??innerWidth,height=dialog?.clientHeight??innerHeight;
+ panel.style.width=Math.min(panel===picker?310:294,width-24)+'px';
+ panel.style.maxHeight=(dialog?Math.max(0,Math.min(420,r.top-top-22)):Math.max(180,Math.min(420,height-24)))+'px';
+ panel.style.left=Math.max(12,Math.min(r.right-left-panel.offsetWidth,width-panel.offsetWidth-12))+'px';
+ panel.style.top=Math.max(12,r.top-top-panel.offsetHeight-10)+'px';
+}
+let reasoningTrigger=null;
+function closeComposerControls(focus=false){
+ const trigger=reasoningTrigger||$('#model-pill');
+ picker.hidden=true;
+ reasoningPopover.hidden=true;
+ reasoningTrigger?.setAttribute('aria-expanded','false');
+ reasoningTrigger=null;
+ if(reasoningPopover.parentElement!==document.body)document.body.append(reasoningPopover);
+ $('#model-pill').setAttribute('aria-expanded','false');
+ $('#model-pill').setAttribute('aria-controls',reasoningButton.hidden?'reasoning-popover':'model-picker');
+ if(focus)trigger.focus({preventScroll:true});
+}
+function toggleReasoningControl(trigger){
+ const wasOpen=reasoningTrigger===trigger&&!reasoningPopover.hidden;
+ closeComposerControls();
+ if(wasOpen)return;
+ syncComposerControls();
+ const host=trigger.closest('dialog[open]')||document.body;
+ if(reasoningPopover.parentElement!==host)host.append(reasoningPopover);
+ reasoningTrigger=trigger;
+ trigger.setAttribute('aria-controls','reasoning-popover');
+ trigger.setAttribute('aria-expanded','true');
+ reasoningPopover.hidden=false;
+ placeControl(reasoningPopover,trigger);
+ (slider.disabled?resetReasoning:slider).focus({preventScroll:true});
+}
 function openModelPicker(){const wasOpen=!picker.hidden;closeComposerControls();if(wasOpen)return;picker.hidden=false;$('#model-pill').setAttribute('aria-controls','model-picker');$('#model-pill').setAttribute('aria-expanded','true');search.value='';renderModelChoices();placeControl(picker,$('#model-pill'));search.focus({preventScroll:true})}
 function useModel(model){$('#runtime-model').value=model;saveRuntime();syncComposerControls();closeComposerControls();$('#model-pill').focus()}
 function renderModelChoices(){modelList.replaceChildren();const current=chosenModel();const configured=(providerRows.find(p=>p.id===$('#provider-select').value)||state.settings).model;const models=[...new Set([configured,current,...availableModels,...$$('#models option').map(o=>o.value)].filter(Boolean))];const query=search.value.trim();const defaults=elem('button','model-choice');defaults.type='button';defaults.setAttribute('role','option');defaults.setAttribute('aria-selected',String(!$('#runtime-model').value));const d=elem('span','','默认');d.append(elem('small','',configured||'使用接口中配置的模型'));defaults.append(d,elem('span','checkmark',!$('#runtime-model').value?'✓':''));defaults.onclick=()=>useModel('');modelList.append(defaults);for(const model of models.filter(m=>m.toLowerCase().includes(query.toLowerCase()))){const b=elem('button','model-choice');b.type='button';b.setAttribute('role','option');b.setAttribute('aria-selected',String(current===model));b.append(elem('span','',model),elem('span','checkmark',current===model?'✓':''));b.onclick=()=>useModel(model);modelList.append(b)}if(query&&!models.includes(query)){const custom=elem('button','model-choice custom-model','使用模型：'+query);custom.type='button';custom.onclick=()=>useModel(query);modelList.append(custom)}if(!models.length&&!query)modelList.append(elem('p','picker-status','先配置接口，或输入服务商提供的模型 ID。'))}
 search.oninput=()=>{renderModelChoices();placeControl(picker,$('#model-pill'))};search.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();if(search.value.trim())useModel(search.value.trim())}};
 $('#model-pill').onclick=openModelPicker;$('#model-pill').setAttribute('aria-controls','model-picker');$('#model-pill').setAttribute('aria-expanded','false');
-reasoningButton.onclick=()=>{const wasOpen=!reasoningPopover.hidden;closeComposerControls();if(wasOpen)return;syncComposerControls();reasoningPopover.hidden=false;reasoningButton.setAttribute('aria-expanded','true');placeControl(reasoningPopover,reasoningButton);slider.focus({preventScroll:true})};
+reasoningButton.onclick=()=>toggleReasoningControl(reasoningButton);
 slider.oninput=()=>{$('#reasoning-select').value=strengths[Number(slider.value)];saveRuntime();syncComposerControls()};resetReasoning.onclick=()=>{$('#reasoning-select').value='default';saveRuntime();syncComposerControls()};reasoningModel.onclick=openModelPicker;
 modelSettings.onclick=()=>{closeComposerControls();showSettings()};
 fetchModels.onclick=safely(async()=>{const generation=++modelFetch,pid=$('#provider-select').value;busyButton(fetchModels,true,'读取中…');modelStatus.textContent='';try{const result=await api('/api/settings/models','POST',{provider:pid});if(generation!==modelFetch||pid!==$('#provider-select').value)return;availableModels=result.models;renderModelChoices();modelStatus.textContent='已读取 '+result.models.length+' 个模型';placeControl(picker,$('#model-pill'))}catch(e){modelStatus.textContent=e.message}finally{busyButton(fetchModels,false)}});
 $('#provider-select').addEventListener('change',()=>{availableModels=[];search.value='';modelStatus.textContent='';renderModelChoices();syncComposerControls();placeControl(picker,$('#model-pill'))});
 $('#runtime-model').addEventListener('change',syncComposerControls);$('#reasoning-select').addEventListener('change',syncComposerControls);
-document.addEventListener('pointerdown',e=>{if(!e.target.closest('.floating-control,#model-pill,#reasoning-pill'))closeComposerControls()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(!picker.hidden||!reasoningPopover.hidden)){e.stopImmediatePropagation();closeComposerControls(true)}},true);window.addEventListener('resize',()=>closeComposerControls());document.addEventListener('scroll',e=>{if(!e.target.closest?.('.floating-control'))closeComposerControls()},true);
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.floating-control,#model-pill,#reasoning-pill,[data-reasoning-trigger]'))closeComposerControls()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(!picker.hidden||!reasoningPopover.hidden)){e.preventDefault();e.stopImmediatePropagation();closeComposerControls(true)}},true);window.addEventListener('resize',()=>closeComposerControls());document.addEventListener('scroll',e=>{if(!e.target.closest?.('.floating-control'))closeComposerControls()},true);
 const composerObserver=new MutationObserver(()=>syncComposerControls());composerObserver.observe($('#models'),{childList:true});
 // Existing settings/provider handlers keep their source values; update the compact label after changes.
 const previousSaveRuntime=saveRuntime;saveRuntime=function(){previousSaveRuntime();syncComposerControls()};

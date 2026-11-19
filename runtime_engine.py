@@ -2,6 +2,7 @@
 import hashlib
 import model_catalog
 import workspace_tools
+import web_search
 import json
 from pathlib import Path
 import threading
@@ -13,7 +14,7 @@ DEFAULTS.update(container_image='',container_memory_mb=512,container_network=Fal
 READ_TOOLS={'list_image_models','get_project','project_diff','calculator','current_time','get_environment','read_file','list_files','search_files','search_text','file_info','read_csv','inspect_json','list_capabilities','load_skill','load_plugin','recall_memory','list_agent_jobs','list_sessions','read_session','list_skill_versions','load_tools','browser_open','browser_find'}
 READ_TOOLS.update(('story_context','story_read_entry'))
 CHAT_TOOLS = frozenset({'render_iui', 'image_gen', 'generate_image', 'list_image_models',
-                        'calculator', 'current_time'})
+                        'calculator', 'current_time', web_search.NAME})
 
 
 def conversation_mode(value):
@@ -66,6 +67,12 @@ def authorize(name,args,c,emit,approve):
             and c.get('file_permission') in ('ask','read','all')):
         return False
     policy=c.get('access_policy')
+    if name == web_search.NAME:
+        if c.get('web_search_enabled') is not True or policy not in (None, 'ask', 'trusted', 'full'):
+            return False
+        if c.get('_untrusted_context'):
+            return bool(emit and approve(name, args, emit))
+        return True
     if policy is None:return True
     if policy not in ('ask','trusted','full'):return False
     # Image edits use the generation aliases with session-scoped reference IDs.

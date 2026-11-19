@@ -83,9 +83,75 @@ async function main() {
     await page.locator('.market-card').first().waitFor();
     assert.equal(await panel.count(), 0);
     assert.equal(await page.evaluate(async () => (await api('/api/extensions/safety')).active), false);
+
+    // An explicit scan stays on the settings page and covers both catalog refresh and MCP load.
+    const loading = page.locator('#workspace-loading');
+    await loading.waitFor({state:'hidden'});
+    await page.locator('#nav-settings').click();
+    const capabilitiesPath = '**/api/capabilities';
+    let releaseOldCatalog, oldCatalogReady;
+    const holdOldCatalog = new Promise(resolve => { releaseOldCatalog = resolve; });
+    const oldCatalogFetched = new Promise(resolve => { oldCatalogReady = resolve; });
+    const delayOldCatalog = async route => {
+      const response = await route.fetch();
+      oldCatalogReady();
+      await holdOldCatalog;
+      await route.fulfill({response});
+    };
+    await page.route(capabilitiesPath, delayOldCatalog, {times:1});
+    await page.locator('[data-settings-group=capabilities]').click();
+    await oldCatalogFetched;
+    const reading = page.locator('#integration-plugins input[role=switch][aria-label="启用插件 舒适阅读"]');
+    const readingPanel = page.locator('.plugin-application-panels').getByRole('button', {name:'舒适阅读', exact:true});
+    const toggleReading = async enabled => {
+      const written = page.waitForResponse(response => response.url().endsWith('/api/plugins/reading-layout') && response.request().method() === 'PUT');
+      await reading.click();
+      const response = await written;
+      assert.equal(response.status(), 200);
+      assert.deepEqual(response.request().postDataJSON(), {enabled});
+      await loading.waitFor({state:'hidden'});
+      assert.equal(await reading.isChecked(), enabled);
+      assert.equal(await readingPanel.count(), Number(enabled));
+      assert.equal(await page.locator('body.plugin-reading-comfortable').count(), Number(enabled));
+    };
+    try {
+      await toggleReading(true);
+      const staleResponse = page.waitForResponse(response => response.url().endsWith('/api/capabilities'));
+      releaseOldCatalog();
+      await (await staleResponse).finished();
+      await page.evaluate(() => new Promise(requestAnimationFrame).then(() => new Promise(requestAnimationFrame)));
+      assert.equal(await reading.isChecked(), true, 'an older catalog must not undo the switch');
+      assert.equal(await readingPanel.count(), 1, 'an older catalog must not unload the enabled panel');
+      await toggleReading(false);
+    } finally { releaseOldCatalog(); }
+    const manage = page.locator('[data-panel=capabilities] .integration-manage > summary');
+    const scan = page.locator('[data-panel=capabilities] .integration-toolbar').getByText('重新扫描', {exact:true});
+    let releaseMcp;
+    const mcpWait = new Promise(resolve => { releaseMcp = resolve; });
+    const blockMcp = async route => { await mcpWait; await route.continue(); };
+    await page.route('**/api/mcp', blockMcp);
+    await manage.click();
+    await scan.click();
+    await loading.getByRole('status').getByText('正在重新加载插件', {exact:true}).waitFor();
+    assert.equal(await page.locator('#app').evaluate(app => app.inert), true);
+    assert.equal(await loading.evaluate(node => node.getBoundingClientRect().top), (await page.locator('.custom-titlebar').boundingBox()).height);
+    releaseMcp();
+    await loading.waitFor({state:'hidden'});
+    await page.unroute('**/api/mcp', blockMcp);
+    assert.equal(await manage.evaluate(button => button === document.activeElement), true);
+
+    const failScan = route => route.fulfill({status:503, json:{error:'扫描测试失败'}});
+    await page.route('**/api/capabilities', failScan);
+    await manage.click();
+    await scan.click();
+    await loading.waitFor({state:'hidden'});
+    assert.equal(await page.locator('#app').evaluate(app => app.inert), false);
+    await page.locator('.integration-notice').getByText('扫描测试失败', {exact:true}).waitFor();
+    await page.unroute('**/api/capabilities', failScan);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({edge: browser.version(), corrupt_boot_paused: true, retry_still_paused: true,
-      repaired_retry_reloaded: true, skin_widgets_and_plugins_restored: true, page_errors: errors}));
+      repaired_retry_reloaded: true, skin_widgets_and_plugins_restored: true, scan_covered: true,
+      scan_failure_unlocked: true, toggle_applied_without_manual_reload: true, stale_catalog_ignored: true, page_errors: errors}));
   } finally {
     try { if (browser) await browser.close(); }
     finally {

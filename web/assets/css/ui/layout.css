@@ -1181,7 +1181,7 @@ body.has-navigation-rail #app {
   background: var(--glass-reading);
 }
 .composer-options-panel
-  :is(.shelf-project, #attachment-add, .compact-context, .review-toggle) {
+  :is(.shelf-project, #attachment-add, .compact-context, .review-toggle, .composer-web-search) {
   width: 100%;
   height: auto;
   min-height: 34px;
@@ -1200,7 +1200,7 @@ body.has-navigation-rail #app {
   margin: 0;
 }
 .composer-options-panel
-  :is(.shelf-project, #attachment-add, .compact-context, .review-toggle):hover {
+  :is(.shelf-project, #attachment-add, .compact-context, .review-toggle, .composer-web-search):hover {
   background: var(--ui-control-hover);
 }
 .composer-options-panel .composer-device,
@@ -1690,3 +1690,12 @@ body.has-navigation-rail #app {
 .integration-toolbar {
   margin-top: 0;
 }
+
+.composer-options-panel .composer-web-search[aria-pressed="true"] { background: var(--ui-selected); }
+
+/* Credential fields stack independently of the generic preference row. */
+#web-search-settings .web-search-field { display:grid;gap:8px;min-width:0;max-width:36rem; }
+#web-search-settings #web-search-key { width:100%;min-width:0;box-sizing:border-box; }
+#web-search-settings .web-search-guidance { min-width:0;overflow-wrap:anywhere;color:var(--muted); }
+#web-search-settings .web-search-guidance p { margin:0 0 4px; }
+#web-search-settings .personalization-actions { margin-block-start:12px; }

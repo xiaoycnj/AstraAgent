@@ -59,7 +59,7 @@ function syncConversationMode() {
     button.setAttribute('aria-pressed', String(value === mode));
     button.disabled = conversationModeSaving || submitting || state.pending.has(state.session?.id);
   }
-  conversationModeHint.textContent = uiText(chat ? 'Chat 可使用 IUI、生图、计算器和时间工具。' : 'Agent 根据当前权限使用文件、命令与扩展工具。');
+  conversationModeHint.textContent = uiText(chat ? 'Chat 可使用 IUI、生图、计算器、时间和联网搜索。' : 'Agent 根据当前权限使用文件、命令与扩展工具。');
   for (const control of [shelfProject, device, compatibilityPermissions, pluginChips, unifiedPolicyButton]) if (control) control.hidden = chat;
 }
 

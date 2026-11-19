@@ -32,7 +32,35 @@ function decorateModelNames(){ensureModelLogo($('#model-pill'),chosenModel());en
 const previousIdentitySync=syncComposerControls;syncComposerControls=function(){previousIdentitySync();decorateModelNames()};const previousIdentityChoices=renderModelChoices;renderModelChoices=function(){previousIdentityChoices();decorateModelNames()};for(const input of [$('#model'),$('#runtime-model'),$('#tts-model')])input?.addEventListener('input',decorateModelNames);setInterval(decorateModelNames,650);decorateModelNames();
 // Uploads are staged until a message succeeds. Failed sends keep the attachments for retry.
 let pendingAttachments=[],sendingAttachments=null,uploadBusy=false;const attachmentPicker=elem('input');attachmentPicker.type='file';attachmentPicker.id='attachment-picker';attachmentPicker.multiple=true;attachmentPicker.hidden=true;attachmentPicker.accept='.png,.jpg,.jpeg,.webp,.pdf,.docx,.txt,.md,.csv,.json,.py,.js,.ts,.html,.css,.xml,.yaml,.yml,.sql,.log,.tex,.rs,.java,.go,.cpp,.c,.h,.sh,.ps1,.toml,.ini,.vue,.jsx,.tsx,.svg';document.body.append(attachmentPicker);const attachmentButton=actionButton('',()=>attachmentPicker.click(),'attachment-add');attachmentButton.id='attachment-add';attachmentButton.title='上传附件 · 每个 5 MB，每条最多 6 个';attachmentButton.setAttribute('aria-label','上传附件');attachmentButton.append(svgIcon('clip'));$('.composer-tools').prepend(attachmentButton);const attachmentTray=elem('div','attachment-tray');attachmentTray.id='attachment-tray';attachmentTray.hidden=true;$('#chat-form').insertBefore(attachmentTray,$('#chat-input'));
-function attachmentCard(item,removable){const card=elem('div','attachment-card');if(item.kind==='image'){const img=elem('img');img.src='/api/attachments/'+item.id+'/content';img.alt=item.name;card.append(img)}else card.append(svgIcon('note'));const title=elem('div');title.append(elem('strong','',item.name),elem('small','',item.kind.toUpperCase()+' · '+(item.size/1024).toFixed(1)+' KB'));card.append(title);if(removable){const remove=actionButton('',()=>{pendingAttachments=pendingAttachments.filter(a=>a.id!==item.id);renderAttachmentTray()},'attachment-remove');remove.setAttribute('aria-label','移除附件 '+item.name);remove.disabled=submitting;remove.append(svgIcon('close'));card.append(remove)}else{const download=elem('a','attachment-download','下载');download.href='/api/attachments/'+item.id+'/content';download.download=item.name;card.append(download)}return card}
+function attachmentCard(item,removable){
+    const card=elem('div','attachment-card');
+    const path='/api/attachments/'+item.id+'/content';
+    if(item.kind==='image'){
+        const img=elem('img');img.src=path;img.alt=item.name;card.append(img);
+    }else card.append(svgIcon('note'));
+    const title=elem('div');
+    title.append(elem('strong','',item.name),elem('small','',item.kind.toUpperCase()+' · '+(item.size/1024).toFixed(1)+' KB'));
+    card.append(title);
+    const preview=actionButton('',event=>previewResource(item,event.currentTarget),'attachment-preview-control');
+    preview.title='在侧栏中预览';
+    preview.setAttribute('aria-label','在侧栏中预览 '+item.name);
+    preview.append(svgIcon('panel-right'));
+    card.append(preview);
+    if(removable){
+        const remove=actionButton('',()=>{pendingAttachments=pendingAttachments.filter(a=>a.id!==item.id);renderAttachmentTray()},'attachment-remove');
+        remove.setAttribute('aria-label','移除附件 '+item.name);
+        remove.disabled=submitting;
+        remove.append(svgIcon('close'));
+        card.append(remove);
+    }else{
+        const download=elem('a','attachment-download attachment-preview-control');
+        download.href=path;download.download=item.name;download.title='下载';
+        download.setAttribute('aria-label','下载 '+item.name);
+        download.append(svgIcon('download'));
+        card.append(download);
+    }
+    return card;
+}
 function renderAttachmentTray(){attachmentTray.replaceChildren(...pendingAttachments.map(item=>attachmentCard(item,true)));attachmentTray.hidden=!pendingAttachments.length;attachmentButton.disabled=uploadBusy||submitting;$('#send').disabled=uploadBusy||!!(state.session&&state.pending.has(state.session.id))}
 async function uploadFiles(files){if(submitting||uploadBusy){toast('请等待当前任务完成');return}uploadBusy=true;renderAttachmentTray();try{for(const file of files){if(pendingAttachments.length>=6){toast('每条消息最多 6 个附件');break}if(file.size>5*1024*1024){toast(file.name+' 超过 5 MB');continue}if(pendingAttachments.reduce((n,a)=>n+a.size,0)+file.size>10*1024*1024){toast('附件总计最多 10 MB');continue}const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file)});try{const item=await api('/api/attachments','POST',{name:file.name,data});pendingAttachments.push(item);renderAttachmentTray()}catch(e){toast(file.name+'：'+e.message)}}}finally{uploadBusy=false;attachmentPicker.value='';renderAttachmentTray()}}
 attachmentPicker.onchange=()=>uploadFiles([...attachmentPicker.files]);$('#chat-input').addEventListener('paste',e=>{const files=[...e.clipboardData.files];if(files.length){e.preventDefault();uploadFiles(files)}});const dropTarget=$('#chat-form');dropTarget.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();dropTarget.classList.add('attachment-dragover')}});dropTarget.addEventListener('dragleave',e=>{if(!dropTarget.contains(e.relatedTarget))dropTarget.classList.remove('attachment-dragover')});dropTarget.addEventListener('drop',e=>{if(e.dataTransfer.files.length){e.preventDefault();dropTarget.classList.remove('attachment-dragover');uploadFiles([...e.dataTransfer.files])}});

@@ -5,6 +5,9 @@ import threading
 import runtime_engine
 
 
+RESUMABLE = frozenset({'interrupted', 'blocked', 'cancelled'})
+
+
 class Blocked(RuntimeError):
     pass
 
@@ -15,7 +18,7 @@ def encode(value):
 
 REQUEST_FIELDS = ('provider','model','reasoning','skill','tools','allow_tools','plugins',
                   'file_permission','command_permission','command_mode','memory_policy',
-                  'auto_memory','access_policy','project_id','story_id','auto_min_tier','iui_enabled','conversation_mode')
+                  'auto_memory','access_policy','project_id','story_id','auto_min_tier','iui_enabled','web_search_enabled','conversation_mode')
 CONTEXT_FIELDS = ('tools','runtime_plugins','system_prompt','active_skill','_untrusted_context',
                   '_mutation_epoch','delegated_count','cross_dispatch_count','cross_dispatch_depth','_verification')
 
@@ -73,7 +76,7 @@ def inspect(db, key):
     row=db.execute('SELECT request_id,session_id,status,checkpoint,answer_id,error FROM executions WHERE request_id=?',(key,)).fetchone()
     if not row:return None
     steps=[dict(s) for s in db.execute('SELECT step,kind,name,status FROM execution_steps WHERE request_id=? ORDER BY rowid',(key,))]
-    return {**dict(row),'steps':steps,'resumable':row['status'] in ('interrupted','blocked','cancelled')}
+    return {**dict(row),'steps':steps,'resumable':row['status'] in RESUMABLE}
 
 
 def resolve(db, key, step, action):

@@ -59,6 +59,53 @@
     row.append(label, group);
     keyboardChoices(group);
   }
+  // Independent of the skin: changing theme or layout does not reset these preferences.
+  const experience = elem('section', 'settings-group appearance-experience');
+  const experienceHeading = elem('h3', '', '动效与智能界面');
+  experienceHeading.id = 'appearance-experience-title';
+  experience.setAttribute('aria-labelledby', experienceHeading.id);
+  experience.append(experienceHeading);
+  advanced.before(experience);
+  function preferenceChoices(title, key, datasetKey, initial, choices) {
+    const row = elem('div', 'appearance-setting-row');
+    const group = elem('div', 'appearance-segmented');
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', title);
+    let selected;
+    try { selected = localStorage.getItem(key); } catch {}
+    if (!choices.some(([id]) => id === selected)) selected = initial;
+    const buttons = new Map(choices.map(([id, label]) => [id, elem('button', '', label)]));
+    function apply(id, persist) {
+      document.documentElement.dataset[datasetKey] = id;
+      for (const [value, button] of buttons) button.setAttribute('aria-pressed', String(id === value));
+      if (persist) try { localStorage.setItem(key, id); } catch {}
+    }
+    for (const [id, button] of buttons) {
+      button.type = 'button';
+      button.onclick = () => apply(id, true);
+      group.append(button);
+    }
+    apply(selected, false);
+    keyboardChoices(group);
+    row.append(elem('span', 'appearance-setting-label', title), group);
+    experience.append(row);
+  }
+  preferenceChoices('动效风格', 'astra-motion-style', 'motionStyle', 'spring',
+    [['quick', '轻快'], ['standard', '平滑'], ['spring', '弹性']]);
+  preferenceChoices('IUI 控件密度', 'astra-iui-density', 'iuiDensity', 'balanced',
+    [['compact', '紧凑'], ['balanced', '适中'], ['comfortable', '宽松']]);
+  const motionNote = elem('p', 'appearance-experience-note');
+  const systemMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  function updateMotionNote() {
+    motionNote.textContent = systemMotion.matches ? '系统已开启减少动态效果，动画样式会在恢复动效后生效。' :
+      document.documentElement.dataset.motion === 'reduced' ? '应用已开启减少动效，动画样式会在恢复动效后生效。' :
+      '动效风格会应用到菜单、弹窗和交互反馈。IUI 密度仅调整智能卡片。';
+  }
+  systemMotion.addEventListener('change', updateMotionNote);
+  new MutationObserver(updateMotionNote).observe(document.documentElement, {attributes: true, attributeFilter: ['data-motion']});
+  updateMotionNote();
+  experience.append(motionNote);
+
   keyboardChoices(glassVariantGroup);
   glassVariantGroup.setAttribute('aria-label', '玻璃质感');
 

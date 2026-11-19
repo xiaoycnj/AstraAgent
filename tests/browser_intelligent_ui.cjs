@@ -170,11 +170,51 @@ print(json.dumps(result))
     await page.evaluate(async branch=>openSession(branch),branch);
     await ui.getByRole('heading',{name:'出行计划',exact:true}).waitFor();
     assert.ok(await ui.locator('.iui-option strong').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=13));
+    await page.evaluate(()=>{showSettings();selectSettingsTab('appearance');});
+    const density = page.getByRole('group',{name:'IUI 控件密度'});
+    const control = ui.locator('.iui-footer button').last();
+    for (const [name,height] of [['紧凑',32], ['宽松',42], ['适中',36]]) {
+      await density.getByRole('button',{name,exact:true}).click();
+      assert.equal(await control.evaluate(button=>getComputedStyle(button).minHeight),height+'px');
+    }
+    await density.getByRole('button',{name:'紧凑',exact:true}).click();
+    await page.reload();
+    await page.waitForFunction(()=>state.session?.id);
+    await page.evaluate(async branch=>openSession(branch),branch);
+    await control.waitFor();
+    assert.equal(await control.evaluate(button=>getComputedStyle(button).minHeight),'32px');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    const chartMotion = await ui.evaluate(card=>{
+      const button = card.querySelector('.iui-chart-legend button');
+      button.click(); button.click();
+      return card.querySelector('.iui-chart-bar').getAnimations().map(animation=>animation.animationName);
+    });
+    assert.ok(chartMotion.includes('iui-chart-reveal'));
+    await page.emulateMedia({reducedMotion:'reduce'});
+    assert.equal(await ui.locator('.iui-chart-bar').first().evaluate(el=>getComputedStyle(el).animationName),'none');
+    const layout = await ui.evaluate(card=>{
+      card.style.width='310px';
+      const status = card.querySelector('.iui-status');
+      const result = {wrapped:getComputedStyle(status).flexBasis, contained:card.scrollWidth<=card.clientWidth+1};
+      card.style.removeProperty('width');
+      return result;
+    });
+    assert.deepEqual(layout,{wrapped:'100%',contained:true},'desktop window with a narrow card');
     await page.screenshot({path:path.join(root,'work/intelligent-ui-desktop.png')});
     await page.setViewportSize({width:390,height:844});
     await page.evaluate(()=>applyTheme('dark'));
     assert.equal(await ui.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
     await page.screenshot({path:path.join(root,'work/intelligent-ui-mobile.png')});
+    const touch = await browser.newPage({locale:'zh-CN', hasTouch:true, isMobile:true, viewport:{width:390,height:844}});
+    await touch.addInitScript(()=>localStorage.setItem('astra-iui-density','compact'));
+    await touch.goto(url + '/#access=' + token);
+    await touch.waitForFunction(()=>state.token&&state.settings);
+    await touch.evaluate(async branch=>openSession(branch),branch);
+    const option = touch.locator('.intelligent-ui .iui-option').first();
+    await option.waitFor();
+    assert.ok(await option.evaluate(el=>matchMedia('(any-pointer: coarse)').matches && el.offsetHeight>=44));
+    await touch.close();
+
     assert.deepEqual(errors,[]);
     console.log(JSON.stringify({model_stream_tool:true,native_components:9,calculator:true,keyboard:true,checklist:true,quiz:true,sorting:true,chart:true,reload:true,conflict_retry:true,network_retry:true,branch:true,session_isolation:true,responsive:true,page_errors:errors}));
   } finally {

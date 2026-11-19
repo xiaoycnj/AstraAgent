@@ -110,6 +110,33 @@ def meta(data,key):
     try:return json.loads((folder/'meta.json').read_text(encoding='utf-8'))
     except OSError:raise ValueError('附件不存在，请重新上传') from None
 
+def save_copy(data, key, choose_destination):
+    """Copy one stored attachment to the path picked by the native save dialog."""
+    item = meta(data, key)
+    folder = location(data, key)
+    content = (folder/'content').resolve()
+    if not content.is_relative_to(folder) or not content.is_file():
+        raise ValueError('附件原文件不存在或不可读取')
+    try:
+        with content.open('rb') as source:
+            raw = source.read(MAX_FILE + 1)
+    except OSError:
+        raise ValueError('无法读取附件原文件') from None
+    if not 0 < len(raw) <= MAX_FILE or len(raw) != item.get('size'):
+        raise ValueError('附件文件大小无效，请重新上传')
+
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', item['name']).strip(' .') or 'attachment'
+    if re.fullmatch(r'CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³]', name.split('.')[0].rstrip(), re.I):
+        name = '_' + name
+    selected = choose_destination(name)
+    if not selected:
+        return False
+    try:
+        Path(selected[0]).write_bytes(raw)
+    except OSError:
+        raise ValueError('无法保存附件，请检查目标文件是否正在使用或选择其他位置') from None
+    return True
+
 def public(item):return {k:v for k,v in item.items() if k not in ('text','ocr_pages')}
 
 def library(db,data):

@@ -26,12 +26,13 @@ jobs:
         shell: pwsh
         run: |
           $suites = @(
-            'test_agent_runtime.py', 'test_app.py', 'test_cli_render.py', 'test_context_oauth.py',
+            'test_agent_runtime.py', 'test_app.py', 'test_attachments.py', 'test_cli_render.py', 'test_context_oauth.py',
             'test_conversation_modes.py', 'test_create_file.py', 'test_creative_workflows.py',
             'test_durable_execution.py', 'test_extension_safety.py', 'test_image_generation.py',
             'test_image_message_state.py', 'test_intelligent_ui.py', 'test_marketplace_author.py',
             'test_performance_stats.py', 'test_personalization.py', 'test_security.py',
-            'test_stream_journal.py', 'test_usage_meter.py'
+            'test_comprehensive_security.py', 'test_stream_journal.py', 'test_usage_meter.py',
+            'test_web_search.py'
           )
           foreach ($suite in $suites) {
             python -m unittest discover -s tests -p $suite -q
@@ -51,7 +52,7 @@ jobs:
             'image_inline_state', 'image_stream_callbacks', 'browser_first_run', 'browser_windows',
             'browser_canvas_workspace', 'browser_creative', 'browser_security', 'browser_rich_chat', 'browser_personalization',
             'browser_performance', 'browser_layout', 'browser_intelligent_ui', 'browser_conversation_modes',
-            'browser_motion', 'browser_controls', 'browser_extension_recovery', 'browser_image_inline'
+            'browser_motion', 'browser_controls', 'browser_extension_recovery', 'browser_image_inline', 'browser_attachments'
           )
           foreach ($suite in $suites) {
             node "tests/$suite.cjs"

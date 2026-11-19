@@ -4,7 +4,7 @@ const destination=elem('section','destination-page');destination.hidden=true;des
 const destinationHead=elem('header','destination-head'),destinationTitle=elem('h1'),destinationActions=elem('div','destination-actions');destinationHead.append(destinationTitle,destinationActions);
 const destinationTabs=elem('nav','destination-tabs');destinationTabs.setAttribute('aria-label','资料类型');
 const destinationBody=elem('div','destination-body');destination.append(destinationHead,destinationTabs,destinationBody);
-const assetSearch=elem('input');assetSearch.type='search';assetSearch.placeholder='搜索资料库';assetSearch.setAttribute('aria-label','搜索资料库');assetSearch.oninput=renderAssetGrid;
+const assetSearch=elem('input');assetSearch.id='asset-search';assetSearch.type='search';assetSearch.placeholder='搜索资料库';assetSearch.setAttribute('aria-label','搜索资料库');assetSearch.oninput=renderAssetGrid;
 const pageCounts=elem('span','page-counts');
 function routeUrl(page){const url=new URL(location.href);if(page==='home')url.searchParams.delete('view');else url.searchParams.set('view',page);return url.pathname+url.search}
 function rememberPage(page,replace=false){const method=replace?'replaceState':'pushState';if(location.pathname+location.search!==routeUrl(page)||!history.state?.astraPage)history[method]({astraPage:page},'',routeUrl(page));if(typeof syncHistoryButtons==='function')syncHistoryButtons()}
@@ -13,6 +13,7 @@ async function navigatePage(page,{historyMode='push'}={}){
  if(!['home','images','library','schedule','marketplace','creator','story'].includes(page))page='home';
  if(!$('#settings').hidden&&!await closeSettingsPage())return false;
  if(state.mode==='canvas'&&!await flushBoard())return false;
+ if(page!==appPage)closeAttachmentPreview(false);
  const ticket=++pageTicket;appPage=page;document.body.dataset.appPage=page;document.body.classList.toggle('in-destination',page!=='home');
  destination.hidden=page==='home';$('.studio-body').hidden=page!=='home';$('.topbar').hidden=page!=='home';
  if(hubBody.parentElement!==hubDialog)hubDialog.append(hubBody);
@@ -40,7 +41,7 @@ async function loadAssetPage(page,ticket){const grid=$('#asset-grid');if(!grid)r
 }
 function renderAssetGrid(){const grid=$('#asset-grid');if(!grid)return;grid.replaceChildren();const query=assetSearch.value.trim().toLowerCase();
  const rows=libraryAssets.filter(item=>(appPage!=='images'||item.kind==='image')&&(!query||item.name.toLowerCase().includes(query))&&(libraryFilter==='all'||libraryFilter==='outputs'&&item.output||libraryFilter==='document'&&item.kind!=='image'||item.kind===libraryFilter));pageCounts.textContent=rows.length+' 项';
- for(const item of rows){const card=elem('article','asset-card');const preview=actionButton('',event=>item.kind==='image'?previewGeneratedImage(item,event.currentTarget.querySelector('img')):previewResource(item),'asset-preview');preview.setAttribute('aria-label','预览 '+item.name);
+ for(const item of rows){const card=elem('article','asset-card');const preview=actionButton('',event=>item.kind==='image'?previewGeneratedImage(item,event.currentTarget.querySelector('img')):previewResource(item,event.currentTarget),'asset-preview');preview.setAttribute('aria-label','预览 '+item.name);
   if(item.kind==='image'){const image=elem('img');image.src='/api/attachments/'+item.id+'/content';image.alt=item.name;image.loading='lazy';preview.append(image)}else preview.append(svgIcon('note'),elem('span','asset-filetype',item.name.split('.').pop().toUpperCase()));
   const footer=elem('div','asset-caption');footer.append(elem('strong','',item.name),elem('small','',(item.output?'输出作品 · ':'')+Math.max(1,Math.round(item.size/1024))+' KB'));
   const download=elem('a','asset-download','下载');download.href='/api/attachments/'+item.id+'/content';download.download=item.name;footer.append(download);card.append(preview,footer);grid.append(card);
@@ -72,4 +73,5 @@ attachmentPicker.addEventListener('change',()=>{if(appPage!=='library')return;le
 const beforePageImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforePageImageEvent(sid,event);if(['images','library'].includes(appPage)&&['image_generated','file_generated'].includes(event.type))loadAssetPage(appPage,pageTicket)};
 window.addEventListener('popstate',async()=>{if(!await navigatePage(new URLSearchParams(location.search).get('view')||'home',{historyMode:'none'}))rememberPage(appPage,true)});
 const initialPage=new URLSearchParams(location.search).get('view')||'home';
-Promise.resolve(studioReady).then(()=>navigatePage(initialPage,{historyMode:'replace'})).catch(error=>toast(error.message));
+const initialPageReady=studioReady.then(()=>navigatePage(initialPage,{historyMode:'replace'})).catch(error=>toast(error.message));
+window.workspaceLoading.track(initialPageReady);

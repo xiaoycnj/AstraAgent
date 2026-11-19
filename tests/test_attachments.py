@@ -29,6 +29,31 @@ class Attachments(unittest.TestCase):
   self.assertNotIn('text',result['items'][0])
   self.assertNotIn('private extracted content',json.dumps(result))
   db.close()
+ def test_native_save_preserves_original_bytes_and_handles_cancel(self):
+  raw='原始文本\r\n'.encode('utf-8-sig')
+  item=self.upload('NUL.txt',raw)
+  target=self.data/'chosen.txt'
+  suggestions=[]
+  def choose(name):
+   suggestions.append(name)
+   return (str(target),)
+  self.assertTrue(attachments.save_copy(self.data,item['id'],choose))
+  self.assertEqual(suggestions,['_NUL.txt'])
+  self.assertEqual(target.read_bytes(),raw)
+  target.write_bytes(b'keep this')
+  self.assertFalse(attachments.save_copy(self.data,item['id'],lambda _:None))
+  self.assertEqual(target.read_bytes(),b'keep this')
+  with self.assertRaisesRegex(ValueError,'无法保存附件'):
+   attachments.save_copy(self.data,item['id'],lambda _:(str(self.data),))
+ def test_native_save_rejects_invalid_or_missing_content_before_dialog(self):
+  item=self.upload('notes.txt',b'hello')
+  source=attachments.location(self.data,item['id'])/'content'
+  source.write_bytes(b'\x00'*(attachments.MAX_FILE+1))
+  def unexpected(_):self.fail('Invalid attachment must not open the save dialog')
+  for key in (item['id'],'../notes','0'*32):
+   with self.assertRaises(ValueError):attachments.save_copy(self.data,key,unexpected)
+  source.unlink()
+  with self.assertRaises(ValueError):attachments.save_copy(self.data,item['id'],unexpected)
  def test_pdf(self):
   sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'vendor_python'))
   from pypdf import PdfWriter

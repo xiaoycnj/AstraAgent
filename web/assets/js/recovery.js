@@ -4,6 +4,7 @@ const recoveryPanel=elem('section','execution-recovery');recoveryPanel.hidden=tr
 recoveryPanel.setAttribute('aria-label','任务恢复');$('#chat-form').before(recoveryPanel);
 const recoveryLabels={pending:'待执行',waiting:'待批准',executing:'执行中',done:'已保存',unknown:'结果不确定'};
 let recoveryGeneration=0,recoverySnapshot='';
+const abandoningExecutions=new Set();
 async function refreshExecutionRecovery(){
  const sid=state.session?.id,ticket=++recoveryGeneration;
  if(!sid){recoveryPanel.hidden=true;return;}
@@ -33,13 +34,36 @@ async function refreshExecutionRecovery(){
  }
  const unknown=row.steps.some(step=>step.status==='unknown');
  const hint=elem('p','hint',unknown?'有步骤的结果不确定。先核对并处置，再继续执行。':'已完成的步骤直接复用；待批准的调用会重新询问。');
- const resume=actionButton('继续任务',async()=>resumeExecution(row),'secondary');resume.disabled=unknown;resume.dataset.resumeExecution=row.request_id;
+ const actions=elem('div','recovery-actions');
+ const resume=actionButton('继续任务',async()=>resumeExecution(row),'secondary');
+ resume.disabled=unknown||abandoningExecutions.has(row.request_id);resume.dataset.resumeExecution=row.request_id;
+ const abandon=actionButton('放弃任务',async()=>{
+  const key=row.request_id,sid=row.session_id;
+  if(abandoningExecutions.has(key)||state.session?.id!==sid)return;
+  abandoningExecutions.add(key);
+  resume.disabled=abandon.disabled=true;
+  try{
+   const message=unknown?'放弃后无法继续该任务。已执行的操作不会撤销，仍可在任务记录中查看。':'放弃后无法继续该任务，已保存的执行记录会保留。';
+   if(!await appConfirm(message))return;
+   await api('/api/executions/'+encodeURIComponent(key)+'/abandon','POST',{});
+   if(state.session?.id===sid){
+    await refreshExecutionRecovery();
+    if(recoveryPanel.hidden)$('#chat-input').focus({preventScroll:true});
+   }
+   toast('已放弃任务');
+  }finally{
+   abandoningExecutions.delete(key);
+   resume.disabled=unknown;abandon.disabled=false;
+  }
+ },'secondary');
+ abandon.disabled=abandoningExecutions.has(row.request_id);
+ actions.append(resume,abandon);
  if(row.error)details.prepend(elem('p','hint',row.error));
- recoveryPanel.append(heading,hint,details,resume);
+ recoveryPanel.append(heading,hint,details,actions);
  }
 }
 async function resumeExecution(row){
- const sid=row.session_id;if(activeStreams.has(sid)||state.pending.has(sid))return;
+ const sid=row.session_id;if(abandoningExecutions.has(row.request_id)||activeStreams.has(sid)||state.pending.has(sid))return;
  state.pending.add(sid);recoveryPanel.hidden=true;renderMessages();
  let promise;
  try{

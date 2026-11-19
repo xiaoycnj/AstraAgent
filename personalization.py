@@ -301,7 +301,7 @@ def serve_asset(handler, data, ident):
     handler.send_header('Content-Length', str(end - start + 1))
     handler.send_header('Accept-Ranges', 'bytes')
     handler.send_header('X-Content-Type-Options', 'nosniff')
-    handler.send_header('Cache-Control', 'private, max-age=86400, immutable')
+    handler.send_header('Cache-Control', 'private, no-store')
     handler.send_header('Referrer-Policy', 'no-referrer')
     scripts = "'unsafe-inline'" if path.suffix in ('.html', '.htm') else "'none'"
     sandbox = 'allow-scripts' if path.suffix in ('.html', '.htm') else ''

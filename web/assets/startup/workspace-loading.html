@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AstraAgent</title><link rel="stylesheet" href="workspace-loading.css">
+<script src="workspace-native.js" defer></script></head>
+<body class="workspace-loader">
+<header class="loading-chrome pywebview-drag-region" aria-label="窗口控制">
+  <button type="button" data-window-action="minimize" aria-label="最小化"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h12"/></svg></button>
+  <button type="button" data-window-action="maximize" aria-label="最大化或还原"><svg aria-hidden="true" viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="1"/></svg></button>
+  <button type="button" data-window-action="close" aria-label="关闭窗口"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="m5 5 10 10m0-10L5 15"/></svg></button>
+</header>
+<main id="workspace-loading">
+  <div class="loading-particles" aria-hidden="true"></div>
+  <div class="loading-brand">
+    <img src="astra.svg" width="94" height="94" alt="">
+    <strong>AstraAgent</strong>
+    <p id="workspace-load-status" role="status">正在唤醒工作空间</p>
+    <button type="button" class="workspace-load-retry" hidden>重新连接</button>
+  </div>
+</main>
+</body></html>

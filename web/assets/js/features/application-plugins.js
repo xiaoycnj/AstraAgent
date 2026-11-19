@@ -1,12 +1,13 @@
 // Application hooks share the persisted plugin switches and the existing message lifecycle.
 let applicationHooks=[];
 const applicationPanels=elem('div','plugin-application-panels');pluginSection.append(applicationPanels);
+function withPluginReload(task){return window.workspaceLoading.run('正在重新加载插件',task);}
 function clearApplicationPlugins(){
  applicationHooks=[];applicationPanels.replaceChildren();document.body.classList.remove('plugin-reading-compact','plugin-reading-comfortable');
 }
 async function reportApplicationPluginFault(id){
  clearApplicationPlugins();
- try { const result=await api('/api/extensions/safety','POST',{action:'plugin_error',id}); if(result.active) location.reload(); }
+ try { const result=await api('/api/extensions/safety','POST',{action:'plugin_error',id}); if(result.active) reloadWorkspace(); }
  catch(error){toast('无法记录插件故障：'+error.message);}
 }
 async function refreshApplicationPlugins(){
@@ -16,7 +17,10 @@ async function refreshApplicationPlugins(){
   for(const panel of plugin.panels||[]){applicationPanels.append(actionButton(panel.title,()=>{const dialog=elem('dialog','app-dialog');dialog.append(elem('h2','',panel.title),elem('p','',panel.text),actionButton('关闭',()=>dialog.close(),'secondary'));dialog.onclose=()=>dialog.remove();document.body.append(dialog);dialog.showModal();},'secondary'));}
  } catch { await reportApplicationPluginFault(plugin.id); return; } }
 }
-const beforeApplicationReload=reloadCapabilities;reloadCapabilities=async function(){await beforeApplicationReload();await refreshApplicationPlugins()};
+const beforeApplicationReload=reloadCapabilities;reloadCapabilities=async function(initial){
+ if(!await beforeApplicationReload(initial))return false;
+ await refreshApplicationPlugins();return true;
+};
 const beforePluginSend=sendMessage;
 sendMessage=async function(event,submittedContent,submittedAttachments){
  const direct=typeof submittedContent==='string';
@@ -51,8 +55,17 @@ function previewMaker(){makerPreview.textContent=JSON.stringify(makerManifest(),
 makerForm.append(elem('h2','','插件制作器'),makerId.label,makerName.label,makerDescription.label,makerAction,makerValue.label,makerPage.label,makerText.label,makerPreview);
 const makerInstall=elem('button','primary','安装插件');makerInstall.type='submit';
 makerForm.append(actionButton('导出清单',()=>download((makerId.input.value||'plugin')+'.json',JSON.stringify(makerManifest(),null,2),'application/json'),'secondary'),makerInstall,actionButton('关闭',()=>pluginMaker.close(),'secondary'));
-makerForm.oninput=previewMaker;makerForm.onsubmit=safely(async event=>{event.preventDefault();if(!await appConfirm('安装这个应用插件？安装后可在插件列表启用。'))return;await api('/api/plugins/install','POST',makerManifest());await reloadCapabilities();pluginMaker.close();toast('插件已安装');});pluginMaker.append(makerForm);document.body.append(pluginMaker);buildSelect(makerAction);
+makerForm.oninput=previewMaker;makerForm.onsubmit=safely(async event=>{
+ event.preventDefault();if(!await appConfirm('安装这个应用插件？安装后可在插件列表启用。'))return;
+ const manifest=makerManifest();pluginMaker.close();
+ let installed=false;
+ try {
+  await withPluginReload(async()=>{await api('/api/plugins/install','POST',manifest);installed=true;await reloadCapabilities();});
+ } catch(error){if(!installed)pluginMaker.showModal();throw error;}
+ toast('插件已安装');
+});pluginMaker.append(makerForm);document.body.append(pluginMaker);buildSelect(makerAction);
 const importPlugin=elem('input');importPlugin.type='file';importPlugin.accept='.json';importPlugin.hidden=true;document.body.append(importPlugin);
-importPlugin.onchange=safely(async()=>{const file=importPlugin.files[0];if(!file)return;try{if(file.size>100000)throw new Error('插件清单超过 100 KB');const value=JSON.parse(await file.text());if(!await appConfirm('导入插件 '+String(value.name||'')+'？请核对来源及行为声明。'))return;await api('/api/plugins/install','POST',value);await reloadCapabilities();toast('插件已安装');}finally{importPlugin.value='';}});
+importPlugin.onchange=safely(async()=>{const file=importPlugin.files[0];if(!file)return;try{if(file.size>100000)throw new Error('插件清单超过 100 KB');const value=JSON.parse(await file.text());if(!await appConfirm('导入插件 '+String(value.name||'')+'？请核对来源及行为声明。'))return;await withPluginReload(async()=>{await api('/api/plugins/install','POST',value);await reloadCapabilities();});toast('插件已安装');}finally{importPlugin.value='';}});
 integrationBar.append(actionButton('创建应用插件',()=>{previewMaker();pluginMaker.showModal()},'secondary'),actionButton('导入应用插件',()=>importPlugin.click(),'secondary'));
-reloadCapabilities().catch(error=>toast(error.message));
+const initialPluginsReady=studioReady.then(()=>reloadCapabilities(true)).catch(error=>toast(error.message));
+window.workspaceLoading?.track(initialPluginsReady);

@@ -421,6 +421,7 @@ async function main() {
     const wallpaperFrame = page.frameLocator('#personal-wallpaper iframe');
     await wallpaperFrame.locator('#title').waitFor({state:'attached'});
     const frame = page.frames().find(frame => frame.url().includes('/appearance-assets/'));
+    const wallpaperUrl = frame.url();
     await frame.waitForFunction(() => window.ready && window.isolated && window.blocked);
     assert.equal(await page.evaluate(() => document.body.dataset.wallpaperEscaped), undefined);
     const paused = section.getByRole('switch',{name:'暂停动态背景',exact:true});
@@ -508,7 +509,10 @@ async function main() {
     assert.equal(suffixRange.status(),206);assert.equal((await suffixRange.body()).length,8);
     const invalidRange=await page.request.get(url+'/appearance-assets/'+clip.id,{headers:{Range:'bytes=99999999-'}});
     assert.equal(invalidRange.status(),416);
-    const videoBytes=await (await page.request.get(url+'/appearance-assets/'+clip.id)).body();
+    const videoResponse=await page.request.get(url+'/appearance-assets/'+clip.id);
+    assert.equal(videoResponse.status(),200);
+    assert.equal(videoResponse.headers()['cache-control'],'private, no-store');
+    const videoBytes=await videoResponse.body();
     const largeUpload=await page.request.post(url+'/api/appearance/upload?name=large.'+clip.id.split('.').pop(),{
       headers:{'Content-Type':'application/octet-stream'}, data:Buffer.concat([videoBytes,Buffer.alloc(9*1024*1024)])
     });
@@ -516,6 +520,8 @@ async function main() {
     assert.ok((await largeUpload.json()).size>8*1024*1024);
     const anonymous=await browser.newContext();
     assert.equal((await anonymous.request.get(url+'/api/appearance')).status(),403);
+    assert.equal((await anonymous.request.get(url+'/appearance-assets/'+clip.id)).status(),403);
+    assert.equal((await anonymous.request.get(wallpaperUrl)).status(),403);
     await anonymous.close();
     await page.setViewportSize({width:390,height:844});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

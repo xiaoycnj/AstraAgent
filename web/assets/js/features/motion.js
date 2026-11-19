@@ -37,7 +37,7 @@
         element.closest(`${menus},[popover]`) || typeof element.animate !== 'function') return;
     const styles = getComputedStyle(root);
     if (message) {
-      play(element, [{opacity: .35}, {opacity: 1}], {duration: 150, easing: 'ease-out'});
+      play(element, [{opacity: .35}, {opacity: 1}], {duration: parseFloat(styles.getPropertyValue('--motion-message')), easing: 'ease-out'});
       return;
     }
     const elastic = element.matches(elasticSurfaces);
@@ -47,7 +47,7 @@
     let start = {translate: offset, easing: spring};
     let end = {translate: '0 0'};
     if (elastic) {
-      start = {...start, scale: '.96 .84'};
+      start = {...start, scale: styles.getPropertyValue('--motion-scale-enter').trim()};
       end = {...end, scale: '1'};
     }
     play(element, [
@@ -108,6 +108,15 @@
     marker.style.translate = `0 ${y}px`;
     markerTarget = y;
     if (animate && group === markerGroup && Number.isFinite(from) && typeof marker.animate === 'function') {
+      const styles = getComputedStyle(root);
+      const duration = parseFloat(styles.getPropertyValue('--motion-rail'));
+      if (!['spring', undefined].includes(root.dataset.motionStyle)) {
+        const animation = play(marker, [{translate: `0 ${from}px`, scale: '1'}, {translate: `0 ${y}px`, scale: '1'}],
+          {duration, easing: styles.getPropertyValue('--motion-spring').trim()}, 'astra-rail-spring');
+        railAnimation = {animation, at: () => parseFloat(getComputedStyle(marker).translate.split(' ')[1])};
+        markerGroup = group;
+        return;
+      }
       const at = springFor(from, y, velocity);
       const count = 28, direction = Math.sign(y - from);
       const frames = Array.from({length: count + 1}, (_, i) => {
@@ -117,7 +126,7 @@
         return {translate: `0 ${round(i === count ? y : at(t))}px`,
           scale: `1 ${round(i === count ? 1 : 1 + stretch)}`, transformOrigin: direction > 0 ? 'center top' : 'center bottom'};
       });
-      railAnimation = {animation: play(marker, frames, {duration: 420}, 'astra-rail-spring'), at};
+      railAnimation = {animation: play(marker, frames, {duration}, 'astra-rail-spring'), at};
     } else {
       active.get(marker)?.cancel();
       railAnimation = undefined;
@@ -188,5 +197,5 @@
     syncRail(false);
   }
   preference.addEventListener('change', syncPreference);
-  new MutationObserver(syncPreference).observe(root, {attributes: true, attributeFilter: ['data-motion']});
+  new MutationObserver(syncPreference).observe(root, {attributes: true, attributeFilter: ['data-motion', 'data-motion-style']});
 })();

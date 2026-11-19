@@ -4,7 +4,16 @@ const capabilitiesTab=elem('button');capabilitiesTab.dataset.settingsTab='capabi
 const skillEditor=elem('form','skill-editor');const editorTitle=elem('h3','','编辑或新建 Skill');const skillId=elem('input');skillId.placeholder='唯一 ID，例如 research';skillId.required=true;skillId.pattern='[a-z](?:[a-z0-9_]|-){0,63}';skillId.setAttribute('aria-label','Skill ID');const skillName=elem('input');skillName.required=true;skillName.maxLength=80;skillName.placeholder='Skill 名称';skillName.setAttribute('aria-label','Skill 名称');const skillPrompt=elem('textarea');skillPrompt.rows=7;skillPrompt.maxLength=12000;skillPrompt.required=true;skillPrompt.setAttribute('aria-label','Skill 提示词');const skillActions=elem('div','skill-actions');const newSkill=elem('button','secondary','新建 Skill');newSkill.type='button';const saveSkill=elem('button','primary','保存 Skill');const reloadSkills=elem('button','secondary','重新扫描');reloadSkills.type='button';skillActions.append(newSkill,reloadSkills,saveSkill);skillEditor.append(editorTitle,skillId,skillName,skillPrompt,skillActions);capabilitiesPanel.append(skillEditor);const skillFeedback=elem('p','hint');skillFeedback.setAttribute('role','status');capabilitiesPanel.append(skillFeedback);
 const pluginSection=elem('section','plugin-section');pluginSection.append(elem('h3','','插件与扩展'),elem('p','hint','扫描 plugins 目录中的 manifest.json。应用插件可响应消息事件、调整界面并提供独立页面。启用前请核对来源与行为声明。'));const pluginList=elem('div','plugin-list');pluginSection.append(pluginList);capabilitiesPanel.append(pluginSection);let capabilityCatalog={skills:{},plugins:[]};
 function showSkillEditor(){const id=$('#skill-select').value,skill=capabilityCatalog.skills[id];if(!skill)return;skillId.value=id;skillName.value=skill.name;skillPrompt.value=skill.prompt;for(const input of [skillId,skillName,skillPrompt])input.disabled=!skill.editable;saveSkill.disabled=!skill.editable;$('#skill-description').textContent=skill.source+' · '+skill.prompt}
-async function reloadCapabilities(){capabilityCatalog=await api('/api/capabilities');const previous=$('#skill-select').value;$('#skill-select').replaceChildren(...Object.entries(capabilityCatalog.skills).map(([id,skill])=>new Option(skill.name,id)));$('#skill-select').value=capabilityCatalog.skills[previous]?previous:'general';$('#skill-select')._refresh?.();showSkillEditor();renderToolCatalog(capabilityCatalog.tools||[]);pluginList.replaceChildren();for(const plugin of capabilityCatalog.plugins){const card=elem('div','plugin-card');const info=elem('div');info.append(elem('strong','',plugin.name+' · '+plugin.version),elem('p','hint',plugin.description),elem('small','',plugin.supported?(plugin.hooks?.length?plugin.hooks.length+' 个应用事件 · '+(plugin.panels?.length||0)+' 个页面':plugin.skills+' 个 Skill · '+(plugin.tools?.length||0)+' 个专用工具'):'需要未来工具适配器'));const toggleLabel=elem('label','switch-pill plugin-switch');
+let catalogRequest=0, catalogApplied=-1;
+async function reloadCapabilities(initial){
+const fromStartup=initial===true;
+const request=fromStartup?0:++catalogRequest;
+const catalog=await (fromStartup?initialCapabilities:api('/api/capabilities'));
+// A late background scan must not overwrite a newer catalog applied after a plugin change.
+if(request<=catalogApplied)return false;
+catalogApplied=request;
+capabilityCatalog=catalog;
+const previous=$('#skill-select').value;$('#skill-select').replaceChildren(...Object.entries(capabilityCatalog.skills).map(([id,skill])=>new Option(skill.name,id)));$('#skill-select').value=capabilityCatalog.skills[previous]?previous:'general';$('#skill-select')._refresh?.();showSkillEditor();renderToolCatalog(capabilityCatalog.tools||[]);pluginList.replaceChildren();for(const plugin of capabilityCatalog.plugins){const card=elem('div','plugin-card');const info=elem('div');info.append(elem('strong','',plugin.name+' · '+plugin.version),elem('p','hint',plugin.description),elem('small','',plugin.supported?(plugin.hooks?.length?plugin.hooks.length+' 个应用事件 · '+(plugin.panels?.length||0)+' 个页面':plugin.skills+' 个 Skill · '+(plugin.tools?.length||0)+' 个专用工具'):'需要未来工具适配器'));const toggleLabel=elem('label','switch-pill plugin-switch');
 const toggle=elem('input');
 toggle.type='checkbox';
 toggle.checked=plugin.enabled;
@@ -14,8 +23,10 @@ toggle.setAttribute('aria-label','启用插件 '+plugin.name);
 toggle.onchange=async()=>{
     toggle.disabled=true;
     try{
-        await api('/api/plugins/'+plugin.id,'PUT',{enabled:toggle.checked});
-        await reloadCapabilities();
+        await withPluginReload(async()=>{
+            await api('/api/plugins/'+plugin.id,'PUT',{enabled:toggle.checked});
+            await reloadCapabilities();
+        });
     }catch(error){
         toggle.checked=plugin.enabled;
         toast(error.message);
@@ -24,7 +35,7 @@ toggle.onchange=async()=>{
     }
 };
 toggleLabel.append(elem('span','','启用'),toggle);
-card.append(info,toggleLabel);pluginList.append(card)}if(!capabilityCatalog.plugins.length)pluginList.append(elem('p','hint','尚未发现插件。将 manifest.json 放入 plugins/<名称>/ 后重新扫描。'));skillFeedback.textContent=capabilityCatalog.errors.join('\n');saveRuntime()}
+card.append(info,toggleLabel);pluginList.append(card)}if(!capabilityCatalog.plugins.length)pluginList.append(elem('p','hint','尚未发现插件。将 manifest.json 放入 plugins/<名称>/ 后重新扫描。'));skillFeedback.textContent=capabilityCatalog.errors.join('\n');saveRuntime();return true;}
 $('#skill-select').onchange=()=>{showSkillEditor();saveRuntime()};newSkill.onclick=()=>{for(const input of [skillId,skillName,skillPrompt]){input.disabled=false;input.value=''}saveSkill.disabled=false;skillId.focus()};skillEditor.onsubmit=async e=>{e.preventDefault();busyButton(saveSkill,true,'保存中…');try{await api('/api/skills/'+encodeURIComponent(skillId.value),'PUT',{name:skillName.value,prompt:skillPrompt.value});const id=skillId.value;await reloadCapabilities();$('#skill-select').value=id;$('#skill-select')._refresh?.();showSkillEditor();saveRuntime();toast('Skill 已保存到独立文件夹')}catch(error){skillFeedback.textContent=error.message}finally{busyButton(saveSkill,false)}};reloadSkills.onclick=safely(reloadCapabilities);
 // Compact persisted execution timeline; events come from the actual runtime.
 const taskPanel=elem('details','task-panel');taskPanel.hidden=true;const taskSummary=elem('summary','','任务执行记录');const taskEvents=elem('div','task-events');taskPanel.append(taskSummary,taskEvents);$('.composer-wrap').prepend(taskPanel);let activeRunSession=null,currentTaskEvents=[];
@@ -33,7 +44,7 @@ function drawTaskEvents(events,status){taskEvents.replaceChildren();for(const ev
 function handleAgentEvent(sid,event){if(state.session?.id!==sid)return;if(event.type==='start'){activeRunSession=sid;currentTaskEvents=[]}if(event.type==='delta')return;currentTaskEvents.push(event);drawTaskEvents(currentTaskEvents,event.type==='approval'?'waiting':event.type==='done'?'complete':event.type==='error'?'failed':event.type==='cancelled'?'cancelled':'running')}
 async function refreshTaskRecords(){const sid=state.session?.id;if(!sid){taskPanel.hidden=true;return}const runs=await api('/api/sessions/'+sid+'/runs');if(state.session?.id!==sid)return;state.sessionRuns=runs;renderRunSummaries?.();if(runs[0]){currentTaskEvents=runs[0].events;drawTaskEvents(currentTaskEvents,runs[0].status)}else taskPanel.hidden=true}
 const previousOpenSession=openSession;openSession=async function(session){await previousOpenSession(session);await refreshTaskRecords()};const previousStreamChat=streamChat;streamChat=async function(sid,content){try{return await previousStreamChat(sid,content)}finally{await refreshTaskRecords().catch(()=>{})}};const previousNewSession=newSession;newSession=async function(){await previousNewSession();taskPanel.hidden=true};
-studioReady.then(async()=>{await reloadCapabilities();$('#skill-select').onchange=()=>{showSkillEditor();saveRuntime()}}).catch(e=>toast(e.message));refreshTaskRecords().catch(()=>{});
+$('#skill-select').addEventListener('change',()=>showSkillEditor());refreshTaskRecords().catch(()=>{});
 // Inline Skill and plugin references at the current caret.
 const commandInput=$('#chat-input');const commandMenu=elem('section','command-menu');commandMenu.id='composer-command-menu';commandMenu.hidden=true;commandMenu.setAttribute('aria-label','快捷能力选择');const commandTitle=elem('div','command-menu-title');const commandList=elem('div','command-list');commandList.setAttribute('role','listbox');commandList.id='composer-command-options';commandMenu.append(commandTitle,commandList);$('#chat-form').before(commandMenu);commandInput.setAttribute('aria-controls',commandList.id);commandInput.setAttribute('aria-autocomplete','list');commandInput.setAttribute('aria-expanded','false');let commandRows=[],commandIndex=0,commandSignature='',commandSuppressed=null,commandFetch=0;
 function hideCommands(){commandMenu.hidden=true;commandInput.setAttribute('aria-expanded','false');commandInput.removeAttribute('aria-activedescendant')}
@@ -60,7 +71,7 @@ function getCommandEntries(type) {
 }
 function highlightCommand(index){commandIndex=index;[...commandList.children].forEach((row,i)=>{row.classList.toggle('active',i===index);row.setAttribute('aria-selected',String(i===index))});const row=commandList.children[index];if(row){commandInput.setAttribute('aria-activedescendant',row.id);row.scrollIntoView({block:'nearest'})}}
 function renderCommands(){const query=commandQuery();if(!query||commandSuppressed===commandInput.value){hideCommands();return}const entries=getCommandEntries(query.type).filter(entry=>fuzzyCommandMatch(query.query,entry));if(!entries.length){hideCommands();return}const signature=query.type+'|'+query.query+'|'+entries.map(e=>e.id+e.name+e.enabled).join('|');commandRows=entries;if(signature!==commandSignature){commandSignature=signature;commandIndex=0;commandList.replaceChildren();for(const [index,entry] of entries.entries()){const row=elem('div','command-option');row.id='command-option-'+index;row.setAttribute('role','option');row.append(svgIcon(entry.icon),elem('strong','',entry.name),elem('span','',entry.description||''));row.addEventListener('pointerdown',e=>e.preventDefault());row.onclick=()=>chooseCommand(index);row.onpointermove=()=>highlightCommand(index);commandList.append(row)}}commandTitle.textContent=query.type==='/'?'Skills · 选择任务角色':'插件';commandMenu.hidden=false;commandInput.setAttribute('aria-expanded','true');highlightCommand(commandIndex)}
-async function refreshCommandCatalog(){const generation=++commandFetch;try{const result=await api('/api/capabilities');if(generation!==commandFetch)return;capabilityCatalog=result;renderCommands()}catch(e){hideCommands();toast(e.message)}}
+async function refreshCommandCatalog(){const generation=++commandFetch;try{await reloadCapabilities();if(generation===commandFetch)renderCommands()}catch(e){if(generation===commandFetch){hideCommands();toast(e.message)}}}
 function chooseCommand(index) {
     const entry = commandRows[index], query = commandQuery();
     if (!entry || !query) return;
