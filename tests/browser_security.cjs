@@ -57,6 +57,7 @@ async function main() {
     await page.screenshot({path:path.join(root,'work/sidebar-collapsed.png')});
     await page.reload();
     await page.waitForSelector('#nav-home');
+    await page.waitForFunction(() => !window.workspaceLoading.active);
     assert.equal(await page.locator('#sidebar-toggle').getAttribute('aria-expanded'),'false');
     await page.keyboard.press('Control+Shift+S');
     await page.waitForTimeout(280);
@@ -99,6 +100,52 @@ async function main() {
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('#nav-more').getAttribute('aria-expanded'),'false');
     await page.locator('.rail-menu').waitFor({state:'hidden'});
+    const searchFixtures = await page.evaluate(async () => {
+      const rows = [];
+      for (const [title, project, mode, archived] of [
+        ['Release notes', '发布组', 'chat', false],
+        ['Release checklist', '发布组', 'agent', false],
+        ['Release archive', '发布组', 'chat', true],
+      ]) {
+        const session = await api('/api/sessions', 'POST', {title, conversation_mode: mode});
+        await api('/api/sessions/' + session.id, 'PATCH', {project, archived});
+        rows.push(session.id);
+      }
+      await refreshList();
+      await navigatePage('library');
+      return rows;
+    });
+    await page.locator('#nav-more').click();
+    await page.getByRole('menuitem', {name:'搜索与筛选', exact:true}).click();
+    const search = page.getByRole('searchbox', {name:'搜索会话', exact:true});
+    await search.waitFor();
+    assert.equal(await search.evaluate(el => document.activeElement === el), true);
+    const group = page.locator('#item-list .session-group').filter({hasText:'发布组'});
+    await group.locator('summary').click();
+    await search.fill('发布组 ＣＨＡＴ RELEASE');
+    assert.equal(await group.getAttribute('open'), '');
+    assert.match(await page.locator('#item-list .list-item').innerText(), /Release notes/);
+    const projectFilter = page.getByRole('searchbox', {name:'筛选项目组', exact:true});
+    await projectFilter.fill('不存在的项目');
+    assert.equal(await page.locator('#item-list [role=status]').innerText(),'没有匹配的会话。');
+    await page.getByRole('button', {name:'搜索会话', exact:true}).click();
+    await search.waitFor({state:'hidden'});
+    assert.equal(await page.locator('#session-search').inputValue(), '');
+    assert.equal(await page.locator('#session-filters input').nth(1).inputValue(), '');
+    assert.equal(await group.getAttribute('open'), null);
+    await page.locator('#nav-more').click();
+    await page.getByRole('menuitem', {name:'已归档的聊天', exact:true}).click();
+    await page.locator('.archive-title').filter({hasText:'Release archive'}).waitFor();
+    const archive = page.getByRole('searchbox', {name:'搜索已归档的聊天', exact:true});
+    await archive.fill('发布组 agent');
+    assert.equal(await page.locator('.archive-title').count(), 0);
+    await archive.fill('发布组 chat release');
+    assert.equal(await page.locator('.archive-title').innerText(), 'Release archive');
+    await page.locator('#settings').getByRole('button',{name:'返回工作空间',exact:true}).click();
+    await page.evaluate(async ids => {
+      for (const id of ids) await api('/api/sessions/' + id, 'DELETE');
+      await refreshList();
+    }, searchFixtures);
     await page.locator('#nav-more').click();
     await page.locator('#nav-review').click();
     await page.locator('.workbench-drawer').waitFor();
@@ -427,7 +474,9 @@ db.commit();db.close()
     await page.locator('.app-dialog .primary').click();
     await page.waitForFunction(()=>!marketData.state.installed['plugin:focus-session']);
     }
+    await page.waitForFunction(() => !window.workspaceLoading.active);
     await page.getByRole('searchbox',{name:'搜索插件与皮肤',exact:true}).fill('没有这个作品');
+    await page.locator('.market-card').first().waitFor({state:'detached'});
     assert.equal(await page.locator('.market-card').count(),0);
     await page.evaluate(()=>navigatePage('home'));
     await page.evaluate(async()=>{languageSelect.value='ja';await languageSelect.onchange();await navigatePage('marketplace');});

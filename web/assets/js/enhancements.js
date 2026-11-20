@@ -27,13 +27,6 @@ async function loadIconLibrary(){
 }
 const previousIconSettingsTab=selectSettingsTab;
 selectSettingsTab=function(name){previousIconSettingsTab(name);$('#settings').scrollTop=0;$('#settings').scrollLeft=0;$('.settings-shell').scrollTop=0;$('.settings-shell').scrollLeft=0;if(name==='icons')loadIconLibrary().catch(error=>toast(error.message));};
-// Search sessions in the sidebar without changing the project filter.
-const sessionSearch=elem('input');sessionSearch.type='search';sessionSearch.placeholder='搜索会话';sessionSearch.setAttribute('aria-label','搜索会话');listFilters.prepend(sessionSearch);
-const previousSearchRenderList=renderList;
-renderList=function(){
-    previousSearchRenderList(sessionSearch.value.trim().toLowerCase());
-};
-sessionSearch.oninput=renderList;
 const previousBranchMessageMore=showMessageMore;
 showMessageMore=function(message){
     previousBranchMessageMore(message);const sourceSession=state.session?.id;

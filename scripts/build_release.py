@@ -39,6 +39,7 @@ def source_files(root, edition):
     files += [root / 'scripts' / name for name in ('static_browser.cjs','update_model_registry.py','build_release.py','build_stt_dlc.py','build_document_dlc.py','build_release_catalog.py','check_dependencies.py','harden_node_runtime.py','benchmark_audit.py','install_local_stt.ps1','start_local_stt.ps1','stt_notices.py')]
     files += [path for path in (root/'licenses/optional-stt').rglob('*') if path.is_file()]
     files += [root/'docs/DESIGN-SYSTEM.md',root/'docs/INTERACTION-SPEC.md',root/'docs/UI-UX-ACCEPTANCE.md',root/'docs/MEDIA-AND-ROUTING.md',root/'docs/PERFORMANCE.md',root/'docs/INTELLIGENT-UI.md',root/'docs/MODEL-ADAPTERS.md',root/'docs/LOCAL-STT.md',root/'docs/DLC.md',root/'docs/APPLICATION-PLUGINS.md',root/'docs/MARKETPLACE.md',root/'docs/SECURITY-AUDIT-2026-11-13.md']
+    files.append(root / 'docs/ROADMAP-2026-11-20.md')
     files += [root / 'security/npm-runtime-lock.json',root/'security/audit-2026-11-13.json',root / 'docs/UI-DESIGN.md',root/'docs/MODULES.md',root/'docs/AUDIT-2026-11-07.md',root/'docs/EXECUTION-RECOVERY.md',root/'native/Launcher.cs',root/'scripts/build_launcher.ps1']
     files += [root / 'i18n' / name for name in ('README.md', 'en.json', 'zh-CN.json', 'ja.json')]
     files += [root / name / 'README.md' for name in ('memory', 'skills', 'plugins')]

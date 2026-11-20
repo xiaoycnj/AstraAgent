@@ -1,13 +1,20 @@
 // Keep the settings viewport outside transformed application ancestors.
 document.body.append($('#settings'));
 // Persistent conversation organization and canvas navigation.
-let projectFilter='';
 const listFilters=elem('div','workspace-filters');
+const sessionSearch=elem('input');
+sessionSearch.type='search';
+sessionSearch.id='session-search';
+sessionSearch.placeholder='搜索标题、项目组或模式';
+sessionSearch.setAttribute('aria-label','搜索会话');
+sessionSearch.setAttribute('aria-controls','item-list');
+listFilters.id='session-filters';
 const projectFilterInput=elem('input');
+projectFilterInput.type='search';
 projectFilterInput.placeholder='筛选项目组';
 projectFilterInput.setAttribute('aria-label','筛选项目组');
-projectFilterInput.oninput=()=>{projectFilter=projectFilterInput.value.trim();renderList()};
-listFilters.append(projectFilterInput);
+for(const input of [sessionSearch,projectFilterInput])input.oninput=()=>renderList();
+listFilters.append(sessionSearch,projectFilterInput);
 $('#item-list').before(listFilters);
 const sessionMenu=elem('div','session-context-menu');
 sessionMenu.hidden=true;
@@ -33,20 +40,34 @@ function showSessionMenu(item,x,y){
 }
 const baseWorkspaceRenderList=renderList;
 const collapsedSessionGroups = new Set();
-renderList=function(search = ''){
+function normalizeSessionSearch(text=''){
+    return text.normalize('NFKC').trim().toLowerCase();
+}
+function sessionMatches(item,terms){
+    const fields=[item.title,item.project||'',item.conversation_mode==='chat'?'chat':'agent']
+        .map(normalizeSessionSearch);
+    return terms.every(term=>fields.some(field=>field.includes(term)));
+}
+renderList=function(){
     listFilters.hidden=state.mode!=='chat';
     if(state.mode!=='chat'){baseWorkspaceRenderList();return}
-    const rows=state.sessions.filter(item=>!item.archived&&(!projectFilter||(item.project||'').includes(projectFilter))&&(!search||item.title.toLowerCase().includes(search)));
+    const terms=normalizeSessionSearch(sessionSearch.value).split(/\s+/).filter(Boolean);
+    const project=normalizeSessionSearch(projectFilterInput.value);
+    const filtering=Boolean(terms.length||project);
+    const rows=state.sessions.filter(item=>!item.archived&&
+        normalizeSessionSearch(item.project||'').includes(project)&&sessionMatches(item,terms));
     $('#item-list').replaceChildren();$('#item-count').textContent=rows.length;
     const groups=new Map();
-    for(const item of rows){const key=item.project||'未分组';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item)}
+    for(const item of rows){const key=item.project||'';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item)}
     for(const [name,items] of groups){
         const group = elem('details', 'session-group');
         const heading = elem('summary', 'session-group-title');
-        heading.append(elem('span', 'session-group-name', name), elem('span', 'session-group-count', String(items.length)));
-        group.open = Boolean(search) || !collapsedSessionGroups.has(name);
+        const label = elem('span', 'session-group-name', name || '未分组');
+        if (name) label.dataset.i18nIgnore = '';
+        heading.append(label,elem('span','session-group-count',String(items.length)));
+        group.open = filtering || !collapsedSessionGroups.has(name);
         group.addEventListener('toggle', () => {
-            if (search || !group.isConnected) return;
+            if (filtering || !group.isConnected) return;
             if (group.open) collapsedSessionGroups.delete(name);
             else collapsedSessionGroups.add(name);
         });
@@ -64,7 +85,11 @@ renderList=function(search = ''){
         }
         $('#item-list').append(group);
     }
-    if(!rows.length)$('#item-list').append(elem('p','hint','这里还没有会话。'));
+    if(!rows.length){
+        const empty=elem('p','hint',filtering?'没有匹配的会话。':'这里还没有会话。');
+        empty.setAttribute('role','status');
+        $('#item-list').append(empty);
+    }
 };
 renderList();
 // Archived conversations live alongside the other personal settings.
@@ -84,7 +109,7 @@ archivePanel.prepend(archiveActions);
 const archiveFilters=elem('div','archive-filters');
 const archiveSearch=elem('input');
 archiveSearch.type='search';
-archiveSearch.placeholder='搜索已归档的聊天';
+archiveSearch.placeholder='搜索标题、项目组或模式';
 archiveSearch.setAttribute('aria-label','搜索已归档的聊天');
 const archiveType=elem('select');
 archiveType.setAttribute('aria-label','归档会话类型');
@@ -127,11 +152,11 @@ async function loadArchives(){
 }
 function renderArchives(){
     archiveRows.replaceChildren();
-    const query=archiveSearch.value.trim().toLowerCase();
+    const terms=normalizeSessionSearch(archiveSearch.value).split(/\s+/).filter(Boolean);
     const rows=archivedSessions.filter(item=>{
         const projectMatches=archiveProject.value==='all'||(archiveProject.value==='none'?!item.project:archiveProject.value==='project:'+item.project);
         const typeMatches=archiveType.value==='all'||(archiveType.value==='branch'?Boolean(item.parent_id):!item.parent_id);
-        return projectMatches&&typeMatches&&item.title.toLowerCase().includes(query);
+        return projectMatches&&typeMatches&&sessionMatches(item,terms);
     });
     deleteArchives.disabled=archivedSessions.length===0;
     const groups=new Map();

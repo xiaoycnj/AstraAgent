@@ -155,7 +155,7 @@ python.bat scripts/check_dependencies.py --online
 python.bat scripts/build_release.py --edition all
 ```
 
-标准版打包需要完整 `runtimes` 环境，保留源码中的 Python 路径配置。内置 npm 安全覆盖可通过 `scripts/harden_node_runtime.py` 和提交的锁文件重建。更新历史统一维护在 CHANGELOG.md。
+标准版打包需要完整 `runtimes` 环境，保留源码中的 Python 路径配置。内置 npm 安全覆盖可通过 `scripts/harden_node_runtime.py` 和提交的锁文件重建。更新历史见 [CHANGELOG](CHANGELOG.md)，竞品对比和分阶段验收见 [产品路线图](docs/ROADMAP-2026-11-20.md)。
 
 语言资源位于 `i18n`，提供简体中文、English 与跟随系统选项，可以安装自定义语言包。
 

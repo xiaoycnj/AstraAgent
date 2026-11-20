@@ -400,6 +400,7 @@
   };
   const commands = [
     ["新建会话", "", () => $("#new-item").click()],
+    ["搜索会话", "", openSessionSearch],
     [
       "聚焦输入框",
       "",

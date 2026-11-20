@@ -9,7 +9,7 @@ const reverseUiStrings = new Map();
 const excludedUiContent = [
     'script', 'style', 'pre', 'code', '.markdown', '.CodeMirror',
     '.terminal-output', '.file-preview', '.project-diff', '.file-entry',
-    '#current-title', '.list-item', '.session-group-title', '.profile-hero',
+    '#current-title', '.list-item', '.profile-hero',
     '.node-title', '.node-content', '.memory-card .hint', '.memory-card button:first-child',
     '.provider-card strong', '.model-row-name', '.model-display-name', '.provider-model-alias', '.provider-model-id', '.notices-license',
     '#provider-select option:not([value=""])', '#provider-edit option:not([value=""])', '#project-selector option:not([value=""])',
