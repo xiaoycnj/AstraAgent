@@ -73,5 +73,8 @@ attachmentPicker.addEventListener('change',()=>{if(appPage!=='library')return;le
 const beforePageImageEvent=handleAgentEvent;handleAgentEvent=function(sid,event){beforePageImageEvent(sid,event);if(['images','library'].includes(appPage)&&['image_generated','file_generated'].includes(event.type))loadAssetPage(appPage,pageTicket)};
 window.addEventListener('popstate',async()=>{if(!await navigatePage(new URLSearchParams(location.search).get('view')||'home',{historyMode:'none'}))rememberPage(appPage,true)});
 const initialPage=new URLSearchParams(location.search).get('view')||'home';
-const initialPageReady=studioReady.then(()=>navigatePage(initialPage,{historyMode:'replace'})).catch(error=>toast(error.message));
+const initialPageReady=studioReady.then(async()=>{
+ if(initialPage==='marketplace')await marketReady;
+ return navigatePage(initialPage,{historyMode:'replace'});
+}).catch(error=>toast(error.message));
 window.workspaceLoading.track(initialPageReady);

@@ -55,6 +55,7 @@ jobs:
             'browser_motion', 'browser_controls', 'browser_extension_recovery', 'browser_image_inline', 'browser_attachments'
           )
           foreach ($suite in $suites) {
+            Write-Host "Running $suite"
             node "tests/$suite.cjs"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }

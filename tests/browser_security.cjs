@@ -470,13 +470,18 @@ db.commit();db.close()
     const restoredMarket = await page.evaluate(() => ({
       page: appPage, lang: document.documentElement.lang,
       skin: marketData?.state.active_skin, safety: extensionSafety,
+      tabs: [...destinationTabs.querySelectorAll('button')].map(button=>button.textContent),
+      recovery: destinationBody.querySelector('.extension-recovery p')?.textContent,
+      inert: Boolean(destination.closest('[inert]')),
     }));
     assert.equal(restoredMarket.page, 'marketplace', JSON.stringify(restoredMarket));
     assert.equal(restoredMarket.lang, 'zh-CN', JSON.stringify(restoredMarket));
     assert.equal(restoredMarket.safety.active, false, JSON.stringify(restoredMarket));
     assert.equal(restoredMarket.skin, 'midnight-orbit', JSON.stringify(restoredMarket));
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
-    await page.getByRole('button',{name:'UI 皮肤',exact:true}).click();
+    assert.equal(restoredMarket.inert, false, JSON.stringify(restoredMarket));
+    assert.ok(restoredMarket.tabs.includes('UI 皮肤'), JSON.stringify(restoredMarket));
+    await page.locator('[data-market-tab=skin]').click();
     await page.screenshot({path:path.join(root,'work/marketplace-skins.png')});
     await page.getByRole('button',{name:'恢复原外观',exact:true}).click();
     await page.waitForFunction(()=>marketData.state.active_skin===null);

@@ -298,10 +298,10 @@ async function renderMarketplacePage() {
   destinationActions.replaceChildren();
   destinationTabs.replaceChildren();
   destinationBody.replaceChildren();
-  await loadExtensionSafety();
-  if (extensionSafety.active) {
+  const safety = await loadExtensionSafety();
+  if (safety.active) {
     const panel = elem('section', 'extension-recovery');
-    panel.append(elem('h2', '', '扩展安全模式'), elem('p', '', extensionSafety.reason),
+    panel.append(elem('h2', '', '扩展安全模式'), elem('p', '', safety.reason),
       elem('p', 'hint', '所有插件和扩展皮肤均已停载。修复或移出故障包后可重新检查。'));
     const retry = actionButton('重新检查并恢复', async () => {
       retry.disabled = true;
@@ -366,6 +366,7 @@ async function renderMarketplacePage() {
       },
       "",
     );
+    button.dataset.marketTab = id;
     button.classList.toggle("active", marketTab === id);
     destinationTabs.append(button);
   }
