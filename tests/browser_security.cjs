@@ -447,6 +447,7 @@ db.commit();db.close()
     await page.evaluate(async()=>{languageSelect.value='zh-CN';await languageSelect.onchange();});
     await page.evaluate(()=>navigatePage('marketplace'));
     await page.waitForSelector('.market-card');
+    await page.waitForFunction(()=>[...destinationTabs.querySelectorAll('button')].some(button=>button.textContent.trim()==='UI 皮肤'));
     assert.equal(await page.locator('.market-card').count(),3);
     await page.getByRole('button',{name:'UI 皮肤',exact:true}).click();
     assert.equal(await page.locator('.market-card').count(),4);
@@ -460,6 +461,7 @@ db.commit();db.close()
     await page.waitForFunction(()=>marketData.state.active_skin==='midnight-orbit'&&!skinPreview);
     await page.reload();
     await page.waitForFunction(()=>marketData?.state.active_skin==='midnight-orbit');
+    await page.waitForFunction(()=>[...destinationTabs.querySelectorAll('button')].some(button=>button.textContent.trim()==='UI 皮肤'));
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
     await page.getByRole('button',{name:'UI 皮肤',exact:true}).click();
     await page.screenshot({path:path.join(root,'work/marketplace-skins.png')});
