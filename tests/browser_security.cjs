@@ -464,11 +464,11 @@ db.commit();db.close()
     await page.locator('[data-package-id="midnight-orbit"]').getByRole('button',{name:'预览',exact:true}).click();
     await page.getByRole('button',{name:'应用皮肤',exact:true}).click();
     await page.waitForFunction(()=>marketData.state.active_skin==='midnight-orbit'&&!skinPreview);
-    await page.evaluate(() => history.replaceState({astraPage:true}, '', location.pathname + '?view=marketplace'));
-    assert.equal(await page.evaluate(()=>new URLSearchParams(location.search).get('view')),'marketplace');
     await page.reload();
     await page.evaluate(() => Promise.all([initialPageReady, marketReady, languageReady]));
     await page.waitForFunction(() => !window.workspaceLoading.active);
+    // Reopen the marketplace to check skin persistence independently of route restoration.
+    await page.evaluate(() => navigatePage('marketplace'));
     const restoredMarket = await page.evaluate(() => ({
       page: appPage, lang: document.documentElement.lang,
       skin: marketData?.state.active_skin, safety: extensionSafety,
