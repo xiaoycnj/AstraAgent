@@ -36,10 +36,14 @@ function currentProject() {
 function updateProjectControls() {
     const project = currentProject();
     const label = projectButton.querySelector('span') || projectButton;
-    label.textContent = project ? project.name : '打开项目';
-    projectButton.title = project?.path || '选择真实项目目录';
-    cancelTaskButton.hidden = !state.pending.has(state.session?.id);
-    projectRoot.textContent = project?.path || '未绑定项目 · 使用应用工作区';
+    const name = project ? project.name : '打开项目';
+    const path = project?.path || '选择真实项目目录';
+    const root = project?.path || '未绑定项目 · 使用应用工作区';
+    const cancelHidden = !state.pending.has(state.session?.id);
+    if (label.textContent !== name) label.textContent = name;
+    if (projectButton.title !== path) projectButton.title = path;
+    if (cancelTaskButton.hidden !== cancelHidden) cancelTaskButton.hidden = cancelHidden;
+    if (projectRoot.textContent !== root) projectRoot.textContent = root;
 }
 async function refreshProjects() {
     projectCatalog = await api('/api/projects');

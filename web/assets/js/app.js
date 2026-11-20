@@ -145,7 +145,7 @@ async function openSession(session) {
   $('#app .sidebar').classList.remove('open');
   const request = ++messageRequest;
   const messages = await api(`/api/sessions/${session.id}/messages`);
-  if (request !== messageRequest) return;
+  if (request !== messageRequest || state.session?.id !== session.id) return;
   state.messages = messages;
   renderMessages();
 }

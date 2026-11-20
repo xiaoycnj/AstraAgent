@@ -56,6 +56,14 @@ async function main() {
     });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript(() => {
+      window.__motionIntervals = [];
+      const nativeInterval = window.setInterval.bind(window);
+      window.setInterval = (callback, delay, ...args) => {
+        if (delay === 5000) {window.__motionIntervals.push(callback); return window.__motionIntervals.length;}
+        return nativeInterval(callback, delay, ...args);
+      };
+    });
     await page.goto(url + "/#access=" + token);
     await page.waitForFunction(
       () =>
@@ -102,6 +110,53 @@ async function main() {
     assert.equal(stable.focus, true);
     assert.equal(stable.body, true);
     assert.equal(stable.value, '保留交互状态');
+    const passiveRefresh = await page.evaluate(async () => {
+      const select = document.createElement('select');
+      select.innerHTML = '<option value="one">Option one</option><option value="two">Option two</option>';
+      document.body.append(select);
+      buildSelect(select);
+      const button = select.nextElementSibling, label = button.firstElementChild;
+      await new Promise(resolve => setTimeout(resolve, 750));
+      const stableLabel = label === button.firstElementChild;
+      select.value = 'two'; select.dispatchEvent(new Event('change'));
+      const updatesOnChange = button.firstElementChild.textContent === 'Option two';
+      select.disabled = true; select._refresh();
+      const updatesDisabled = button.disabled;
+      select.remove(); button.remove();
+      return {stableLabel, updatesOnChange, updatesDisabled};
+    });
+    assert.deepEqual(passiveRefresh,{stableLabel:true,updatesOnChange:true,updatesDisabled:true});
+    const switchedSessions = await page.evaluate(async () => {
+      const sessions=[];
+      for(const title of ['Switch A','Switch B']) sessions.push(await api('/api/sessions','POST',{title}));
+      await refreshList();
+      const entered=[];
+      document.querySelector('#messages').addEventListener('astra:session-enter',()=>entered.push({session:state.session?.id,view:conversationSession}));
+      for(const session of sessions) {
+        await openSession(session);
+        const animation=document.querySelector('#messages').getAnimations().find(item=>item.id==='astra-session-enter');
+        if(!animation)throw Error('Conversation session change did not animate: '+JSON.stringify({session:session.id,active:state.session?.id,view:conversationSession,entered,animations:document.querySelector('#messages').getAnimations().map(item=>({id:item.id,state:item.playState,pending:item.pending}))}));
+        await animation.finished;
+      }
+      return {count:document.querySelector('#messages').getAnimations().filter(item=>item.id==='astra-session-enter').length, active:state.session.id, expected:sessions[1].id};
+    });
+    assert.equal(switchedSessions.count,0,'each session fade finishes before the next click');
+    assert.equal(switchedSessions.active,switchedSessions.expected);
+    const greeting = await page.evaluate(() => {
+      state.session = {id:'greeting-fixture'};
+      state.messages = [];
+      renderMessages();
+      const heading = document.querySelector('.welcome h1');
+      if (!heading) return {skipped:true};
+      heading.dataset.layoutTitle = 'false';
+      for (const callback of window.__motionIntervals) callback();
+      const animations = heading.getAnimations();
+      return {count:animations.length, animation:animations.at(-1)?.effect.getKeyframes(), className:heading.className};
+    });
+    assert.equal(greeting.skipped,undefined);
+    assert.equal(greeting.count,1);
+    assert.ok(greeting.animation.every(frame=>frame.opacity!==undefined&&!('translate' in frame)&&!('transform' in frame)&&!('filter' in frame)),JSON.stringify(greeting));
+    assert.equal(greeting.className.includes('greeting-change'),false);
     const scrolling = await page.evaluate(async () => {
       const settle = async () => {for(let i=0;i<4;i++) await new Promise(requestAnimationFrame);};
       state.session = {id: 'following-fixture', title: 'Follow'};

@@ -123,6 +123,7 @@ function paintConversation(){
  }
  conversationFollowing=follow;
  restoreConversationPosition();
+ if(changed)conversationList.dispatchEvent(new Event('astra:session-enter'));
  conversationList.classList.toggle('has-streaming',state.messages.some(message=>message.streaming));
  observeConversationArticles();
  syncConversationStop();scheduleConversationMap();

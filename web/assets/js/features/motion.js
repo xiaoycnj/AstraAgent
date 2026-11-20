@@ -20,6 +20,8 @@
   const visible = element => element.isConnected && !element.hidden &&
     !element.closest('[hidden], details:not([open]) > :not(summary)') &&
     !!element.getClientRects().length;
+  const canEnter = element => !reduced() && !element.closest('[data-reduced-motion="true"]') &&
+    visible(element) && typeof element.animate === 'function';
 
   function play(element, frames, options, id = 'astra-enter') {
     active.get(element)?.cancel();
@@ -33,8 +35,7 @@
   }
 
   function enter(element, {page = false, message = false} = {}) {
-    if (reduced() || element.closest('[data-reduced-motion="true"]') || !visible(element) ||
-        element.closest(`${menus},[popover]`) || typeof element.animate !== 'function') return;
+    if (!canEnter(element) || element.closest(`${menus},[popover]`)) return;
     const styles = getComputedStyle(root);
     if (message) {
       play(element, [{opacity: .35}, {opacity: 1}], {duration: parseFloat(styles.getPropertyValue('--motion-message')), easing: 'ease-out'});
@@ -57,6 +58,24 @@
       {...end, offset: 1},
     ], {duration: parseFloat(styles.getPropertyValue(page ? '--motion-page' : '--motion-panel')) || 300});
   }
+
+  const conversation = document.querySelector('#messages');
+  conversation?.addEventListener('astra:session-enter', () => {
+    // History and the empty state enter as a group, not again in the mutation observer.
+    for (const node of conversation.children) {
+      if (node.matches('.message')) seenMessages.add(node);
+      if (node.matches('.welcome')) visibility.set(node, visible(node));
+    }
+    if (!canEnter(conversation)) return;
+    // Keep the scroll viewport fixed and let rapid switches share the fade already in flight.
+    const current = active.get(conversation);
+    if (current?.pending || current?.playState === 'running') return;
+    const styles = getComputedStyle(root);
+    play(conversation, [{opacity: .72}, {opacity: 1}], {
+      duration: parseFloat(styles.getPropertyValue('--motion-control')) || 140,
+      easing: styles.getPropertyValue('--motion-ease').trim(),
+    }, 'astra-session-enter');
+  });
 
   // A single marker follows selection within each rail group. Do not fly across empty screen
   // space between top and bottom groups, or outside independently scrolling rail layouts.
