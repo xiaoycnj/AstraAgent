@@ -121,8 +121,13 @@ async function main() {
     await search.waitFor();
     assert.equal(await search.evaluate(el => document.activeElement === el), true);
     const group = page.locator('#item-list .session-group').filter({hasText:'发布组'});
-    await group.locator('summary').click();
-    await search.fill('发布组 ＣＨＡＴ RELEASE');
+    // Switch to search in the same task, before the browser dispatches details.toggle.
+    await group.locator('summary').evaluate(heading => {
+      heading.click();
+      const input = document.querySelector('#session-search');
+      input.value = '发布组 ＣＨＡＴ RELEASE';
+      input.dispatchEvent(new Event('input', {bubbles: true}));
+    });
     assert.equal(await group.getAttribute('open'), '');
     assert.match(await page.locator('#item-list .list-item').innerText(), /Release notes/);
     const projectFilter = page.getByRole('searchbox', {name:'筛选项目组', exact:true});
@@ -460,8 +465,16 @@ db.commit();db.close()
     await page.getByRole('button',{name:'应用皮肤',exact:true}).click();
     await page.waitForFunction(()=>marketData.state.active_skin==='midnight-orbit'&&!skinPreview);
     await page.reload();
-    await page.waitForFunction(()=>marketData?.state.active_skin==='midnight-orbit');
-    await page.waitForFunction(()=>[...destinationTabs.querySelectorAll('button')].some(button=>button.textContent.trim()==='UI 皮肤'));
+    await page.evaluate(() => Promise.all([initialPageReady, marketReady, languageReady]));
+    await page.waitForFunction(() => !window.workspaceLoading.active);
+    const restoredMarket = await page.evaluate(() => ({
+      page: appPage, lang: document.documentElement.lang,
+      skin: marketData?.state.active_skin, safety: extensionSafety,
+    }));
+    assert.equal(restoredMarket.page, 'marketplace', JSON.stringify(restoredMarket));
+    assert.equal(restoredMarket.lang, 'zh-CN', JSON.stringify(restoredMarket));
+    assert.equal(restoredMarket.safety.active, false, JSON.stringify(restoredMarket));
+    assert.equal(restoredMarket.skin, 'midnight-orbit', JSON.stringify(restoredMarket));
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
     await page.getByRole('button',{name:'UI 皮肤',exact:true}).click();
     await page.screenshot({path:path.join(root,'work/marketplace-skins.png')});

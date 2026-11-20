@@ -66,8 +66,11 @@ renderList=function(){
         if (name) label.dataset.i18nIgnore = '';
         heading.append(label,elem('span','session-group-count',String(items.length)));
         group.open = filtering || !collapsedSessionGroups.has(name);
-        group.addEventListener('toggle', () => {
-            if (filtering || !group.isConnected) return;
+        heading.addEventListener('click', event => {
+            if (filtering || event.defaultPrevented) return;
+            // Native toggle events are deferred and may arrive after the list is rebuilt.
+            event.preventDefault();
+            group.open = !group.open;
             if (group.open) collapsedSessionGroups.delete(name);
             else collapsedSessionGroups.add(name);
         });
